@@ -1,14 +1,16 @@
-# Project
+# Typechat
+In this repo, we're exploring an approach to developer tools for generative ai prompt engineering.  In our experiences so far with building systems around LLMs, we have observed that:
+1. LLMs can be constrained to avoid unexpected output formats if we specify the output form using a formal description such as a schema.
+2. LLMs produce more consistent output if the prompt contains unambiguous, formal description of the possible outputs.
+3. The approach of using formal schemas works best when the LLM has trained on many tokens from the given formal language.
+4. For specifying schemas, formal schema languages such as JSON Schema are more verbose (4-5X) than programming languages like TypeScript 
+5. Developers have requested a way to bridge between the approximate world of natural language chat and the precise world of software that takes actions on systems of record. Of course, the need for this bridge depends on the type of LLM application under development. For applications like search and draft generation, the system can remain in the approximate world because the human is in the loop selecting search results and reviewing draft edits.  For applications like updating a database, the bridge is an important step toward updating systems of record. 
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+This repo supplies one possible method for implementing one of two parts of a bridge: validating that the LLM output conforms to a schema that describes the instances that the system can work with.  Once the validity of an instance is established, the system using typechat must still verify that the valid instance corresponds to the end-user's actual intent. 
 
-As the maintainer of this project, please make a few updates:
+To support validation, the developer creates a schema using a TypeScript type declaration file (.d.ts). The developer selects a root type from the schema that corresponds to the JSON object output requested of the LLM.  The developer describes in natural language the meaning of the root type (for example, a set of calendar update actions) and also the overall framing of the application (for example, a person is working with a bot to update a calendar).  
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+The developer can combine these inputs with end-user input to create a prompt that will result in the LLM generating a JSON instance. The typechat library validates the JSON instance against the schema provided by the developer, simplifying the task of verifying that the captured end-user intent can be successfully processed by the system. 
 
 ## Contributing
 
