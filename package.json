@@ -1,0 +1,34 @@
+{
+  "name": "typechat",
+  "version": "0.0.10",
+  "description": "An exploration of using schemas to make prompt engineering simpler and more reliable.",
+  "main": "./dist/typechat.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "node ./dist/tests.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/microsoft/typechat.git"
+  },
+  "keywords": [
+    "schema",
+    "LLM",
+    "prompt",
+    "TypeScript",
+    "validation"
+  ],
+  "author": "Microsoft",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/microsoft/typechat/issues"
+  },
+  "homepage": "https://github.com/microsoft/typechat#readme",
+  "dependencies": {
+    "azure-openai": "^0.9.4",
+    "typescript": "^5.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^18.15.12"
+  }
+}
