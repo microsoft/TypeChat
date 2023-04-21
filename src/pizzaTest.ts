@@ -70,7 +70,7 @@ function printOrder(order: Order) {
     }
 }
 
-export function pizzaTests() {
-    runTests(testPrompts, "Order", typeInterp, frame, schemaText, 1, printOrder);
+export async function pizzaTests() {
+    return await runTests(testPrompts, "Order", typeInterp, frame, schemaText, 1, printOrder);
 }
 

@@ -27,9 +27,10 @@ const testPrompts = [
     "Will you please add an appointment with Jerri Skinner at 9 am?  I need it to last 2 hours",
     "Do I have any plan with Rosy this month?",
     "I need to add a meeting with my boss on Monday at 10am. Also make sure to schedule and appointment with Sally, May, and Boris tomorrow at 3pm. Now just add to it Jesse and Abby and make it last ninety minutes",
-    "Add meeting with team today at 2"
+    "Add meeting with team today at 2",
+    "can you record lunch with cookie at 12pm on Friday and also add Isobel to the Wednesday ping pong game at 4pm",
 ]
 
-export function calendarTests() {
-    runTests(testPrompts, "CalendarActions", typeInterp, frame, schemaText, 2);
+export async function calendarTests() {
+    return await runTests(testPrompts, "CalendarActions", typeInterp, frame, schemaText, 2);
 }
