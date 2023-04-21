@@ -84,44 +84,74 @@ function printJSON<TSchema>(result: TSchema) {
 * @param handleResult Handler for each valid result
 */
 export async function runTest<TSchema>(prompt: string, typeName: string, typeInterp: string,frame: string, 
-    schemaText: string, delay = 0, handleResult:(result: TSchema) => void = printJSON) {
-    let totalPrompt = makePrompt(schemaText, typeName, typeInterp, frame, prompt);
-    console.log(prompt);
-    let result = await completeAndValidate(totalPrompt, schemaText, typeName);
-    if (result.error) {
-        console.log("Error: " + result.errorMessage);
-        if (result.diagnostics) {
-            totalPrompt += result.jsontext ? result.jsontext : "";
-            for (let d of result.diagnostics) {
-                console.log(d);
-                totalPrompt += d;
+    schemaText: string, delay = 0, handleResult:(result: TSchema) => void = printJSON, printTotalPrompt = false) {
+        let totalPrompt = makePrompt(schemaText, typeName, typeInterp, frame, prompt);
+        if (printTotalPrompt) {
+            console.log(totalPrompt);
+        }
+        else {
+            console.log(prompt);
+        }
+        let result = await completeAndValidate(totalPrompt, schemaText, typeName);
+        if (result.error) {
+            console.log("Error: " + result.errorMessage);
+            if (result.diagnostics) {
+                totalPrompt += result.jsontext ? result.jsontext : "";
+                for (let d of result.diagnostics) {
+                    console.log(d);
+                    totalPrompt += d;
+                }
+                totalPrompt += "Revised JSON object:"
+                result = await completeAndValidate(totalPrompt, schemaText, typeName);
+                if (result.error) {
+                    console.log("error on second try " + result.errorMessage);
+                    console.log(result.jsontext!);
+                }
             }
-            totalPrompt += "Revised JSON object:"
-            result = await completeAndValidate(totalPrompt, schemaText, typeName);
-            if (result.error) {
-                console.log("error on second try " + result.errorMessage);
-                console.log(result.jsontext!);
+        } 
+        if (!result.error) {
+            console.log("Valid instance:");
+            if (result.jsontext) {
+                const typedResult = JSON.parse(result.jsontext) as TSchema;
+                handleResult(typedResult);
             }
         }
-    } 
-    if (!result.error) {
-        console.log("Valid instance:");
-        if (result.jsontext) {
-            const typedResult = JSON.parse(result.jsontext) as TSchema;
-            handleResult(typedResult);
+        // insert a delay 
+        if (delay > 0) {
+            // console.log(`Delaying ${delay} seconds`);
+            await new Promise(r => setTimeout(r, Math.round(delay*1000)));
         }
+        return result;
     }
-    // insert a delay 
-    if (delay > 0) {
-        // console.log(`Delaying ${delay} seconds`);
-        await new Promise(r => setTimeout(r, Math.round(delay*1000)));
-    }
-    return result;
-}
-
-export async function runTests<TSchema>(testPrompts: string[], typeName: string, typeInterp: string, frame: string, 
-    schemaText: string, delay = 0, handleResult:(result: TSchema) => void = printJSON) {
-    for (let prompt of testPrompts) {
-        await runTest(prompt, typeName, typeInterp, frame, schemaText, delay, handleResult);
-    }   
-}
+    
+    export async function runTests<TSchema>(testPrompts: string[], typeName: string, typeInterp: string, frame: string, 
+        schemaText: string, delay = 0, handleResult:(result: TSchema) => void = printJSON) {
+            for (let prompt of testPrompts) {
+                await runTest(prompt, typeName, typeInterp, frame, schemaText, delay, handleResult);
+            }   
+        }
+        
+        export function runTestsInteractive<TSchema>(typeName: string, typeInterp: string, frame: string, 
+            schemaText: string, handleResult:(result: TSchema) => void = printJSON) {
+                // read a prompt from the console line by line and test the prompt after an empty line
+                let prompt = "";
+                let lineReader = require('readline').createInterface({
+                    input: process.stdin,
+                    output: process.stdout
+                });
+                lineReader.on('line', function (line: string) {
+                    if (line.length == 0) {
+                        runTests([prompt], typeName, typeInterp, frame, schemaText, 0, handleResult);
+                        prompt = "";
+                    }
+                    else {
+                        if (line == "exit") {
+                            process.exit();
+                        }
+                        prompt += line + " ";
+                    }
+                });
+                // wait for the user to enter a prompt
+                console.log("Enter a multi-line prompt.  Enter a blank line to test the prompt.  Enter 'exit' to exit.");
+                lineReader.prompt();   
+            }

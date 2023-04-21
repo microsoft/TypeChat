@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
-import { runTests } from './typechat';
+import { runTests, runTestsInteractive } from './typechat';
 
 const schemaFilename = "../src/pizzaobj.d.ts";
 // open schema file containing ts definitions
@@ -19,7 +19,9 @@ const testPrompts = [
     "I would like to order one with basil and one with extra sauce.  Throw in a salad and an ale.",
     "I would love to have a pepperoni with extra sauce, basil and arugula. Lovely weather we're having. Throw in some pineapple.  And give me a whole Greek and a Pale Ale.  Boy, those Mariners are doggin it. And how about a Mack and Jacks.",
     "I'll have two pepperoni, the first with extra sauce and the second with basil.  Add pineapple to the first and add olives to the second.",
-    "I sure am hungry for a pizza with pepperoni and a salad with parmesan.  And I'm thirsty for 3 Pale Ales"
+    "I sure am hungry for a pizza with pepperoni and a salad with parmesan.  And I'm thirsty for 3 Pale Ales",
+    "give me three regular salads and two Greeks and make one of the regular ones with no red onions",
+    "I'll take four pepperoni pizzas and two of them get extra sauce.  plus an M&J and a Pale Ale",
 ]
 
 function printOrder(order: Order) {
@@ -74,3 +76,14 @@ export async function pizzaTests() {
     return await runTests(testPrompts, "Order", typeInterp, frame, schemaText, 1, printOrder);
 }
 
+// read arguments from command line
+const args = process.argv.slice(2);
+// if there are no arguments, run the tests
+if (args.length == 0) {
+    pizzaTests();
+}
+else {
+    if ((args.length == 1) && (args[0] == "-i")) {
+        runTestsInteractive("Order", typeInterp, frame, schemaText, printOrder);
+    }
+}

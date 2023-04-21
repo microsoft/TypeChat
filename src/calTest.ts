@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
-import { runTests } from './typechat';
+import { runTests, runTestsInteractive } from './typechat';
 
 const schemaFilename = "../src/calendarActions.d.ts";
 // open schema file containing ts definitions
@@ -33,4 +33,16 @@ const testPrompts = [
 
 export async function calendarTests() {
     return await runTests(testPrompts, "CalendarActions", typeInterp, frame, schemaText, 2);
+}
+
+// read arguments from command line
+const args = process.argv.slice(2);
+// if there are no arguments, run the tests
+if (args.length == 0) {
+    calendarTests();
+}
+else {
+    if ((args.length == 1) && (args[0] == "-i")) {
+        runTestsInteractive("CalendarActions", typeInterp, frame, schemaText);
+    }
 }
