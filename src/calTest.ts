@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
-import { runTests, runTestsInteractive } from './typechat';
+import { makePromptsInteractive, runTests, runTestsInteractive } from './typechat';
 
 const schemaFilename = "../src/calendarActions.d.ts";
 // open schema file containing ts definitions
@@ -28,7 +28,8 @@ const testPrompts = [
     "Do I have any plan with Rosy this month?",
     "I need to add a meeting with my boss on Monday at 10am. Also make sure to schedule and appointment with Sally, May, and Boris tomorrow at 3pm. Now just add to it Jesse and Abby and make it last ninety minutes",
     "Add meeting with team today at 2",
-    "can you record lunch with cookie at 12pm on Friday and also add Isobel to the Wednesday ping pong game at 4pm",
+    "can you record lunch with Luis at 12pm on Friday and also add Isobel to the Wednesday ping pong game at 4pm",
+    "I said I'd meet with Jenny this afternoon at 2pm and after that I need to go to the dry cleaner and then the soccer game.  Leave an hour for each of those starting at 3:30"
 ]
 
 export async function calendarTests() {
@@ -42,7 +43,12 @@ if (args.length == 0) {
     calendarTests();
 }
 else {
-    if ((args.length == 1) && (args[0] == "-i")) {
+    if (args.length == 1) {
+        if (args[0] == "-i") {
         runTestsInteractive("CalendarActions", typeInterp, frame, schemaText);
+        } else if (args[0] == "-p")
+        {
+            makePromptsInteractive("CalendarActions", typeInterp, frame, schemaText);
+        }
     }
 }

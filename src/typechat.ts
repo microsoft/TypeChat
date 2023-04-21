@@ -52,7 +52,7 @@ function validate(ret: string, schemaText:string, typeName: string) {
 export function makePrompt(st: string,typeName: string,typeInterp: string, frame: string, text: string) {
     const preamble = `Here is a set of typescript data types that define the structure of an object of type ${typeName} that represents ${typeInterp}.\n`;
     
-    const postamble = `\nIn the following paragraph ${frame}. Write out the person's requests as a **single** JSON object of type ${typeName}. **Do not** add comments when writing out the JSON object because some JSON parsers can't understand comments.\n`;
+    const postamble = `\nIn the following paragraph ${frame}. Write out the person's requests as a **single** JSON object of type ${typeName}. If a property is null or undefined, do not include it. **Do not** add comments when writing out the JSON object because some JSON parsers can't understand comments.\n`;
     
     const prompt = preamble + st + postamble + text +"\nJSON object:\n";
     return prompt;
@@ -132,27 +132,41 @@ export async function runTest<TSchema>(prompt: string, typeName: string, typeInt
             }   
         }
         
+        function interactivePrompt(handler: (prompt: string) => void) {
+            // read a prompt from the console line by line and test the prompt after an empty line
+            let prompt = "";
+            let lineReader = readline.createInterface({
+                input: process.stdin,
+                output: process.stdout
+            });
+            lineReader.on('line', function (line: string) {
+                if (line.length == 0) {
+                    handler(prompt);
+                    prompt = "";
+                }
+                else {
+                    if (line == "exit") {
+                        process.exit();
+                    }
+                    prompt += line + " ";
+                }
+            });
+            // wait for the user to enter a prompt
+            console.log("Enter a multi-line prompt.  Enter a blank line to test the prompt.  Enter 'exit' to exit.");
+            lineReader.prompt();   
+            
+        }
+        
         export function runTestsInteractive<TSchema>(typeName: string, typeInterp: string, frame: string, 
             schemaText: string, handleResult:(result: TSchema) => void = printJSON) {
-                // read a prompt from the console line by line and test the prompt after an empty line
-                let prompt = "";
-                let lineReader = readline.createInterface({
-                    input: process.stdin,
-                    output: process.stdout
+                interactivePrompt((prompt: string) => {
+                    runTest(prompt, typeName, typeInterp, frame, schemaText, 0, handleResult);
                 });
-                lineReader.on('line', function (line: string) {
-                    if (line.length == 0) {
-                        runTests([prompt], typeName, typeInterp, frame, schemaText, 0, handleResult);
-                        prompt = "";
-                    }
-                    else {
-                        if (line == "exit") {
-                            process.exit();
-                        }
-                        prompt += line + " ";
-                    }
-                });
-                // wait for the user to enter a prompt
-                console.log("Enter a multi-line prompt.  Enter a blank line to test the prompt.  Enter 'exit' to exit.");
-                lineReader.prompt();   
             }
+            
+            export function makePromptsInteractive<TSchema>(typeName: string, typeInterp: string, frame: string, 
+                schemaText: string) {
+                    interactivePrompt((prompt: string) => {
+                        console.log(makePrompt(schemaText, typeName, typeInterp, frame, prompt));
+                    });
+                }
