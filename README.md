@@ -25,6 +25,10 @@ Currently, the experiments are only running on Azure OpenAI endpoints.  To confi
 `OPENAI_API_BASE`| the base URL for your openai endpoint
 `DEPLOYMENT_NAME`| the name of your Azure deployment
 
+## Interactive Prompts
+To run a test interactively, type `node [testName].js -i` and then enter a multi-line prompt. Enter a blank line to send the prompt 
+and enter 'exit' on a line to end the session.
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a

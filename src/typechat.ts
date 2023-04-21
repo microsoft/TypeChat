@@ -1,5 +1,6 @@
 import { llmComplete } from './llm';
 import { verifyJsonObject } from './verify';
+import * as readline from 'readline';
 
 export interface ICompletionResult {
     jsontext?: string;
@@ -135,7 +136,7 @@ export async function runTest<TSchema>(prompt: string, typeName: string, typeInt
             schemaText: string, handleResult:(result: TSchema) => void = printJSON) {
                 // read a prompt from the console line by line and test the prompt after an empty line
                 let prompt = "";
-                let lineReader = require('readline').createInterface({
+                let lineReader = readline.createInterface({
                     input: process.stdin,
                     output: process.stdout
                 });
