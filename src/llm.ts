@@ -3,9 +3,6 @@ import * as procss from "process";
 const apiKey = procss.env.OPENAI_API_KEY;
 const apiBase = procss.env.OPENAI_API_BASE;
 const apiDeploymentName: string = process.env.DEPLOYMENT_NAME? process.env.DEPLOYMENT_NAME : "error";
-console.log(`apiBase: ${apiBase}`);
-console.log(`apiDeploymentName: ${apiDeploymentName}`);
-console.log(`apiKey: ${apiKey}`)
 
 const openai = new OpenAIApi(new Configuration({
     apiKey: apiKey,
