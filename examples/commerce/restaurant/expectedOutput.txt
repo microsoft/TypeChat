@@ -24,7 +24,6 @@ Valid instance:
     1 Sierra Nevada Pale Ale
     1 Mack and Jacks
 I want three pizzas, one with mushrooms and the other two with sausage.  Make one sausage a small.  And give me a whole Greek and a Pale Ale.  And give me a Mack and Jacks.
-retries 10
 Valid instance:
     large pizza with mushrooms
     small pizza with sausage
