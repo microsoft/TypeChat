@@ -12,10 +12,12 @@ To support validation, the developer creates a schema using a TypeScript type de
 
 The developer can combine these inputs with end-user input to create a prompt that will result in the LLM generating a JSON instance. The typechat library validates the JSON instance against the schema provided by the developer, simplifying the task of verifying that the captured end-user intent can be successfully processed by the system. 
 ## Build
-`npm run build`
-
-## Test
-`npm run test`
+```     
+npm run build
+```
+This will build the module but not the examples. 
+## Examples
+For now, build each example directory separately by typing `tsc` in the example directory and then using node to run the resulting `.js` output file.
 
 ## Environment Variables
 Currently, the experiments are only running on Azure OpenAI endpoints.  To configure environment for this set the following variables:
