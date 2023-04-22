@@ -30,8 +30,7 @@ Currently, the experiments are only running on Azure OpenAI endpoints.  To confi
 `DEPLOYMENT_NAME`| the name of your Azure deployment
 
 ## Interactive Prompts
-To run a test interactively, type `node [testName].js -i` and then enter a multi-line prompt. Enter a blank line to send the prompt 
-and enter 'exit' on a line to end the session.
+To run an example interactively, type `node [exampleName].js -i` in the example's directory and then enter a multi-line prompt. Enter a blank line to send the prompt and enter 'exit' on a line to end the session.
 
 ## Contributing
 
