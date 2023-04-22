@@ -2,9 +2,10 @@
 import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
-import { makePromptsInteractive, runTests, runTestsInteractive } from './typechat';
+import { makePromptsInteractive, runTests, runTestsInteractive } from '../../src/typechat';
 
-const schemaFilename = "../src/calendarActions.d.ts";
+const schemaFilename = "calendarActions.d.ts";
+
 // open schema file containing ts definitions
 const schemaText = fs.readFileSync(path.join(__dirname, schemaFilename), 'utf8');
 
@@ -45,7 +46,7 @@ if (args.length == 0) {
 else {
     if (args.length == 1) {
         if (args[0] == "-i") {
-        runTestsInteractive("CalendarActions", typeInterp, frame, schemaText);
+            runTestsInteractive("CalendarActions", typeInterp, frame, schemaText);
         } else if (args[0] == "-p")
         {
             makePromptsInteractive("CalendarActions", typeInterp, frame, schemaText);

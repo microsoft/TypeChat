@@ -102,7 +102,7 @@ export async function runTest<TSchema>(prompt: string, typeName: string, typeInt
                     console.log(d);
                     totalPrompt += d;
                 }
-                totalPrompt += "Revised JSON object:"
+                totalPrompt += "Revised JSON object (no comments, no new properties, single JSON object):"
                 result = await completeAndValidate(totalPrompt, schemaText, typeName);
                 if (result.error) {
                     console.log("error on second try " + result.errorMessage);
