@@ -11,7 +11,7 @@ This repo supplies one possible method for implementing one of two parts of a br
 
 To support validation, the developer creates a schema using a TypeScript module or a YAML schema. The developer selects a root type from the schema that corresponds to the JSON object output requested of the LLM.  The developer describes in natural language the meaning of the root type (for example, a set of calendar update actions) and also the overall framing of the application (for example, a person is working with a bot to update a calendar).  
 
-The developer can combine these inputs with end-user input to create a prompt that will result in the LLM generating a JSON instance. The typechat library validates the JSON instance against the schema provided by the developer, simplifying the task of verifying that the captured end-user intent can be successfully processed by the system. 
+The developer can combine these inputs with end-user input to create a prompt that will result in the LLM generating a JSON or YAML instance. The typechat library validates the instance against the schema provided by the developer, simplifying the task of verifying that the captured end-user intent can be successfully processed by the system. The system can convert both JSON and YAML instances into objects native to the host programming language (TypeScript/JavaScript or python), simplifying post-processing.
 ## Install
 Install `node.js` and the `npm` package manager.  Then type `npm install` in the root directory.
 ## Build
