@@ -27,6 +27,7 @@ export const beerKind = [
 
 export type Beer = {
     itemType: "beer";
+    // must be one of the strings in the beerKind array
     kind: string;
     // default: 1
     quantity?: number;

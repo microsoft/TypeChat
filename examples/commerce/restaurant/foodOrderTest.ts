@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
-import { Order } from './foodOrderSchema';
+import { Order, pizzaToppings, beerKind, saladIngredients } from './foodOrderSchema';
 import { runTests, runTestsInteractive } from '../../../src/typechat';
 
 const schemaFilename = "foodOrderSchema.ts";
@@ -82,8 +82,56 @@ function printOrder(order: Order) {
     }
 }
 
+function checkOrderConstraints(order: Order) {
+    const diagnostics: string[] = [];
+    if (order.items && (order.items.length > 0)) {
+        for (let item of order.items) {
+            switch (item.itemType) {
+                case "pizza":
+                if (item.addedToppings && (item.addedToppings.length > 0)) {
+                    for (let addedTopping of item.addedToppings) {
+                        if (!pizzaToppings.includes(addedTopping)) {
+                            diagnostics.push(`Cannot add ${addedTopping} to a pizza`);
+                        }
+                    }
+                }
+                if (item.removedToppings && (item.removedToppings.length > 0)) {
+                    for (let removedTopping of item.removedToppings) {
+                        if (!pizzaToppings.includes(removedTopping)) {
+                            diagnostics.push(`Cannot remove ${removedTopping} from a pizza`);
+                        }
+                    }
+                }
+                break;
+                case "beer":
+                    if (!beerKind.includes(item.kind)) {
+                        diagnostics.push(`Cannot add ${item.kind} to an order; we don't have that beer.`);
+                    }
+                break;
+                case "salad":
+                if (item.addedIngredients && (item.addedIngredients.length > 0)) {
+                    for (let addedIngredient of item.addedIngredients) {
+                        if (!saladIngredients.includes(addedIngredient)) {
+                            diagnostics.push(`Cannot add ${addedIngredient} to a salad`);
+                        }
+                    }
+                }
+                if (item.removedIngredients && (item.removedIngredients.length > 0)) {
+                    for (let removedIngredient of item.removedIngredients) {
+                        if (!saladIngredients.includes(removedIngredient)) {
+                            diagnostics.push(`Cannot remove ${removedIngredient} from a salad`);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+    return diagnostics;
+}
+
 export async function pizzaTests() {
-    return await runTests(testPrompts, "Order", typeInterp, frame, schemaText, 1, printOrder);
+    return await runTests(testPrompts, "Order", typeInterp, frame, schemaText, 1, checkOrderConstraints, printOrder)
 }
 
 // read arguments from command line
@@ -94,6 +142,6 @@ if (args.length == 0) {
 }
 else {
     if ((args.length == 1) && (args[0] == "-i")) {
-        runTestsInteractive("Order", typeInterp, frame, schemaText, printOrder);
+        runTestsInteractive("Order", typeInterp, frame, schemaText, checkOrderConstraints, printOrder);
     }
 }

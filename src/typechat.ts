@@ -9,7 +9,7 @@ export interface ICompletionResult {
     errorMessage?: string;
 }
 
-function validate(ret: string, schemaText:string, typeName: string) {
+function validate<TSchema>(ret: string, schemaText:string, typeName: string, checkConstraints?:(result: TSchema) => string[]) {
     // find the first '{' in ret
     const start = ret.indexOf('{');
     // find the last '}' in ret
@@ -22,6 +22,17 @@ function validate(ret: string, schemaText:string, typeName: string) {
         try {
             const testJSON = JSON.parse(jsontext);
             const diagnostics = verifyJsonObject(testJSON, schemaText, typeName);
+            if (checkConstraints) {
+                const constraintDiagnostics = checkConstraints(testJSON);
+                if (constraintDiagnostics && constraintDiagnostics.length > 0) {
+                    if (diagnostics) {
+                        diagnostics.push(...constraintDiagnostics);
+                    }
+                    else {
+                        result.diagnostics = constraintDiagnostics;
+                    }
+                }
+            }
             if (diagnostics && diagnostics.length > 0) {
                 result.diagnostics = diagnostics;
                 result.error = true;
@@ -58,10 +69,10 @@ export function makePrompt(st: string,typeName: string,typeInterp: string, frame
     return prompt;
 }
 
-export async function completeAndValidate(p: string, schemaText: string, typeName: string) {
+export async function completeAndValidate<TSchema>(p: string, schemaText: string, typeName: string, checkConstraints?:(result: TSchema) => string[]) {
     const ret = await llmComplete(p);
     if (ret) {
-        const result = validate(ret, schemaText, typeName);
+        const result = validate(ret, schemaText, typeName, checkConstraints);
         return result;
     } else 
     {
@@ -85,7 +96,7 @@ function printJSON<TSchema>(result: TSchema) {
 * @param handleResult Handler for each valid result
 */
 export async function runTest<TSchema>(prompt: string, typeName: string, typeInterp: string,frame: string, 
-    schemaText: string, delay = 0, handleResult:(result: TSchema) => void = printJSON, printTotalPrompt = false) {
+    schemaText: string, delay = 0, checkConstraints?:(result: TSchema) => string[], handleResult:(result: TSchema) => void = printJSON, printTotalPrompt = false) {
         let totalPrompt = makePrompt(schemaText, typeName, typeInterp, frame, prompt);
         if (printTotalPrompt) {
             console.log(totalPrompt);
@@ -93,10 +104,10 @@ export async function runTest<TSchema>(prompt: string, typeName: string, typeInt
         else {
             console.log(prompt);
         }
-        let result = await completeAndValidate(totalPrompt, schemaText, typeName);
+        let result = await completeAndValidate(totalPrompt, schemaText, typeName, checkConstraints);
         if (result.error) {
             console.log("Error: " + result.errorMessage);
-            if (result.diagnostics) {
+            if (result.diagnostics && result.diagnostics.length > 0) {
                 totalPrompt += result.jsontext ? result.jsontext : "";
                 for (let d of result.diagnostics) {
                     console.log(d);
@@ -125,48 +136,45 @@ export async function runTest<TSchema>(prompt: string, typeName: string, typeInt
         return result;
     }
     
-    export async function runTests<TSchema>(testPrompts: string[], typeName: string, typeInterp: string, frame: string, 
-        schemaText: string, delay = 0, handleResult:(result: TSchema) => void = printJSON) {
-            for (let prompt of testPrompts) {
-                await runTest(prompt, typeName, typeInterp, frame, schemaText, delay, handleResult);
-            }   
-        }
-        
-        function interactivePrompt(handler: (prompt: string) => void) {
-            // read a prompt from the console line by line and test the prompt after an empty line
-            let prompt = "";
-            let lineReader = readline.createInterface({
-                input: process.stdin,
-                output: process.stdout
-            });
-            lineReader.on('line', function (line: string) {
-                if (line.length == 0) {
-                    handler(prompt);
-                    prompt = "";
-                }
-                else {
-                    if (line == "exit") {
-                        process.exit();
-                    }
-                    prompt += line + " ";
-                }
-            });
-            // wait for the user to enter a prompt
-            console.log("Enter a multi-line prompt.  Enter a blank line to test the prompt.  Enter 'exit' to exit.");
-            lineReader.prompt();   
-            
-        }
-        
-        export function runTestsInteractive<TSchema>(typeName: string, typeInterp: string, frame: string, 
-            schemaText: string, handleResult:(result: TSchema) => void = printJSON) {
-                interactivePrompt((prompt: string) => {
-                    runTest(prompt, typeName, typeInterp, frame, schemaText, 0, handleResult);
-                });
+    export async function runTests<TSchema>(testPrompts: string[], typeName: string, typeInterp: string, frame: string, schemaText: string, delay = 0, checkConstraints?:(result: TSchema) => string[], handleResult:(result: TSchema) => void = printJSON) {
+        for (let prompt of testPrompts) {
+            await runTest(prompt, typeName, typeInterp, frame, schemaText, delay, checkConstraints, handleResult);
+        }   
+    }
+    
+    function interactivePrompt(handler: (prompt: string) => void) {
+        // read a prompt from the console line by line and test the prompt after an empty line
+        let prompt = "";
+        let lineReader = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+        lineReader.on('line', function (line: string) {
+            if (line.length == 0) {
+                handler(prompt);
+                prompt = "";
             }
-            
-            export function makePromptsInteractive<TSchema>(typeName: string, typeInterp: string, frame: string, 
-                schemaText: string) {
-                    interactivePrompt((prompt: string) => {
-                        console.log(makePrompt(schemaText, typeName, typeInterp, frame, prompt));
-                    });
+            else {
+                if (line == "exit") {
+                    process.exit();
                 }
+                prompt += line + " ";
+            }
+        });
+        // wait for the user to enter a prompt
+        console.log("Enter a multi-line prompt.  Enter a blank line to test the prompt.  Enter 'exit' to exit.");
+        lineReader.prompt();   
+        
+    }
+    
+    export function runTestsInteractive<TSchema>(typeName: string, typeInterp: string, frame: string, schemaText: string, checkConstraints?:(result: TSchema) => string[], handleResult:(result: TSchema) => void = printJSON) {
+        interactivePrompt((prompt: string) => {
+            runTest(prompt, typeName, typeInterp, frame, schemaText, 0, checkConstraints, handleResult);
+        });
+    }
+    
+    export function makePromptsInteractive<TSchema>(typeName: string, typeInterp: string, frame: string,schemaText: string) {
+        interactivePrompt((prompt: string) => {
+            console.log(makePrompt(schemaText, typeName, typeInterp, frame, prompt));
+        });
+    }
