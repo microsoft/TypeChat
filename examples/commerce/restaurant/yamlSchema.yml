@@ -1,0 +1,50 @@
+type: array
+items:
+  oneOf:
+    - type: object
+      properties:
+        type:
+          type: string
+          enum: [pizza]
+        size:
+          type: string
+          enum: [small, medium, large, extra large]
+          default: large
+        toppings:
+          type: array
+          items:
+            type: string
+            enum: [pepperoni, sausage, mushrooms, basil, extra cheese, extra sauce, anchovies, pineapple, olives, arugula, Canadian bacon]
+      required: [type]
+    - type: object
+      properties:
+        type:
+          type: string
+          enum: [salad]
+        size:
+          type: string
+          enum: [whole, half]
+          default: half
+        style:
+          type: string
+          enum: [Garden, Greek]
+          default: Garden
+        removed:
+          type: array
+          items:
+            type: string
+            enum: [red onions, croutons]
+      required: [type]
+    - type: object
+      properties:
+        type:
+          type: string
+          enum: [beer]
+        kind:
+          type: string
+          enum: [Sierra Nevada Pale Ale, Mack & Jacks]
+        quantity:
+          type: integer
+          minimum: 1
+          default: 1
+      required: [type, kind]
