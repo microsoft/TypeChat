@@ -3,8 +3,9 @@ import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
 import { runTests, runTestsInteractive } from '../../../src/typechat';
+import { Order } from './foodOrderSchema';
 
-const schemaFilename = "foodOrder.d.ts";
+const schemaFilename = "foodOrderSchema.ts";
 // open schema file containing ts definitions
 const schemaText = fs.readFileSync(path.join(__dirname, schemaFilename), 'utf8');
 
@@ -19,17 +20,23 @@ const testPrompts = [
     "I would like to order one with basil and one with extra sauce.  Throw in a salad and an ale.",
     "I would love to have a pepperoni with extra sauce, basil and arugula. Lovely weather we're having. Throw in some pineapple.  And give me a whole Greek and a Pale Ale.  Boy, those Mariners are doggin it. And how about a Mack and Jacks.",
     "I'll have two pepperoni, the first with extra sauce and the second with basil.  Add pineapple to the first and add olives to the second.",
-    "I sure am hungry for a pizza with pepperoni and a salad with parmesan.  And I'm thirsty for 3 Pale Ales",
-    "give me three regular salads and two Greeks and make one of the regular ones with no red onions",
+    "I sure am hungry for a pizza with pepperoni and a salad with no croutons.  And I'm thirsty for 3 Pale Ales",
+    "give me three regular salads and two Greeks and make the regular ones with no red onions",
     "I'll take four pepperoni pizzas and two of them get extra sauce.  plus an M&J and a Pale Ale",
 ]
 
 function printOrder(order: Order) {
     if (order.items && (order.items.length > 0)) {
         for (let item of order.items) {
+            if (!item.quantity) {
+                item.quantity = 1;
+            }
             switch (item.type) {
                 case "pizza":
-                let pizzaStr = `    ${item.size} pizza`;
+                if (!item.size) {
+                    item.size = "large";
+                }
+                let pizzaStr = `    ${item.quantity} ${item.size} pizza`;
                 if (item.toppings && (item.toppings.length > 0)) {
                     pizzaStr += " with";
                     for (let [index,addedTopping] of item.toppings.entries()) {
@@ -39,17 +46,20 @@ function printOrder(order: Order) {
                 console.log(pizzaStr);
                 break;
                 case "beer":
-                if (!item.quantity) {
-                    item.quantity = 1;
-                }
                 let beerStr = `    ${item.quantity} ${item.kind}`;
                 console.log(beerStr);
                 break;
                 case "salad":
-                let saladStr = `    ${item.size} ${item.style} salad`;
-                if (item.removed && (item.removed.length > 0)) {
+                if (!item.size) {
+                    item.size = "half";
+                }
+                if (!item.style) {
+                    item.style = "Garden";
+                }
+                let saladStr = `    ${item.quantity} ${item.size} ${item.style} salad`;
+                if (item.removedIngredients && (item.removedIngredients.length > 0)) {
                     saladStr += " without";
-                    for (let [index,removedIngredient] of item.removed.entries()) {
+                    for (let [index,removedIngredient] of item.removedIngredients.entries()) {
                         saladStr += `${index==0?" ":", "}${removedIngredient}`;
                     }
                 }

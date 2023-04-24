@@ -17,7 +17,8 @@ export function verifyJsonObject(json: object, schema: string, typeName: string)
     const jsonFilePath = "/json.ts";
     const libSourceFile = ts.createSourceFile(libFilePath, libText, ts.ScriptTarget.Latest);
     const schemaSourceFile = ts.createSourceFile(schemaFilePath, schema, ts.ScriptTarget.Latest);
-    const jsonSourceFile = ts.createSourceFile(jsonFilePath, `const json: ${typeName} = ${JSON.stringify(json)};`, ts.ScriptTarget.Latest);
+    const jsonSourceFile = ts.createSourceFile(jsonFilePath, `import { ${typeName} } from './schema';\nconst json: ${typeName} = ${JSON.stringify(json)};`, 
+    ts.ScriptTarget.Latest);
     const host: ts.CompilerHost = {
         getSourceFile: fileName =>
         fileName === libFilePath ? libSourceFile :

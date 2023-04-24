@@ -102,7 +102,7 @@ export async function runTest<TSchema>(prompt: string, typeName: string, typeInt
                     console.log(d);
                     totalPrompt += d;
                 }
-                totalPrompt += "Revised JSON object (no comments, no new properties, single JSON object):"
+                totalPrompt += "Reminder:\n If a property is null or undefined, do not include it. **Do not** add comments when writing out the JSON object because some JSON parsers can't understand comments. Write out only a single JSON object with no extra comments.\nRevised JSON object:"
                 result = await completeAndValidate(totalPrompt, schemaText, typeName);
                 if (result.error) {
                     console.log("error on second try " + result.errorMessage);

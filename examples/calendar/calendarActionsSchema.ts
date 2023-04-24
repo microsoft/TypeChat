@@ -1,10 +1,10 @@
-type EventTimeRange = {
+export type EventTimeRange = {
     startTime?: string;
     endTime?: string;
     duration?: string;
 }
 
-type Event = {
+export type Event = {
     // date (example: March 22, 2024) or relative date (example: tomorrow)
     day: string;
     timeRange: EventTimeRange;
@@ -14,7 +14,7 @@ type Event = {
     participants?: string[];    
 }
 
-type EventReference = {
+export type EventReference = {
     // date (example: March 22, 2024) or relative date (example: tomorrow)
     day?: string;
     // (examples: this month, this week, in the next two days)
@@ -25,17 +25,17 @@ type EventReference = {
     participants?: string[];    
 }
 
-type AddEventAction = {
+export type AddEventAction = {
     actionType: "add event";
     event: Event;
 }
 
-type RemoveEventAction = {
+export type RemoveEventAction = {
     actionType: "removeEvent";
     eventReference: EventReference;
 }
 
-type AddParticipantsAction = {
+export type AddParticipantsAction = {
     actionType: "add participants";
     // event to be augmented; if not specified assume last event discussed
     eventReference?: EventReference;
@@ -43,7 +43,7 @@ type AddParticipantsAction = {
     participants: string[];
 }
 
-type ChangeTimeRangeAction = {
+export type ChangeTimeRangeAction = {
     actionType: "change time range";
     // event to be changed
     eventReference?: EventReference;
@@ -51,13 +51,13 @@ type ChangeTimeRangeAction = {
     timeRange: EventTimeRange;
 }
 
-type FindEventsAction = {
+export type FindEventsAction = {
     actionType: "find events";
     // one or more event properties to use to search for matching events
     eventReference: EventReference;
 }
 
-type Action = 
+export type Action = 
     | AddEventAction
     | RemoveEventAction
     | AddParticipantsAction
@@ -65,6 +65,6 @@ type Action =
     | FindEventsAction
     ;
 
-type CalendarActions = {
+export type CalendarActions = {
     actions: Action[];
 }

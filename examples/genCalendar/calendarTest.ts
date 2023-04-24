@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { makePromptsInteractive, runTests, runTestsInteractive } from '../../src/typechat';
 
-const schemaFilename = "calendarActions.d.ts";
+const schemaFilename = "calendarActionsSchema.ts";
 
 // open schema file containing ts definitions
 const schemaText = fs.readFileSync(path.join(__dirname, schemaFilename), 'utf8');
