@@ -1,5 +1,7 @@
 # Typechat
-In this repo, we're exploring an approach to developer tools for generative ai prompt engineering.  In our experiences so far with building systems around LLMs, we have observed that:
+In this repo, we're exploring an approach to developer tools for generative ai prompt engineering.  The tools support a prompt flow pattern which converts each LLM output into a TypeScript or Python object, validated against a formal schema. The program can then work with this object by verfiying that it captures user intent, by matching the object to plug-in or library interfaces for further processing, or by converting the object into another LLM prompt.
+
+In our experiences so far with building systems around LLMs, we have observed that:
 1. LLMs can be constrained to avoid unexpected output formats if we specify the output form using a formal description such as a schema.
 2. LLMs produce more consistent output if the prompt contains unambiguous, formal description of the possible outputs.
 3. The approach of using formal schemas works best when the LLM has trained on many tokens from the given formal language.
