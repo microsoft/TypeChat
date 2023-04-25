@@ -1,0 +1,44 @@
+# LLM generated schema for restaurant order
+type: seq # A restaurant order is a sequence of items
+sequence:
+  - type: map # Each item is a mapping of properties
+    mapping:
+      type: # The type property specifies the kind of item
+        type: str
+        enum: [pizza, beer, salad] # The possible types are pizza, beer, or salad
+        required: true
+      size: # The size property is only for pizza items
+        type: str
+        enum: [small, medium, large, extra large] # The possible pizza sizes
+        default: large # The default pizza size is large
+        required: false
+      toppings: # The toppings property is only for pizza items
+        type: seq # The toppings property is a sequence of strings
+        sequence:
+          - type: str
+            enum: [pepperoni, sausage, mushrooms, basil, extra cheese, extra sauce, anchovies, pineapple, olives, arugula, Canadian bacon] # The possible pizza toppings
+        required: false
+      portion: # The portion property is only for salad items
+        type: str
+        enum: [whole, half] # The possible salad portions
+        default: half # The default salad portion is half
+        required: false
+      style: # The style property is only for salad items
+        type: str
+        enum: [Garden, Greek] # The possible salad styles
+        default: Garden # The default salad style is Garden
+        required: false
+      removed: # The removed property is only for salad items
+        type: seq # The removed property is a sequence of strings
+        sequence:
+          - type: str
+            enum: [red onions, croutons] # The possible removed ingredients for salads
+        required: false
+      kind: # The kind property is only for beer items
+        type: str
+        enum: [Sierra Nevada Pale Ale, Mack & Jacks] # The possible kinds of beer
+        required: false
+      quantity: # The quantity property is only for beer items
+        type: int
+        default: 1 # The default quantity of beer is 1
+        required: false
