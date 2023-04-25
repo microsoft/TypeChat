@@ -1,0 +1,30 @@
+# Goal
+Let's work together to create a bot that transforms English requests for restaurant orders into a single YAML list that specifies the items in the restaurant order.  
+# Informal Schema for Restaurant Order
+An order can contain three types of items: pizza, beer, and salad.  The possible pizza sizes are small, medium, large, and extra large.  The default pizza size is large (the formal schema can put in a comment to specify this default).  The possible pizza toppings are pepperoni, sausage, mushrooms, basil, extra cheese, extra sauce, anchovies, pineapp[le, olives, arugula, and Canadian bacon.  The possible salad portions are whole and half.  Half is the default portion for a salad.  Salads have a style which is either Garden or Greek.  The default is Garden.  People may ask to remove ingredients, like red onions from salads, so salad items must have an optional way of representing removed ingredients.  The possible removed ingredients for a salad are red onions and croutons.  Beer items have a kind and a quantity.  The default quantity is 1.  The kinds of beer are Sierra Nevada Pale Ale and Mack & Jacks.  
+# Formal Schema for Restaurant Order
+Here is a Relax NG compact schema for a restaurant order.  It has no comments.  The schema captures the constraints on text elements such as pizza topping.
+
+order = element order {
+  (pizza | beer | salad)*
+}
+
+pizza = element pizza {
+  attribute size { "small" | "medium" | "large" | "extra large" }?,
+  element topping {
+    ("pepperoni" | "sausage" | "mushrooms" | "basil" | "extra cheese" | "extra sauce" | "anchovies" | "pineapple" | "olives" | "arugula" | "Canadian bacon")+
+  }
+}
+
+beer = element beer {
+  attribute kind { "Sierra Nevada Pale Ale" | "Mack & Jacks" },
+  attribute quantity { xsd:positiveInteger }?
+}
+
+salad = element salad {
+  attribute portion { "whole" | "half" }?,
+  attribute style { "Garden" | "Greek" }?,
+  element remove {
+    ("red onions" | "croutons")*
+  }?
+}
