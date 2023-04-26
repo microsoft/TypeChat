@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
-import { runTests, runTestsInteractive } from '../../../src/typechat';
+import { runTests, runTestsInteractive, IPromptContext } from '../../../src/typechat';
 import { Order } from './foodOrderSchema';
 
 const schemaFilename = "foodOrderSchema.ts";
@@ -71,7 +71,11 @@ function printOrder(order: Order) {
 }
 
 export async function pizzaTests() {
-    return await runTests(testPrompts, "Order", typeInterp, frame, schemaText, 1, printOrder);
+    const promptContext: IPromptContext<Order> = {
+        typeInterp, frame, schemaText, typeName: "Order",
+        handleResult: printOrder
+    }   
+    return await runTests(testPrompts, promptContext, 1)
 }
 
 // read arguments from command line
@@ -82,6 +86,10 @@ if (args.length == 0) {
 }
 else {
     if ((args.length == 1) && (args[0] == "-i")) {
-        runTestsInteractive("Order", typeInterp, frame, schemaText, printOrder);
+        const promptContext: IPromptContext<Order> = {
+            typeInterp, frame, schemaText, typeName: "Order",
+            handleResult: printOrder
+        }   
+        runTestsInteractive(promptContext);
     }
 }

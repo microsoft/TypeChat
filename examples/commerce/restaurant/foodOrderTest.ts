@@ -3,10 +3,9 @@ import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
 import { Order, pizzaToppings, beerKind, saladIngredients } from './foodOrderSchema';
-import { runTests, runTestsInteractive } from '../../../src/typechat';
+import { runTests, runTestsInteractive, IPromptContext } from '../../../src/typechat';
 
 const schemaFilename = "foodOrderSchema.ts";
-// open schema file containing ts definitions
 const schemaText = fs.readFileSync(path.join(__dirname, schemaFilename), 'utf8');
 
 const typeInterp = "the list of items in a restaurant order";
@@ -56,13 +55,13 @@ function printOrder(order: Order) {
                 console.log(beerStr);
                 break;
                 case "salad":
-                if (!item.size) {
-                    item.size = "half";
+                if (!item.portion) {
+                    item.portion = "half";
                 }
                 if (!item.style) {
                     item.style = "Garden";
                 }
-                let saladStr = `    ${item.quantity} ${item.size} ${item.style} salad`;
+                let saladStr = `    ${item.quantity} ${item.portion} ${item.style} salad`;
                 if (item.addedIngredients && (item.addedIngredients.length > 0)) {
                     saladStr += " with";
                     for (let [index, addedIngredient] of item.addedIngredients.entries()) {
@@ -104,9 +103,9 @@ function checkOrderConstraints(order: Order) {
                 }
                 break;
                 case "beer":
-                    if (!beerKind.includes(item.kind)) {
-                        diagnostics.push(`Cannot add ${item.kind} to an order; we don't have that beer.`);
-                    }
+                if (!beerKind.includes(item.kind)) {
+                    diagnostics.push(`Cannot add ${item.kind} to an order; we don't have that beer.`);
+                }
                 break;
                 case "salad":
                 if (item.addedIngredients && (item.addedIngredients.length > 0)) {
@@ -131,7 +130,12 @@ function checkOrderConstraints(order: Order) {
 }
 
 export async function pizzaTests() {
-    return await runTests(testPrompts, "Order", typeInterp, frame, schemaText, 1, checkOrderConstraints, printOrder)
+    const promptContext: IPromptContext<Order> = {
+        typeInterp, frame, schemaText, typeName: "Order",
+        checkConstraints: checkOrderConstraints,
+        handleResult: printOrder
+    }   
+    return await runTests(testPrompts, promptContext, 1);
 }
 
 // read arguments from command line
@@ -142,6 +146,11 @@ if (args.length == 0) {
 }
 else {
     if ((args.length == 1) && (args[0] == "-i")) {
-        runTestsInteractive("Order", typeInterp, frame, schemaText, checkOrderConstraints, printOrder);
+        const promptContext: IPromptContext<Order> = {
+            typeInterp, frame, schemaText, typeName: "Order",
+            checkConstraints: checkOrderConstraints,
+            handleResult: printOrder
+        }   
+        runTestsInteractive(promptContext);
     }
 }

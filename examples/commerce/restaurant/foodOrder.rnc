@@ -1,0 +1,38 @@
+Order = element Order {
+  (pizza | beer | salad)*
+}
+
+pizza = element pizza {
+  attribute size { "small" | "medium" | "large" | "extra large" }?,
+  element itemType {
+    "pizza"
+  }
+  element addedToppings {
+    ("pepperoni" | "sausage" | "mushrooms" | "basil" | "extra cheese" | "extra sauce" | "anchovies" | "pineapple" | "olives" | "arugula" | "Canadian bacon")*
+  }
+  element removedToppings {
+    ("pepperoni" | "sausage" | "mushrooms" | "basil" | "extra cheese" | "extra sauce" | "anchovies" | "pineapple" | "olives" | "arugula" | "Canadian bacon")*
+  }
+}
+
+beer = element beer {
+  element itemType {
+    "beer"
+  }
+  attribute kind { "Sierra Nevada Pale Ale" | "Mack & Jacks" },
+  attribute quantity { xsd:positiveInteger }?
+}
+
+salad = element salad {
+  element itemType {
+    "salad"
+  } 
+  attribute portion { "whole" | "half" }?,
+  attribute style { "Garden" | "Greek" }?,
+  element removedIngredients {
+    ("red onions" | "croutons")*
+  }?
+  element addedIngredients {
+    ("red onions" | "croutons")*
+  }?
+}

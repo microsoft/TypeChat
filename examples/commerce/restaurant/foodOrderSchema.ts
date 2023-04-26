@@ -44,7 +44,7 @@ export const saladStyle = [
 export type Salad = {
     itemType: "salad";
     // default: half
-    size?: string;
+    portion?: string;
     // default: garden
     style?: string;
     // an array of strings from the saladIngredients array 

@@ -68,3 +68,4 @@ export type Action =
 export type CalendarActions = {
     actions: Action[];
 }
+

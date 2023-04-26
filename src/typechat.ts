@@ -9,6 +9,21 @@ export interface ICompletionResult {
     errorMessage?: string;
 }
 
+export interface IPromptContext<TSchema> {
+    // Text of the schema that will be part of the prompt
+    schemaText: string;
+    // Name of the type in the schema that will be used to validate the JSON output
+    typeName: string;
+    // Informal interpretation the validation type    
+    typeInterp: string;
+    // Description of the overall prompt context
+    frame: string;
+    // Function to check additional constraints on the JSON output
+    checkConstraints?: (result: TSchema) => string[];
+    // Function to print the result of the interaction
+    handleResult?: (result: TSchema) => void;
+}
+
 function validate<TSchema>(ret: string, schemaText:string, typeName: string, checkConstraints?:(result: TSchema) => string[]) {
     // find the first '{' in ret
     const start = ret.indexOf('{');
@@ -53,26 +68,20 @@ function validate<TSchema>(ret: string, schemaText:string, typeName: string, che
 
 /**
 * Create a prompt for a completion service
-* @param st The text of a schema that specifies the type of the JSON output
-* @param typeName The name of a type in the schema to use for validating the JSON output
-* @param typeInterp Description of the validation type
-* @param frame Description of the overall prompt context
-* @param text Text of the user request to be schematized into JSON
-* @returns 
 */
-export function makePrompt(st: string,typeName: string,typeInterp: string, frame: string, text: string) {
-    const preamble = `Here is a set of typescript data types that define the structure of an object of type ${typeName} that represents ${typeInterp}.\n`;
+export function makePrompt<TSchema>(promptContext: IPromptContext<TSchema>, text: string) {
+    const preamble = `Here is a set of TypeScript data types that define the structure of an object of type ${promptContext.typeName} that represents ${promptContext.typeInterp}.\n`;
     
-    const postamble = `\nIn the following paragraph ${frame}. Write out the person's requests as a **single** JSON object of type ${typeName}. If a property is null or undefined, do not include it. **Do not** add comments when writing out the JSON object because some JSON parsers can't understand comments.\n`;
+    const postamble = `\nIn the following paragraph ${promptContext.frame}. Write out the person's requests as a **single** JSON object of type ${promptContext.typeName}. If a property is null or undefined, do not include it. **Do not** add comments when writing out the JSON object because some JSON parsers can't understand comments.\n`;
     
-    const prompt = preamble + st + postamble + text +"\nJSON object:\n";
+    const prompt = preamble + promptContext.schemaText + postamble + text +"\nJSON object:\n";
     return prompt;
 }
 
-export async function completeAndValidate<TSchema>(p: string, schemaText: string, typeName: string, checkConstraints?:(result: TSchema) => string[]) {
+export async function completeAndValidate<TSchema>(promptContext: IPromptContext<TSchema>, p: string) {
     const ret = await llmComplete(p);
     if (ret) {
-        const result = validate(ret, schemaText, typeName, checkConstraints);
+        const result = validate(ret, promptContext.schemaText, promptContext.typeName, promptContext.checkConstraints);
         return result;
     } else 
     {
@@ -81,9 +90,8 @@ export async function completeAndValidate<TSchema>(p: string, schemaText: string
 }
 
 function printJSON<TSchema>(result: TSchema) {
-    console.log(JSON.stringify(result));
+    console.log(JSON.stringify(result, null, 2));
 }
-
 
 /**
 * Construct, complete and validate a prompt.
@@ -95,86 +103,85 @@ function printJSON<TSchema>(result: TSchema) {
 * @param delay Delay in seconds between tests
 * @param handleResult Handler for each valid result
 */
-export async function runTest<TSchema>(prompt: string, typeName: string, typeInterp: string,frame: string, 
-    schemaText: string, delay = 0, checkConstraints?:(result: TSchema) => string[], handleResult:(result: TSchema) => void = printJSON, printTotalPrompt = false) {
-        let totalPrompt = makePrompt(schemaText, typeName, typeInterp, frame, prompt);
-        if (printTotalPrompt) {
-            console.log(totalPrompt);
+export async function runTest<TSchema>(promptContext: IPromptContext<TSchema>, prompt: string, delay = 0) {
+    let totalPrompt = makePrompt(promptContext, prompt);
+    console.log(prompt);
+    let result = await completeAndValidate(promptContext, totalPrompt);
+    if (result.error) {
+        console.log("Error: " + result.errorMessage);
+        if (result.diagnostics && result.diagnostics.length > 0) {
+            totalPrompt += result.jsontext ? result.jsontext : "";
+            for (let d of result.diagnostics) {
+                console.log(d);
+                totalPrompt += d;
+            }
+            totalPrompt += "Reminder:\n If a property is null or undefined, do not include it. **Do not** add comments when writing out the JSON object because some JSON parsers can't understand comments. Write out only a single JSON object with no extra comments.\nRevised JSON object:"
+            result = await completeAndValidate(promptContext, totalPrompt);
+            if (result.error) {
+                console.log("error on second try " + result.errorMessage);
+                console.log(result.jsontext!);
+            }
+        }
+    } 
+    if (!result.error) {
+        console.log("Valid instance:");
+        if (result.jsontext) {
+            const typedResult = JSON.parse(result.jsontext) as TSchema;
+            if (promptContext.handleResult) {
+                promptContext.handleResult(typedResult);
+            } else 
+            {
+                printJSON(typedResult);
+            }
+        }
+    }
+    // insert a delay 
+    if (delay > 0) {
+        // console.log(`Delaying ${delay} seconds`);
+        await new Promise(r => setTimeout(r, Math.round(delay*1000)));
+    }
+    return result;
+}
+
+export async function runTests<TSchema>(testPrompts: string[], promptContext: IPromptContext<TSchema>, delay = 0) {
+    for (let prompt of testPrompts) {
+        await runTest(promptContext, prompt, delay);
+    }   
+}
+
+function interactivePrompt(handler: (prompt: string) => void) {
+    // read a prompt from the console line by line and test the prompt after an empty line
+    let prompt = "";
+    let lineReader = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+    lineReader.on('line', function (line: string) {
+        if (line.length == 0) {
+            handler(prompt);
+            prompt = "";
         }
         else {
-            console.log(prompt);
+            if (line == "exit") {
+                process.exit();
+            }
+            prompt += line + " ";
         }
-        let result = await completeAndValidate(totalPrompt, schemaText, typeName, checkConstraints);
-        if (result.error) {
-            console.log("Error: " + result.errorMessage);
-            if (result.diagnostics && result.diagnostics.length > 0) {
-                totalPrompt += result.jsontext ? result.jsontext : "";
-                for (let d of result.diagnostics) {
-                    console.log(d);
-                    totalPrompt += d;
-                }
-                totalPrompt += "Reminder:\n If a property is null or undefined, do not include it. **Do not** add comments when writing out the JSON object because some JSON parsers can't understand comments. Write out only a single JSON object with no extra comments.\nRevised JSON object:"
-                result = await completeAndValidate(totalPrompt, schemaText, typeName);
-                if (result.error) {
-                    console.log("error on second try " + result.errorMessage);
-                    console.log(result.jsontext!);
-                }
-            }
-        } 
-        if (!result.error) {
-            console.log("Valid instance:");
-            if (result.jsontext) {
-                const typedResult = JSON.parse(result.jsontext) as TSchema;
-                handleResult(typedResult);
-            }
-        }
-        // insert a delay 
-        if (delay > 0) {
-            // console.log(`Delaying ${delay} seconds`);
-            await new Promise(r => setTimeout(r, Math.round(delay*1000)));
-        }
-        return result;
-    }
+    });
+    // wait for the user to enter a prompt
+    console.log("Enter a multi-line prompt.  Enter a blank line to test the prompt.  Enter 'exit' to exit.");
+    lineReader.prompt();   
     
-    export async function runTests<TSchema>(testPrompts: string[], typeName: string, typeInterp: string, frame: string, schemaText: string, delay = 0, checkConstraints?:(result: TSchema) => string[], handleResult:(result: TSchema) => void = printJSON) {
-        for (let prompt of testPrompts) {
-            await runTest(prompt, typeName, typeInterp, frame, schemaText, delay, checkConstraints, handleResult);
-        }   
-    }
-    
-    function interactivePrompt(handler: (prompt: string) => void) {
-        // read a prompt from the console line by line and test the prompt after an empty line
-        let prompt = "";
-        let lineReader = readline.createInterface({
-            input: process.stdin,
-            output: process.stdout
-        });
-        lineReader.on('line', function (line: string) {
-            if (line.length == 0) {
-                handler(prompt);
-                prompt = "";
-            }
-            else {
-                if (line == "exit") {
-                    process.exit();
-                }
-                prompt += line + " ";
-            }
-        });
-        // wait for the user to enter a prompt
-        console.log("Enter a multi-line prompt.  Enter a blank line to test the prompt.  Enter 'exit' to exit.");
-        lineReader.prompt();   
-        
-    }
-    
-    export function runTestsInteractive<TSchema>(typeName: string, typeInterp: string, frame: string, schemaText: string, checkConstraints?:(result: TSchema) => string[], handleResult:(result: TSchema) => void = printJSON) {
-        interactivePrompt((prompt: string) => {
-            runTest(prompt, typeName, typeInterp, frame, schemaText, 0, checkConstraints, handleResult);
-        });
-    }
-    
-    export function makePromptsInteractive<TSchema>(typeName: string, typeInterp: string, frame: string,schemaText: string) {
-        interactivePrompt((prompt: string) => {
-            console.log(makePrompt(schemaText, typeName, typeInterp, frame, prompt));
-        });
-    }
+}
+
+export function runTestsInteractive<TSchema>(promptContext: IPromptContext<TSchema>) {
+    interactivePrompt((prompt: string) => {
+        runTest(promptContext, prompt, 0);
+    });
+}
+
+export function makePromptsInteractive<TSchema>(promptContext: IPromptContext<TSchema>) {
+    interactivePrompt((prompt: string) => {
+        console.log(makePrompt(promptContext, prompt));
+    });
+}
