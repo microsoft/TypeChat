@@ -7,7 +7,7 @@ export const saladIngredients = [
 ];
 
 export const pizzaToppings = [
-    "pepperoni","sausage", "mushrooms", "basil", "extraCheese", "extraSauce", "anchovies", "pineapple", "olives", "arugula", "Canadian bacon"
+    "pepperoni","sausage", "mushrooms", "basil", "extra cheese", "extra sauce", "anchovies", "pineapple", "olives", "arugula", "Canadian bacon"
 ];
 
 export type Pizza = {
