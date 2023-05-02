@@ -3,7 +3,7 @@ export const pizzaSizes = [
 ];
 
 export const saladIngredients = [
-    "lettuce", "tomatoes", "red onions", "olives", "peppers", "parmesan"
+    "lettuce", "tomatoes", "red onions", "olives", "peppers", "parmesan", "croutons"
 ];
 
 export const pizzaToppings = [

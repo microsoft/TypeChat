@@ -62,6 +62,7 @@ function validate<TSchema>(ret: string, schemaText:string, typeName: string, che
     else {
         result.error = true;
         result.errorMessage = "No JSON instance found";
+        console.log(ret);
     }
     return result;
 }
@@ -72,7 +73,7 @@ function validate<TSchema>(ret: string, schemaText:string, typeName: string, che
 export function makePrompt<TSchema>(promptContext: IPromptContext<TSchema>, text: string) {
     const preamble = `Here is a set of TypeScript data types that define the structure of an object of type ${promptContext.typeName} that represents ${promptContext.typeInterp}.\n`;
     
-    const postamble = `\nIn the following paragraph ${promptContext.frame}. Write out the person's requests as a **single** JSON object of type ${promptContext.typeName}. If a property is null or undefined, do not include it. **Do not** add comments when writing out the JSON object because some JSON parsers can't understand comments.\n`;
+    const postamble = `\nIn the following paragraph ${promptContext.frame}. Write out the person's requests as a **single** JSON object of type ${promptContext.typeName}. Never write null or undefined as values in the JSON object. **Do not** add comments when writing out the JSON object because some JSON parsers can't understand comments.\n`;
     
     const prompt = preamble + promptContext.schemaText + postamble + text +"\nJSON object:\n";
     return prompt;
