@@ -9,3 +9,5 @@ package-lock.json
 # VSCode
 **/.vscode/launch.json
 
+#Config
+AppConfig.json
