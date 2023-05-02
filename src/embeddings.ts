@@ -11,6 +11,10 @@ export interface IEmbedding {
     normalize() : void;
 }
 
+export interface ITextEmbeddingGenerator {
+    createEmbeddings(texts : string[]) : Promise<Embedding[]>;   
+}
+
 export class Embedding extends Float32Array implements IEmbedding {
     constructor(vector : number[]) {
         super(vector);

@@ -1,25 +1,34 @@
 // (c) Copyright Microsoft Corp
 
-import { Configuration, CreateEmbeddingRequest, OpenAIApi } from "azure-openai";
-import { assert } from "console";
-import exp from "constants";
+import * as oai from "azure-openai";
+import { Embedding, ITextEmbeddingGenerator } from "./embeddings";
+import * as retry from "./retry";
+import { TypechatException } from "./exception";
 
-//type ModelSpecs = Readonly<typeof data>;
-//export const Models : ModelSpecs = data;
+/**
+ * Types of models we work with
+ */
+export enum ModelType {
+    Completion = "completion",
+    Embedding = "embedding",
+    Chat = "chat",
+    Image = "image"
+}
 
+/**
+ * Model information, like token budgets and
+ */
 export type ModelInfo = {
     name : string,
     type : string,
     maxTokenLength : number,
     embeddingSize? : number
+    // Add Tokenizer Here
 }
 
-export enum ModelType {
-    Completion = "completion",
-    Embedding = "embedding",
-    Chat = "chat"
-}
-
+/**
+ * A registry of model information
+ */
 export const Models : ModelInfo[] = [
     {
         "name" : "text-davinci-002",
@@ -51,14 +60,80 @@ export type ModelAPISettings = {
     endpoint : string
 }
 
-export function createClient(settings : ModelAPISettings) : any {
-    let config : Configuration = new Configuration({
+export class OpenAIException extends TypechatException<number> {
+    constructor(statusCode : number, message? : string) {
+        super(statusCode, message);
+    }
+}
+
+export class OpenAIClient implements ITextEmbeddingGenerator {
+ 
+    _retrySettings : retry.RetrySettings;
+    _modelSettings : ModelAPISettings;
+    _client : oai.OpenAIApi;
+    
+    constructor(modelSettings : ModelAPISettings, retrySettings? : retry.RetrySettings) {
+        this._modelSettings = modelSettings;
+        this._client = createClient(modelSettings);
+        if (retrySettings) {
+            this._retrySettings = retrySettings;
+        }
+        else {
+            this._retrySettings = {
+                maxAttempts : 5,
+                retryPauseMS : 1000
+            }
+        }
+    }
+
+    public async createEmbeddings(texts: string[]): Promise<Embedding[]> {
+        let embeddings : Embedding[]= await retry.executeWithRetry(
+            this._retrySettings.maxAttempts,
+            this._retrySettings.retryPauseMS,
+            () => this.createEmbeddingsAttempt(texts),
+            this.isTransientError
+        );
+        return embeddings;
+    }
+
+    async createEmbeddingsAttempt(texts: string[]): Promise<Embedding[]> {
+        let response = await this._client.createEmbedding({
+            model : this._modelSettings.deployment,
+            input : texts
+        });
+        if (response.status == 200) {
+            return this.toEmbeddings(response.data);
+        }
+        throw new OpenAIException(response.status, response.statusText);
+    }
+
+    toEmbeddings(response: oai.CreateEmbeddingResponse) : Embedding[] {
+        let data = response.data;
+        let embeddings : Embedding[] = new Array(data.length);
+        for (let i = 0; i < data.length; ++i)
+        {
+            embeddings[i] = new Embedding(data[i].embedding);
+        }
+        return embeddings;
+    }   
+
+    isTransientError(e : Error) : boolean {
+        if (e instanceof OpenAIException) {
+            return retry.isTransientHttpError((e as OpenAIException).errorCode);
+        } 
+        return false;
+    }
+}
+
+function createClient(settings : ModelAPISettings) : any {
+    let config : oai.Configuration = new oai.Configuration({
         apiKey : settings.apiKey,
         azure : {
             apiKey : settings.apiKey,
             endpoint : settings.endpoint,
             deploymentName : settings.deployment
         }});
-    let client : OpenAIApi = new OpenAIApi(config);
+    let client : oai.OpenAIApi = new oai.OpenAIApi(config);
     return client;
 }
+
