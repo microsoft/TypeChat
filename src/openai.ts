@@ -68,9 +68,9 @@ export class OpenAIException extends TypechatException<number> {
 
 export class OpenAIClient implements ITextEmbeddingGenerator {
  
-    _retrySettings : retry.RetrySettings;
-    _modelSettings : ModelAPISettings;
-    _client : oai.OpenAIApi;
+    private _retrySettings : retry.RetrySettings;
+    private _modelSettings : ModelAPISettings;
+    private _client : oai.OpenAIApi;
     
     constructor(modelSettings : ModelAPISettings, retrySettings? : retry.RetrySettings) {
         this._modelSettings = modelSettings;
@@ -96,7 +96,7 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
         return embeddings;
     }
 
-    async createEmbeddingsAttempt(texts: string[]): Promise<Embedding[]> {
+    private async createEmbeddingsAttempt(texts: string[]): Promise<Embedding[]> {
         let response = await this._client.createEmbedding({
             model : this._modelSettings.deployment,
             input : texts
@@ -107,7 +107,7 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
         throw new OpenAIException(response.status, response.statusText);
     }
 
-    toEmbeddings(response: oai.CreateEmbeddingResponse) : Embedding[] {
+    private toEmbeddings(response: oai.CreateEmbeddingResponse) : Embedding[] {
         let data = response.data;
         let embeddings : Embedding[] = new Array(data.length);
         for (let i = 0; i < data.length; ++i)
@@ -117,7 +117,7 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
         return embeddings;
     }   
 
-    isTransientError(e : Error) : boolean {
+    private isTransientError(e : Error) : boolean {
         if (e instanceof OpenAIException) {
             return retry.isTransientHttpError((e as OpenAIException).errorCode);
         } 

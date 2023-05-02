@@ -5,6 +5,7 @@
 import { test } from "node:test";
 
 export type TestFunction = (context : TestContext) => void;
+export type TestFunctionAsync = (context : TestContext) => Promise<void>;
 
 export class TestFailedException extends Error {
     public constructor(testName? : string) {
@@ -13,13 +14,11 @@ export class TestFailedException extends Error {
 }
 
 export class TestContext {
-    public log(obj : any) : TestContext {
+    public log(obj : any) : void {
         console.log(obj.toString());
-        return this;
     }
-    public logError(e : Error) : TestContext {
+    public logError(e : Error) : void  {
         console.log(e);
-        return this;
     }
     public assertTrue(result : boolean) : void {
         if (!result) {
@@ -30,6 +29,16 @@ export class TestContext {
         if (value === null || value.length == 0) {
             throw new TestFailedException();
         }
+    }
+    public logStart(testName : string) : void {
+        console.log(`###${testName} Starting###`);            
+    }
+    public logSuccess(testName : string) : void {
+        console.log(`###${testName} Success###`);            
+    }
+    public logFailed(testName : string, error : Error) : void {
+        this.logError(error);
+        console.log(`###${testName} Failed###`);
     }
 }
 
@@ -43,13 +52,12 @@ export function runTests(tests : TestFunction[], stopOnError : boolean) : void {
             testName = test.name;
         }
         try {
-            context.log(`###${testName} Starting###`);            
+            context.logStart(testName);
             test(context);              
-            console.log(`###${testName} Success###`);            
+            context.logSuccess(testName);            
         }
         catch(e : any) {
-            context.logError(e);
-            console.log(`###${testName} Failed###`);
+            context.logFailed(testName, e);
             if (stopOnError) {
                 return;
             }
@@ -57,3 +65,25 @@ export function runTests(tests : TestFunction[], stopOnError : boolean) : void {
     }
 }    
 
+export async function runTestsAsync(tests : TestFunctionAsync[], stopOnError : boolean) : Promise<void> {
+    let context : TestContext = new TestContext();
+    for (let i = 0; i < tests.length; ++i) {
+        let test : TestFunctionAsync = tests[i];
+        let testInfo : any = test;
+        let testName : string = testInfo["TestName"];
+        if (testName === undefined || testName == "") {
+            testName = test.name;
+        }
+        try {
+            context.logStart(testName);
+            await test(context);              
+            context.logSuccess(testName);            
+        }
+        catch(e : any) {
+            context.logFailed(testName, e);
+            if (stopOnError) {
+                return;
+            }
+        }
+    }
+}    

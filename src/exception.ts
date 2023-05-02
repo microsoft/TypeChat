@@ -1,8 +1,8 @@
 // (c) Copyright Microsoft Corp
 
 export class TypechatException<TError> extends Error {
-    _errorCode : TError;
-    _innerEx? : Error;
+    private _errorCode : TError;
+    private _innerEx? : Error;
     
     public constructor(errorCode : TError, message? : string, innerEx? : Error) {
         super(message);

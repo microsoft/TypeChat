@@ -9,9 +9,14 @@ runTests.TestName = "Embeddings";
 
 // This ends up testing both normalize and dot product
 function testNormalize(context : TestContext) {
-    let vector : number[] = random.array(1024);
+    let vector : number[] = random.array(1024);    
     let embedding : embeddings.Embedding =  new embeddings.Embedding(vector);
+
     embedding.normalize();
+    
     let length : number = embedding.euclideanLength();
     context.assertTrue(Math.round(length) == 1);
+    
+    let lengthManual : number = Math.sqrt(embedding.dotProduct(embedding));
+    context.assertTrue(length == lengthManual);
 }
