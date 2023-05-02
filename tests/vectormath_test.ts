@@ -1,5 +1,5 @@
 import {TestContext} from "./testing"
-import * as vector from "../src/vectormath"
+import * as vectormath from "../src/vectormath"
 
 export function runTests(context : TestContext) : void {
     testCosine(context);
@@ -24,6 +24,6 @@ function testCosine(context : TestContext) : void {
 function doCosine32(context : TestContext, x : number[], y : number[], target : number, scale : number) : void  {
     let x32 : Float32Array = new Float32Array(x);
     let y32 : Float32Array = new Float32Array(y);
-    let cosine : number = vector.cosineSimilarity(x, y);
+    let cosine : number = vectormath.cosineSimilarity(x, y);
     context.assertTrue(Math.round(cosine * scale) == target * scale);
 }

@@ -1,5 +1,5 @@
-import {ModelAPISettings, ModelInfo, Models} from "../src/openai";
 import {TestContext} from  "./testing";
+import {ModelAPISettings, ModelInfo, Models} from "../src/openai";
 import { TypechatConfig, loadConfig } from "../src/typechatConfig";
 import * as fs from 'fs';
 import * as path from 'path';

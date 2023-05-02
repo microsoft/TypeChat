@@ -1,3 +1,5 @@
+// (c) Copyright Microsoft Corp
+
 import * as fs from 'fs';
 import {ModelAPISettings} from './openai';
 

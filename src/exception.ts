@@ -1,3 +1,5 @@
+// (c) Copyright Microsoft Corp
+
 export enum TypechatErrorCode {
     NotEmbeddingModel
 }

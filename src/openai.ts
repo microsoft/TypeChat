@@ -1,3 +1,5 @@
+// (c) Copyright Microsoft Corp
+
 import { Configuration, CreateEmbeddingRequest, OpenAIApi } from "azure-openai";
 import { assert } from "console";
 import exp from "constants";
