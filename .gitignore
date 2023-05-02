@@ -11,3 +11,5 @@ package-lock.json
 
 #Config
 AppConfig.json
+**/AppConfig.json
+

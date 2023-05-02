@@ -42,17 +42,14 @@ export const Models : ModelInfo[] = [
     }
 ];
 
-export type ModelSettings = {
-    type : string,
+export type ModelAPISettings = {
     modelName : string,
     deployment : string,
     apiKey : string,
     endpoint : string
 }
 
-export function createClient(type : ModelType, settings : ModelSettings) : any {
-    assert(settings.type == ModelType.Embedding);
-
+export function createClient(settings : ModelAPISettings) : any {
     let config : Configuration = new Configuration({
         apiKey : settings.apiKey,
         azure : {
