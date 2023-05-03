@@ -86,21 +86,60 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
         }
     }
 
-    public async createEmbeddings(texts: string[]): Promise<Embedding[]> {
-        let embeddings : Embedding[]= await retry.executeWithRetry(
+    public async getCompletion(prompt : string, maxTokens? : number, temperature? : number) : Promise<string> {
+        let request : oai.CreateCompletionRequest = {
+            model : this._modelSettings.deployment,
+            prompt : prompt,
+            max_tokens : maxTokens,
+            temperature : temperature
+        };
+        return retry.executeWithRetry(
+            this._retrySettings.maxAttempts, 
+            this._retrySettings.retryPauseMS,
+            () => this.getCompletionAttempt(request),
+            this.isTransientError
+            );
+    }
+
+    public async createEmbedding(text : string) : Promise<Embedding> {
+        let request : oai.CreateEmbeddingRequest = {
+            model : this._modelSettings.deployment,
+            input : [text]
+        };
+        let embeddings : Embedding[] = await retry.executeWithRetry(
             this._retrySettings.maxAttempts,
             this._retrySettings.retryPauseMS,
-            () => this.createEmbeddingsAttempt(texts),
+            () => this.createEmbeddingsAttempt(request),
             this.isTransientError
         );
+        return embeddings[0];
+
+    }
+
+    public async createEmbeddings(texts: string[]): Promise<Embedding[]> {
+        // Azure OAI is currently only allowing 1 embedding at a time, even though the API allows batching
+        // So we have to do this in a loop.
+        let embeddings : Embedding[] = new Array(texts.length);
+        for (let i = 0; i < texts.length; ++i) {
+            embeddings[i] = await this.createEmbedding(texts[i]);
+        }
         return embeddings;
     }
 
-    private async createEmbeddingsAttempt(texts: string[]): Promise<Embedding[]> {
-        let response = await this._client.createEmbedding({
-            model : this._modelSettings.deployment,
-            input : texts
-        });
+    private async getCompletionAttempt(request: oai.CreateCompletionRequest): Promise<string> {
+        let response = await this._client.createCompletion(request);
+        if (response.status == 200) {
+            let text = response.data.choices[0].text;
+            if (!text) {
+                text = "";
+            }
+            return text;
+        }
+        throw new OpenAIException(response.status, response.statusText);
+    }
+
+    private async createEmbeddingsAttempt(request: oai.CreateEmbeddingRequest): Promise<Embedding[]> {
+        let response = await this._client.createEmbedding(request);
         if (response.status == 200) {
             return this.toEmbeddings(response.data);
         }
@@ -117,7 +156,13 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
         return embeddings;
     }   
 
-    private isTransientError(e : Error) : boolean {
+    private isTransientError(e : any) : boolean {
+        if (e.response && retry.isTransientHttpError(e.response.status)) {
+            return true;
+        }
+        if (e.status && retry.isTransientHttpError(e.status)) {
+            return true;
+        }
         if (e instanceof OpenAIException) {
             return retry.isTransientHttpError((e as OpenAIException).errorCode);
         } 

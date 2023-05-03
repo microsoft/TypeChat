@@ -12,6 +12,7 @@ export interface IEmbedding {
 }
 
 export interface ITextEmbeddingGenerator {
+    createEmbedding(text : string) : Promise<Embedding>;   
     createEmbeddings(texts : string[]) : Promise<Embedding[]>;   
 }
 

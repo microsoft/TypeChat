@@ -1,0 +1,15 @@
+{
+    "completionModel" : 
+     {
+        "modelName" : "azure-dv3",
+        "deployment" : "dv3",
+        "apiKey" : "? YOUR KEY",
+        "endpoint" :"? YOUR ENDPOINT"    
+     },
+     "embeddingModel" : {
+        "modelName" : "text-embedding-ada-002",
+        "deployment" : "text-embedding-ada-002",
+        "apiKey" : "? YOUR KEY",
+        "endpoint" :"? YOUR ENDPOINT"    
+     }
+}

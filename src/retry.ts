@@ -17,7 +17,7 @@ export async function executeWithRetry<T>(
     maxAttempts : number, 
     retryPauseMS : number = 1000, 
     fn : () => Promise<T>, 
-    isTransient : (ex : Error) => boolean) : Promise<T>
+    isTransient : (e : any) => boolean) : Promise<T>
 {
 
     for (let i = 0; i < maxAttempts; ++i) {
