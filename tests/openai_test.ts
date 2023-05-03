@@ -2,6 +2,8 @@ import * as oai from "../src/openai";
 import * as config from "../src/typechatConfig";
 import { Embedding } from "../src/embeddings";
 import {TestContext} from  "./testing";
+import * as fs from 'fs';
+import * as path from 'path';
 
 let test_texts : string[] = [
 
@@ -11,6 +13,12 @@ let test_texts : string[] = [
 ];
 
 export async function runTestsAsync(context : TestContext) : Promise<void> {
+
+    const configPath = path.resolve("./tests/appConfig.json");
+    if (!fs.existsSync(configPath)) {
+        context.log("No Config Found. OpenAI tests will not run ")
+        return;
+    }
 
     let tcConfig : config.TypechatConfig = config.loadConfig("./tests/appConfig.json"); 
 
