@@ -27,5 +27,5 @@ console.log("Async tests Starting");
 (async () => {
     await testFx.runTestsAsync(asyncTests, true);
     // This code will be executed after the asynchronous operation is complete
+    console.log("Async tests Finished");
 })();
-console.log("Async tests Finished");

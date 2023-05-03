@@ -19,17 +19,18 @@ export async function executeWithRetry<T>(
     fn : () => Promise<T>, 
     isTransient : (e : any) => boolean) : Promise<T>
 {
-
+    let max_i : number = maxAttempts - 1;
     for (let i = 0; i < maxAttempts; ++i) {
         try {
             return await fn();
         }
         catch(e : any) {
-            if (!isTransient(e)) {
+            if (!isTransient(e) || 
+                i == max_i) {
                 throw e;
             }
         }
-        if (retryPauseMS > 0) {
+        if (retryPauseMS > 0 && i < max_i) {
             await sleep(retryPauseMS);
         }
     }

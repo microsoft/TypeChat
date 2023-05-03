@@ -66,6 +66,11 @@ export class OpenAIException extends TypechatException<number> {
     }
 }
 
+/**
+ * OpenAIClient with:
+ *   Built in retry around transient errors
+ *   Wrapper APIs for common scenarios
+ */
 export class OpenAIClient implements ITextEmbeddingGenerator {
  
     private _retrySettings : retry.RetrySettings;
@@ -157,11 +162,11 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
     }   
 
     private isTransientError(e : any) : boolean {
-        if (e.response && retry.isTransientHttpError(e.response.status)) {
-            return true;
+        if (e.response) {
+            return (retry.isTransientHttpError(e.response.status));
         }
-        if (e.status && retry.isTransientHttpError(e.status)) {
-            return true;
+        if (e.status) {
+            return retry.isTransientHttpError(e.status);
         }
         if (e instanceof OpenAIException) {
             return retry.isTransientHttpError((e as OpenAIException).errorCode);
