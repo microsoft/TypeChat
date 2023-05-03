@@ -2,7 +2,6 @@ build/
 dist/
 node_modules/
 .env
-*.js
 *.map
 *.out.txt
 package-lock.json

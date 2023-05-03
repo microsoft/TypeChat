@@ -11,7 +11,8 @@
     "fix": "gts fix",
     "prepare": "npm.cmd run compile",
     "pretest": "npm.cmd run compile",
-    "posttest": "npm.cmd run lint"
+    "posttest": "npm.cmd run lint",
+    "test": "jest"
   },
   "repository": {
     "type": "git",
@@ -36,8 +37,11 @@
     "typescript": "^5.0.4"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.1",
     "@types/node": "^18.15.12",
     "gts": "^3.1.1",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
     "typescript": "~4.7.0"
   }
 }
