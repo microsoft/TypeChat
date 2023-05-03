@@ -14,13 +14,39 @@ This repo supplies one possible method for implementing one of two parts of a br
 To support validation, the developer creates a schema using a TypeScript module, a Relax NG compact schema or a YAML schema. The developer selects a root type from the schema that corresponds to the XML or JSON output requested of the LLM.  The developer describes in natural language the meaning of the root type (for example, a set of calendar update actions) and also the overall framing of the application (for example, a person is working with a bot to update a calendar).  
 
 The developer can combine these inputs with end-user input to create a prompt that will result in the LLM generating a JSON or YAML instance. The typechat library validates the instance against the schema provided by the developer, simplifying the task of verifying that the captured end-user intent can be successfully processed by the system. The system can convert both JSON and YAML instances into objects native to the host programming language (TypeScript/JavaScript or python), simplifying post-processing.
-## Install
-Install `node.js` and the `npm` package manager.  Then type `npm install` in the root directory.
+
+## Alternative 1: Use GitHub CodeSpaces
+In your web browser, navigate to the [repo on GitHub](https://github.com/microsoft/typechat/). Click the green button, labelled `<> Code` and then choose the `Codespaces` tab.
+Then click the green `Create codespaces` button.
+
+![Create codespaces](docs/codespaces.png)
+
+If this is your first time creating a codespace on this repo, 
+GitHub will take a moment to create a dev container image for your session.
+
+![Setting up your codespace](docs/setting-up-your-codespace.png)
+
+Once the image has been created, the browser will load a version
+of VSCode, which has been configured to communicate with your dev container in the cloud.
+
+Note that the dev container is pre-configured to clone the repo and run `npm run install` so you are ready to go as soon as VS Code appears in your browser.
+
+Remember that you are running in the cloud, so all changes you make to the source tree must be committed and pushed before destroying the CodeSpace. GitHub accounts are usually configured to automatically delete CodeSpaces that have been inactive for 30 days.
+
+For more information, see the [GitHub Codespaces Overview](https://docs.github.com/en/codespaces/overview)
+
+## Alternative 2: Configure your Dev Machine
+1. Install [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en). Note that this version of node comes with `npm` package manager.
+2. Clone the repo with `git clone https://github.com/microsoft/typechat.git`.
+3. `cd` to the root of the repo.
+4. Install packages with `npm install`.
+
 ## Build
 ```     
 npm run build
 ```
-This will build the module but not the examples. 
+This will build the module but not the examples.
+
 ## Examples
 For now, build each example directory separately by typing `tsc` in the example directory and then using node to run the resulting `.js` output file.
 

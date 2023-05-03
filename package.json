@@ -4,7 +4,14 @@
   "description": "An exploration of using schemas to make prompt engineering simpler and more reliable.",
   "main": "./dist/typechat.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "lint": "gts lint",
+    "clean": "gts clean",
+    "compile": "tsc",
+    "fix": "gts fix",
+    "prepare": "npm.cmd run compile",
+    "pretest": "npm.cmd run compile",
+    "posttest": "npm.cmd run lint"
   },
   "repository": {
     "type": "git",
@@ -29,6 +36,8 @@
     "typescript": "^5.0.4"
   },
   "devDependencies": {
-    "@types/node": "^18.15.12"
+    "@types/node": "^18.15.12",
+    "gts": "^3.1.1",
+    "typescript": "~4.7.0"
   }
 }

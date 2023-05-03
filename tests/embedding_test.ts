@@ -1,22 +1,22 @@
-import {TestContext} from  "./testing";
-import * as embeddings from "../src/embeddings"
-import * as random from "./random"
+import {TestContext} from './testing';
+import * as embeddings from '../src/embeddings';
+import * as random from './random';
 
-export function runTests(context : TestContext) : void {
+export function runTests(context: TestContext): void {
     testNormalize(context);
 }
-runTests.TestName = "Embeddings";
+runTests.TestName = 'Embeddings';
 
 // This ends up testing both normalize and dot product
-function testNormalize(context : TestContext) {
-    let vector : number[] = random.array(1024);    
-    let embedding : embeddings.Embedding =  new embeddings.Embedding(vector);
+function testNormalize(context: TestContext) {
+    const vector: number[] = random.array(1024);
+    const embedding: embeddings.Embedding = new embeddings.Embedding(vector);
 
     embedding.normalize();
-    
-    let length : number = embedding.euclideanLength();
-    context.assertTrue(Math.round(length) == 1);
-    
-    let lengthManual : number = Math.sqrt(embedding.dotProduct(embedding));
-    context.assertTrue(length == lengthManual);
+
+    const length: number = embedding.euclideanLength();
+    context.assertTrue(Math.round(length) === 1);
+
+    const lengthManual: number = Math.sqrt(embedding.dotProduct(embedding));
+    context.assertTrue(length === lengthManual);
 }
