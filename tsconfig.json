@@ -1,6 +1,7 @@
 {
   "extends": "./node_modules/gts/tsconfig-google.json",
   "compilerOptions": {
+    "target": "es2016",  
     "esModuleInterop": true,
     "outDir": "build",
     "rootDir": ".",

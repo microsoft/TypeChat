@@ -12,7 +12,7 @@ import {
     runTests,
     runTestsInteractive,
     IPromptContext,
-} from '../../../dist/typechat';
+} from '../../../build/src/typechat';
 
 const schemaFilename = 'foodOrderSchema.ts';
 const schemaText = fs.readFileSync(
