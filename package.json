@@ -2,7 +2,7 @@
   "name": "typechat",
   "version": "0.0.10",
   "description": "An exploration of using schemas to make prompt engineering simpler and more reliable.",
-  "main": "./src/typechat.js",
+  "main": "./dist/typechat.js",
   "scripts": {
     "build": "tsc"
   },
@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/microsoft/typechat#readme",
   "dependencies": {
+    "axios": "^1.4.0",
     "azure-openai": "^0.9.4",
     "typescript": "^5.0.4"
   },

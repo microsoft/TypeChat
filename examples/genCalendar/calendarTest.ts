@@ -3,7 +3,7 @@ import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
 import { CalendarActions } from './calendarActionsSchema';
-import { makePromptsInteractive, runTests, runTestsInteractive, IPromptContext } from '../../src/typechat';
+import { makePromptsInteractive, runTests, runTestsInteractive, IPromptContext } from '../../dist/typechat';
 
 const schemaFilename = "calendarActionsSchema.ts";
 

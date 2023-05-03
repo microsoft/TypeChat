@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
-import { runTests, runTestsInteractive, IPromptContext } from '../../../src/typechat';
+import { runTests, runTestsInteractive, IPromptContext } from '../../../dist/typechat';
 import { Order } from './foodOrderSchema';
 
 const schemaFilename = "foodOrderSchema.ts";

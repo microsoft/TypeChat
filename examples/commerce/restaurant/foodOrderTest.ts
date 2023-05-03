@@ -3,7 +3,7 @@ import * as fs from 'fs';
 // import the node path api
 import * as path from 'path';
 import { Order, pizzaToppings, beerKind, saladIngredients } from './foodOrderSchema';
-import { runTests, runTestsInteractive, IPromptContext } from '../../../src/typechat';
+import { runTests, runTestsInteractive, IPromptContext } from '../../../dist/typechat';
 
 const schemaFilename = "foodOrderSchema.ts";
 const schemaText = fs.readFileSync(path.join(__dirname, schemaFilename), 'utf8');
