@@ -1,6 +1,15 @@
+# Node
 node_modules/
 dist/
 *.js
 *.map
 *.out.txt
+package-lock.json
+
+# VSCode
+**/.vscode/launch.json
+
+#Config
+AppConfig.json
+**/AppConfig.json
 
