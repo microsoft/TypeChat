@@ -4,6 +4,7 @@ node_modules/
 .env
 *.map
 *.out.txt
+*.bat
 package-lock.json
 
 # VSCode

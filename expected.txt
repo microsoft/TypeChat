@@ -1,0 +1,82 @@
+
+> typechat@0.0.10 test
+> node ./dist/tests.js
+
+I'd like two large, one with pepperoni and the other with extra sauce.  The pepperoni gets basil and the extra sauce gets Canadian bacon.  And add a whole salad. Make the Canadian bacon a medium. Make the salad a Greek with no red onions.  And give me two Mack and Jacks and a Sierra Nevada.  Oh, and add another salad with no red onions.
+Valid instance:
+    large pizza with pepperoni, basil
+    medium pizza with extraSauce, Canadian bacon
+    whole Greek salad without red onions
+    half Garden salad without red onions
+    2 Mack and Jacks
+    1 Sierra Nevada Pale Ale
+I'd like two large with olives and mushrooms.  And the first one gets extra sauce.  The second one gets basil.  Both get arugula.  And add a Pale Ale. Give me a two Greeks with no red onions, a half and a whole.  And a large with sausage and mushrooms.  Plus three Pale Ales and a Mack and Jacks.
+Valid instance:
+    large pizza with olives, mushrooms, extraSauce, arugula
+    large pizza with olives, mushrooms, basil, arugula
+    1 Sierra Nevada Pale Ale
+    half Greek salad without red onions
+    whole Greek salad without red onions
+    large pizza with sausage, mushrooms
+    3 Sierra Nevada Pale Ale
+    1 Mack and Jacks
+I'll take two pepperoni and give me the second one with olives.  Make the olive a small.  And give me whole Greek plus a Pale Ale and an M&J.
+Valid instance:
+    large pizza with pepperoni
+    small pizza with pepperoni, olives
+    whole Greek salad
+    1 Sierra Nevada Pale Ale
+    1 Mack and Jacks
+I want three pizzas, one with mushrooms and the other two with sausage.  Make one sausage a small.  And give me a whole Greek and a Pale Ale.  And give me a Mack and Jacks.
+Valid instance:
+    large pizza with mushrooms
+    small pizza with sausage
+    large pizza with sausage
+    whole Greek salad
+    1 Sierra Nevada Pale Ale
+    1 Mack and Jacks
+I would like to order one with basil and one with extra sauce.  Throw in a salad and an ale.
+Valid instance:
+    large pizza with basil
+    large pizza with extraSauce
+    half Garden salad
+    1 Sierra Nevada Pale Ale
+I would love to have a pepperoni with extra sauce, basil and arugula. Lovely weather we're having. Throw in some pineapple.  And give me a whole Greek and a Pale Ale.  Boy, those Mariners are doggin it. And how about a Mack and Jacks.
+Valid instance:
+    large pizza with pepperoni, extraSauce, basil, arugula, pineapple
+    whole Greek salad
+    1 Sierra Nevada Pale Ale
+    1 Mack and Jacks
+I'll have two pepperoni, the first with extra sauce and the second with basil.  Add pineapple to the first and add olives to the second.
+Valid instance:
+    large pizza with pepperoni, extraSauce, pineapple
+    large pizza with pepperoni, basil, olives
+I sure am hungry for a pizza with pepperoni and a salad with parmesan.  And I'm thirsty for 3 Pale Ales
+Valid instance:
+    large pizza with pepperoni
+    half Garden salad with parmesan
+    3 Sierra Nevada Pale Ale
+I need to get my tires changed from 12:00 to 2:00 pm on Friday March 15, 2024
+Valid instance:
+{"actions":[{"actionType":"add event","event":{"day":"Friday March 15, 2024","timeRange":{"startTime":"12:00","endTime":"2:00 pm"},"description":"get tires changed","location":"Bob's Tire Shop"}}]}
+Search for any meetings with Gavin this week
+Valid instance:
+{"actions":[{"actionType":"find events","eventReference":{"dayRange":"this week","participants":["Gavin"]}}]}
+Set up an event for friday named Jeffs pizza party at 6pm
+Valid instance:
+{"actions":[{"actionType":"add event","event":{"day":"friday","timeRange":{"startTime":"6pm"},"description":"Jeffs pizza party"}}]}
+Please add Jennifer to the scrum next Thursday
+Valid instance:
+{"actions":[{"actionType":"add participants","eventReference":{"day":"next Thursday","description":"scrum"},"participants":["Jennifer"]}]}
+Will you please add an appointment with Jerri Skinner at 9 am?  I need it to last 2 hours
+Valid instance:
+{"actions":[{"actionType":"add event","event":{"day":"today","timeRange":{"startTime":"9 am","duration":"2 hours"},"description":"appointment with Jerri Skinner"}}]}
+Do I have any plan with Rosy this month?
+Valid instance:
+{"actions":[{"actionType":"find events","eventReference":{"dayRange":"this month","participants":["Rosy"]}}]}
+I need to add a meeting with my boss on Monday at 10am. Also make sure to schedule and appointment with Sally, May, and Boris tomorrow at 3pm. Now just add to it Jesse and Abby and make it last ninety minutes
+Valid instance:
+{"actions":[{"actionType":"add event","event":{"day":"Monday","timeRange":{"startTime":"10am"},"description":"meeting with boss"}},{"actionType":"add event","event":{"day":"tomorrow","timeRange":{"startTime":"3pm"},"description":"appointment with Sally, May, and Boris"}},{"actionType":"add participants","participants":["Jesse","Abby"]},{"actionType":"change time range","timeRange":{"duration":"90 minutes"}}]}
+Add meeting with team today at 2
+Valid instance:
+{"actions":[{"actionType":"add event","event":{"day":"today","timeRange":{"startTime":"2:00 pm","endTime":"3:00 pm"},"description":"meeting with team","participants":["team"]}}]}

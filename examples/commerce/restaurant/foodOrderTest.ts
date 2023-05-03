@@ -43,7 +43,7 @@ function printOrder(order: Order) {
                 item.quantity = 1;
             }
             switch (item.itemType) {
-                case 'pizza':
+                case 'pizza': {
                     if (!item.size) {
                         item.size = 'large';
                     }
@@ -55,7 +55,7 @@ function printOrder(order: Order) {
                             addedTopping,
                         ] of item.addedToppings.entries()) {
                             pizzaStr += `${
-                                index == 0 ? ' ' : ', '
+                                index === 0 ? ' ' : ', '
                             }${addedTopping}`;
                         }
                     }
@@ -69,17 +69,19 @@ function printOrder(order: Order) {
                             removedTopping,
                         ] of item.removedToppings.entries()) {
                             pizzaStr += `${
-                                index == 0 ? ' ' : ', '
+                                index === 0 ? ' ' : ', '
                             }${removedTopping}`;
                         }
                     }
                     console.log(pizzaStr);
                     break;
-                case 'beer':
+                }
+                case 'beer': {
                     const beerStr = `    ${item.quantity} ${item.kind}`;
                     console.log(beerStr);
                     break;
-                case 'salad':
+                }
+                case 'salad': {
                     if (!item.portion) {
                         item.portion = 'half';
                     }
@@ -97,7 +99,7 @@ function printOrder(order: Order) {
                             addedIngredient,
                         ] of item.addedIngredients.entries()) {
                             saladStr += `${
-                                index == 0 ? ' ' : ', '
+                                index === 0 ? ' ' : ', '
                             }${addedIngredient}`;
                         }
                     }
@@ -111,12 +113,13 @@ function printOrder(order: Order) {
                             removedIngredient,
                         ] of item.removedIngredients.entries()) {
                             saladStr += `${
-                                index == 0 ? ' ' : ', '
+                                index === 0 ? ' ' : ', '
                             }${removedIngredient}`;
                         }
                     }
                     console.log(saladStr);
                     break;
+                }
             }
         }
     }
@@ -204,10 +207,10 @@ export async function pizzaTests() {
 // read arguments from command line
 const args = process.argv.slice(2);
 // if there are no arguments, run the tests
-if (args.length == 0) {
+if (args.length === 0) {
     pizzaTests();
 } else {
-    if (args.length == 1 && args[0] == '-i') {
+    if (args.length === 1 && args[0] === '-i') {
         const promptContext: IPromptContext<Order> = {
             typeInterp,
             frame,
