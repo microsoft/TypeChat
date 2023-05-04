@@ -2,6 +2,6 @@
     "recommendations": [
         "dbaeumer.vscode-eslint",
         "esbenp.prettier-vscode",
-        "hbenl.vscode-mocha-test-adapter"
+        "orta.vscode-jest"
     ]
 }

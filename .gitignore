@@ -2,9 +2,9 @@ build/
 dist/
 node_modules/
 .env
-*.js
 *.map
 *.out.txt
+*.bat
 package-lock.json
 
 # VSCode
