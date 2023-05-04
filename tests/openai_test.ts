@@ -25,23 +25,27 @@ export async function runTestsAsync(context: TestContext): Promise<void> {
     let client: oai.OpenAIClient = new oai.OpenAIClient(
         tcConfig.completionModel
     );
-    //await testCompletions(context, client);
+    await testCompletions(context, client);
 
     client = new oai.OpenAIClient(tcConfig.embeddingModel);
     await testEmbeddings(context, client);
 }
 runTestsAsync.TestName = 'OpenAI';
 
-// async function testCompletions(
-//     context: TestContext,
-//     client: oai.OpenAIClient
-// ): Promise<void> {
-//     const texts: string[] = test_texts;
-//     for (let i = 0; i < texts.length; ++i) {
-//         const result: string = await client.getCompletion(texts[i], 256, 0.2);
-//         context.assertNotNullOrEmpty(result);
-//     }
-// }
+async function testCompletions(
+    context: TestContext,
+    client: oai.OpenAIClient): Promise<void> {
+    const texts: string[] = test_texts;
+    for (let i = 0; i < texts.length; ++i) {
+        let result: string;
+        if (client.modelSettings.isChat) {
+            result = await client.getChatCompletion(texts[i], 256, 0.2);
+        } else {
+            result = await client.getCompletion(texts[i], 256, 0.2);
+        }
+        context.assertNotNullOrEmpty(result);
+    }
+}
 
 async function testEmbeddings(
     context: TestContext,

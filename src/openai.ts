@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 // (c) Copyright Microsoft Corp
 
 import * as oai from 'azure-openai';
@@ -44,7 +45,7 @@ export const Models: ModelInfo[] = [
     {
         name: 'gpt-4',
         maxTokenLength: 8192,
-        type: ModelType.Completion,
+        type: ModelType.Chat,
     },
     {
         name: 'gpt-3.5-turbo',
@@ -58,6 +59,7 @@ export type ModelAPISettings = {
     deployment: string;
     apiKey: string;
     endpoint: string;
+    isChat: boolean;
 };
 
 export class OpenAIException extends TypechatException<number> {
@@ -92,6 +94,10 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
         }
     }
 
+    get modelSettings(): ModelAPISettings {
+        return this._modelSettings;
+    }
+
     public async getCompletion(
         prompt: string,
         maxTokens?: number,
@@ -107,6 +113,30 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
             this._retrySettings.maxAttempts,
             this._retrySettings.retryPauseMS,
             () => this.getCompletionAttempt(request),
+            this.isTransientError
+        );
+    }
+
+    public async getChatCompletion(
+        prompt: string,
+        maxTokens?: number,
+        temperature?: number
+    ): Promise<string> {
+        const request: oai.CreateChatCompletionRequest = {
+            model: this._modelSettings.deployment,
+            messages:[
+                {
+                    role: oai.ChatCompletionRequestMessageRoleEnum.User,
+                    content: prompt
+                }
+            ],
+            max_tokens: maxTokens,
+            temperature: temperature,
+        };
+        return retry.executeWithRetry(
+            this._retrySettings.maxAttempts,
+            this._retrySettings.retryPauseMS,
+            () => this.getChatCompletionAttempt(request),
             this.isTransientError
         );
     }
@@ -139,8 +169,22 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
         request: oai.CreateCompletionRequest
     ): Promise<string> {
         const response = await this._client.createCompletion(request);
-        if (response.status == 200) {
+        if (response.status === 200) {
             let text = response.data.choices[0].text;
+            if (!text) {
+                text = '';
+            }
+            return text;
+        }
+        throw new OpenAIException(response.status, response.statusText);
+    }
+
+    private async getChatCompletionAttempt(
+        request: oai.CreateChatCompletionRequest
+    ): Promise<string> {
+        const response = await this._client.createChatCompletion(request);
+        if (response.status === 200) {
+            let text = response.data.choices[0].message?.content;
             if (!text) {
                 text = '';
             }

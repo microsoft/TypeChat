@@ -3,6 +3,9 @@
 
 export type TestFunction = (context: TestContext) => void;
 export type TestFunctionAsync = (context: TestContext) => Promise<void>;
+interface ITestFunctionInfo {
+    TestName: string;
+}
 
 export class TestFailedException extends Error {
     public constructor(testName?: string) {
@@ -44,8 +47,8 @@ export function runTests(tests: TestFunction[], stopOnError: boolean): void {
     const context: TestContext = new TestContext();
     for (let i = 0; i < tests.length; ++i) {
         const test: TestFunction = tests[i];
-        const testInfo = test;
-        let testName: string = testInfo['TestName'];
+        const testInfo: unknown = test;
+        let testName: string = (testInfo as ITestFunctionInfo).TestName;
         if (testName === undefined || testName === '') {
             testName = test.name;
         }
@@ -70,8 +73,8 @@ export async function runTestsAsync(
     const context: TestContext = new TestContext();
     for (let i = 0; i < tests.length; ++i) {
         const test: TestFunctionAsync = tests[i];
-        const testInfo = test;
-        let testName: string = testInfo['TestName'];
+        const testInfo: unknown = test;
+        let testName: string = (testInfo as ITestFunctionInfo).TestName;
         if (testName === undefined || testName === '') {
             testName = test.name;
         }
