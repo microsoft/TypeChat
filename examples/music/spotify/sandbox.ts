@@ -31,8 +31,8 @@ const main = async () => {
     console.log(track);
 
     service.storeUser({
-        username: 'steveluc',
-        token: 'BQD6mhgbXbsYhppUQpQJ9DlLGaxVg0IyWrsd2yx1bfrd6gjjvP8whZmKiwLstgBgvbpR3pmpyShgRVyk9Vxmq0GchGFKeG4Uk56ZTF9fvPuQr46OY_4ofuWIL9kc0DGCwaAUpq-P7fnVxIoZhMW9tcnSezkgfa5yD-VKfY8p5nmuUzpNeASCLu5ckpDXIj7bPBI3TfVr_riz_tmkplutYUniWGGp_3zkT1yWJ6AlN44XL77_vwPxzGipoOCg_YwHWXZO7X8_Eta9PuMyh7Gy_1KLl49hv62QFhv5AfIyjwSmXr8',
+        username: '',
+        token: '',
     });
 
     const userdata = await getUserProfile(service);
