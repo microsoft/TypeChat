@@ -6,7 +6,7 @@ import {
     runTests,
     runTestsInteractive,
     IPromptContext,
-} from '../../../dist/typechat';
+} from '../../../build/src/typechat';
 import {Order} from './foodOrderSchema';
 
 const schemaFilename = 'foodOrderSchema.ts';
