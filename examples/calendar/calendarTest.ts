@@ -8,7 +8,7 @@ import {
     runTestsInteractive,
     IPromptContext,
 } from '../../build/src/typechat';
-import {CalendarActions} from './calendarActionsSchema';
+import { CalendarActions } from './calendarActionsSchema';
 const schemaFilename = 'calendarActionsSchema.ts';
 
 // open schema file containing ts definitions

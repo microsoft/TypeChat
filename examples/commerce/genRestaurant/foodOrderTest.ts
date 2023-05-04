@@ -7,7 +7,7 @@ import {
     runTestsInteractive,
     IPromptContext,
 } from '../../../build/src/typechat';
-import {Order} from './foodOrderSchema';
+import { Order } from './foodOrderSchema';
 
 const schemaFilename = 'foodOrderSchema.ts';
 // open schema file containing ts definitions
@@ -39,7 +39,7 @@ function printOrder(order: Order) {
                 item.quantity = 1;
             }
             switch (item.type) {
-                case 'pizza':
+                case 'pizza': {
                     if (!item.size) {
                         item.size = 'large';
                     }
@@ -51,17 +51,19 @@ function printOrder(order: Order) {
                             addedTopping,
                         ] of item.toppings.entries()) {
                             pizzaStr += `${
-                                index == 0 ? ' ' : ', '
+                                index === 0 ? ' ' : ', '
                             }${addedTopping}`;
                         }
                     }
                     console.log(pizzaStr);
                     break;
-                case 'beer':
+                }
+                case 'beer': {
                     const beerStr = `    ${item.quantity} ${item.kind}`;
                     console.log(beerStr);
                     break;
-                case 'salad':
+                }
+                case 'salad': {
                     if (!item.size) {
                         item.size = 'half';
                     }
@@ -79,12 +81,13 @@ function printOrder(order: Order) {
                             removedIngredient,
                         ] of item.removedIngredients.entries()) {
                             saladStr += `${
-                                index == 0 ? ' ' : ', '
+                                index === 0 ? ' ' : ', '
                             }${removedIngredient}`;
                         }
                     }
                     console.log(saladStr);
                     break;
+                }
             }
         }
     }
@@ -104,10 +107,10 @@ export async function pizzaTests() {
 // read arguments from command line
 const args = process.argv.slice(2);
 // if there are no arguments, run the tests
-if (args.length == 0) {
+if (args.length === 0) {
     pizzaTests();
 } else {
-    if (args.length == 1 && args[0] == '-i') {
+    if (args.length === 1 && args[0] === '-i') {
         const promptContext: IPromptContext<Order> = {
             typeInterp,
             frame,

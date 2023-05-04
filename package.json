@@ -2,7 +2,8 @@
   "name": "typechat",
   "version": "0.0.10",
   "description": "An exploration of using schemas to make prompt engineering simpler and more reliable.",
-  "main": "./dist/typechat.js",
+  "main": "./build/typechat.js",
+  "files": ["build/**/*", "src/**/*"],
   "scripts": {
     "build": "tsc",
     "lint": "gts lint",

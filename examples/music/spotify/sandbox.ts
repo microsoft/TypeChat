@@ -8,8 +8,8 @@ import {
     //    pause,
     //    TrackInfo,
 } from './endpoints';
-import {SpotifyService} from './service';
-import {SearchContent} from 'spotify-types';
+import { SpotifyService } from './service';
+import { SearchContent } from 'spotify-types';
 
 const main = async () => {
     const clientData = {
