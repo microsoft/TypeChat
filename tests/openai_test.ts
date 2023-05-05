@@ -1,7 +1,7 @@
 import * as oai from '../src/openai';
 import * as config from '../src/typechatConfig';
-import {Embedding} from '../src/embeddings';
-import {TestContext} from './testing';
+import { Embedding } from '../src/embeddings';
+import { TestContext } from './testing';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -22,40 +22,58 @@ export async function runTestsAsync(context: TestContext): Promise<void> {
         './tests/appConfig.json'
     );
 
-    let client: oai.OpenAIClient = new oai.OpenAIClient(
-        tcConfig.completionModel
+    const models = tcConfig.azureOAI.models;
+    const client: oai.AzureOAIClient = new oai.AzureOAIClient(
+        tcConfig.azureOAI
     );
-    await testCompletions(context, client);
-
-    client = new oai.OpenAIClient(tcConfig.embeddingModel);
-    await testEmbeddings(context, client);
+    await testCompletions(context, models, client);
+    await testEmbeddings(context, models, client);
 }
 runTestsAsync.TestName = 'OpenAI';
 
 async function testCompletions(
     context: TestContext,
-    client: oai.OpenAIClient): Promise<void> {
+    models: oai.AzureOAIModel[],
+    client: oai.AzureOAIClient
+): Promise<void> {
     const texts: string[] = test_texts;
     for (let i = 0; i < texts.length; ++i) {
-        let result: string;
-        if (client.modelSettings.isChat) {
-            result = await client.getChatCompletion(texts[i], 256, 0.2);
-        } else {
-            result = await client.getCompletion(texts[i], 256, 0.2);
+        for (let m = 0; m < models.length; ++i) {
+            const model = models[m];
+            if (
+                model.type === oai.ModelType.Chat ||
+                model.type === oai.ModelType.Completion
+            ) {
+                const result = await client.getCompletion(
+                    texts[i],
+                    model.modelName,
+                    256,
+                    0.2
+                );
+                context.assertNotNullOrEmpty(result);
+            }
         }
-        context.assertNotNullOrEmpty(result);
     }
 }
 
 async function testEmbeddings(
     context: TestContext,
-    client: oai.OpenAIClient
+    models: oai.AzureOAIModel[],
+    client: oai.AzureOAIClient
 ): Promise<void> {
     const texts: string[] = test_texts;
-    const embeddings: Embedding[] = await client.createEmbeddings(texts);
-    context.assertTrue(embeddings.length === texts.length);
-    const x: Embedding = embeddings[0];
-    for (let i = 1; i < embeddings.length; ++i) {
-        x.cosineSimilarity(embeddings[i]);
+    for (let m = 0; m < models.length; ++m) {
+        const model = models[m];
+        if (model.type === oai.ModelType.Embedding) {
+            const embeddings: Embedding[] = await client.createEmbeddings(
+                texts,
+                model.modelName
+            );
+            context.assertTrue(embeddings.length === texts.length);
+            const x: Embedding = embeddings[0];
+            for (let i = 1; i < embeddings.length; ++i) {
+                x.cosineSimilarity(embeddings[i]);
+            }
+        }
     }
 }

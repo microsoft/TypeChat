@@ -1,4 +1,4 @@
-import {TestContext} from './testing';
+import { TestContext } from './testing';
 import * as embeddings from '../src/embeddings';
 import * as random from './random';
 

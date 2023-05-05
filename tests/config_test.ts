@@ -1,6 +1,5 @@
-import {TestContext} from './testing';
-import {ModelAPISettings} from '../src/openai';
-import {TypechatConfig, loadConfig} from '../src/typechatConfig';
+import { TestContext } from './testing';
+import * as tcConfig from '../src/typechatConfig';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -15,12 +14,6 @@ function testConfig(context: TestContext): void {
         return;
     }
 
-    const config: TypechatConfig = loadConfig(configPath);
-    testModelConfig(context, config.completionModel);
-    testModelConfig(context, config.embeddingModel);
-}
-
-function testModelConfig(context: TestContext, model: ModelAPISettings) {
-    context.assertNotNullOrEmpty(model.endpoint);
-    context.assertNotNullOrEmpty(model.apiKey);
+    const config = tcConfig.loadConfig(configPath, false);
+    tcConfig.validate(config);
 }
