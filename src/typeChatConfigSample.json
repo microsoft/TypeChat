@@ -1,15 +1,23 @@
 {
-    "completionModel" : 
-     {
-        "modelName" : "azure-dv3",
-        "deployment" : "dv3",
-        "apiKey" : "? YOUR KEY",
-        "endpoint" :"? YOUR ENDPOINT"    
-     },
-     "embeddingModel" : {
-        "modelName" : "text-embedding-ada-002",
-        "deployment" : "text-embedding-ada-002",
-        "apiKey" : "? YOUR KEY",
-        "endpoint" :"? YOUR ENDPOINT"    
-     }
+   "azureOAI": {
+      "apiKey" : "? YOUR KEY",
+      "endpoint" :"? YOUR ENDPOINT",
+      "models" : [
+         {
+            "modelName" : "text-davinci-002",
+            "deployment" : "text-davinci-002",
+            "type": "completion"
+         },
+         {
+            "modelName" : "gpt-4",
+            "deployment" : "gpt-4",
+            "type": "chat"
+         },
+         {
+            "modelName" : "text-embedding-ada-002",
+            "deployment" : "text-embedding-ada-002",
+            "type": "embedding"
+         }
+      ]
+   } 
 }

@@ -6,7 +6,7 @@ import exp from 'constants';
 const ERROR_ARRAYLENGTH = 'array length mismatch';
 
 export function dot(x: number[], y: number[]): number {
-    if (x.length != y.length) {
+    if (x.length !== y.length) {
         throw new Error(ERROR_ARRAYLENGTH);
     }
     let sum = 0;
@@ -17,7 +17,7 @@ export function dot(x: number[], y: number[]): number {
 }
 
 export function dot32(x: Float32Array, y: Float32Array): number {
-    if (x.length != y.length) {
+    if (x.length !== y.length) {
         throw new Error(ERROR_ARRAYLENGTH);
     }
     let sum = 0;
@@ -56,7 +56,7 @@ export function normalize32(x: Float32Array): void {
 }
 
 export function cosineSimilarity(x: number[], y: number[]): number {
-    if (x.length != y.length) {
+    if (x.length !== y.length) {
         throw new Error(ERROR_ARRAYLENGTH);
     }
 
@@ -78,7 +78,7 @@ export function cosineSimilarity(x: number[], y: number[]): number {
 }
 
 export function cosineSimilarity32(x: Float32Array, y: Float32Array): number {
-    if (x.length != y.length) {
+    if (x.length !== y.length) {
         throw new Error(ERROR_ARRAYLENGTH);
     }
 

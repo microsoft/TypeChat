@@ -2,37 +2,50 @@
 //
 // Logic and settings for retrying Http Calls and other operations that may have transient failures
 
+/**
+ * Retry settings. These can come from config
+ */
 export type RetrySettings = {
     maxAttempts: number;
     retryPauseMS: number;
+    useBackOff?: boolean;
 };
 
-export class MaxAttemptsExceededError extends Error {
-    constructor(message: string) {
-        super(message);
-    }
-}
-
 export async function executeWithRetry<T>(
-    maxAttempts: number,
-    retryPauseMS = 1000,
+    retrySettings: RetrySettings,
     fn: () => Promise<T>,
     isTransient: (e: any) => boolean
 ): Promise<T> {
+    let maxAttempts: number = retrySettings.maxAttempts;
+    if (maxAttempts <= 0) {
+        maxAttempts = 3;
+    }
+    let retryPauseMS: number = retrySettings.retryPauseMS;
     const max_i: number = maxAttempts - 1;
     for (let i = 0; i < maxAttempts; ++i) {
         try {
             return await fn();
         } catch (e: any) {
-            if (!isTransient(e) || i == max_i) {
+            if (!isTransient(e) || i === max_i) {
                 throw e;
             }
         }
         if (retryPauseMS > 0 && i < max_i) {
             await sleep(retryPauseMS);
+            if (retrySettings.useBackOff) {
+                retryPauseMS *= 2;
+            }
         }
     }
-    throw new MaxAttemptsExceededError(`Max Attempts: ${maxAttempts} Exceeded`);
+    // We'll never actually get here because after the last attempt, we will throw the last exception
+    throw new Error(`Max Attempts: ${maxAttempts} Exceeded`);
+}
+
+export function executeHttpWithRetry<T>(
+    retrySettings: RetrySettings,
+    fn: () => Promise<T>
+): Promise<T> {
+    return executeWithRetry(retrySettings, fn, isTransientHttpError);
 }
 
 export function isTransientHttpError(code: number): boolean {
@@ -51,5 +64,5 @@ export function isTransientHttpError(code: number): boolean {
 }
 
 function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }

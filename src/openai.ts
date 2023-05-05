@@ -2,9 +2,10 @@
 // (c) Copyright Microsoft Corp
 
 import * as oai from 'azure-openai';
-import {Embedding, ITextEmbeddingGenerator} from './embeddings';
+import {Embedding} from './embeddings';
 import * as retry from './retry';
-import {TypechatException} from './exception';
+import {Exception, Validator, strEqInsensitive} from './core';
+import { TypechatErrorCode, TypechatException } from './typechatException';
 
 /**
  * Types of models we work with
@@ -17,22 +18,30 @@ export enum ModelType {
 }
 
 /**
- * Model information, like token budgets and
+ * General model information, like token budgets, tokenizer to use,etc.
  */
 export type ModelInfo = {
     name: string;
-    type: string;
+    type: ModelType;
     maxTokenLength: number;
     embeddingSize?: number;
-    // Add Tokenizer Here
+    // Add Tokenizer Name or Path here
+    // We will use that to estimate token budgets etc.
 };
 
 /**
- * A registry of model information
+ * A table of model information
+ * This is hard-codded for the short term.
+ * Future: pull directly from the OAI service.
  */
 export const Models: ModelInfo[] = [
     {
         name: 'text-davinci-002',
+        maxTokenLength: 4096,
+        type: ModelType.Completion,
+    },
+    {
+        name: 'text-davinci-003',
         maxTokenLength: 4096,
         type: ModelType.Completion,
     },
@@ -54,15 +63,42 @@ export const Models: ModelInfo[] = [
     },
 ];
 
-export type ModelAPISettings = {
+function findModel(name: string): ModelInfo | undefined {
+    return Models.find((m) => strEqInsensitive(m.name, name));
+}
+
+/**
+ * Settings to use with the AzureOAIClient
+ * These settings can be loaded from config
+ */
+export type AzureOAIModel = {
     modelName: string;
     deployment: string;
+    type?: ModelType;
+    // Other flags and properties may go here. 
+};
+function validateAzureOAIModel(settings: AzureOAIModel): void {
+    Validator.notEmpty(settings.modelName, 'modelName');
+    Validator.notEmpty(settings.deployment, 'deployment');
+}
+
+/**
+ * Settings to use with the AzureOAIClient
+ * These settings can be loaded from config
+ */
+export type AzureOAISettings = {
     apiKey: string;
     endpoint: string;
-    isChat: boolean;
+    models: AzureOAIModel[];  // Models available at this endpoint
 };
+export function validateAzureOAISettings(settings: AzureOAISettings): void {
+    Validator.notEmpty(settings.apiKey, 'apiKey');
+    Validator.notEmpty(settings.endpoint, 'endpoint');
+    Validator.notEmpty(settings.models, 'models');
+    Validator.validate(settings.models, validateAzureOAIModel);
+}
 
-export class OpenAIException extends TypechatException<number> {
+export class AzureOAIException extends Exception<number> {
     constructor(statusCode: number, message?: string) {
         super(statusCode, message);
     }
@@ -73,134 +109,195 @@ export class OpenAIException extends TypechatException<number> {
  *   Built in retry around transient errors
  *   Wrapper APIs for common scenarios
  */
-export class OpenAIClient implements ITextEmbeddingGenerator {
+export class AzureOAIClient {
+    private _apiSettings: AzureOAISettings;
+    private _models: AzureOAIModels;
     private _retrySettings: retry.RetrySettings;
-    private _modelSettings: ModelAPISettings;
     private _client: oai.OpenAIApi;
 
     constructor(
-        modelSettings: ModelAPISettings,
+        apiSettings: AzureOAISettings,
         retrySettings?: retry.RetrySettings
     ) {
-        this._modelSettings = modelSettings;
-        this._client = createClient(modelSettings);
+        validateAzureOAISettings(apiSettings);
+        this._apiSettings = apiSettings;
+        this._models = new AzureOAIModels(apiSettings.models);
+        this._client = createClient(apiSettings.apiKey, apiSettings.endpoint);
         if (retrySettings) {
             this._retrySettings = retrySettings;
         } else {
             this._retrySettings = {
                 maxAttempts: 5,
-                retryPauseMS: 1000,
+                retryPauseMS: 1000
             };
         }
     }
 
-    get modelSettings(): ModelAPISettings {
-        return this._modelSettings;
-    }
-
+    /**
+     * Get a single completion for the given prompt. A simple method that includes the most common parameters
+     * we use. And will use the right completion API underneath - since newer models use the 'chat' mechanism. 
+     * @param prompt The prompt to complete
+     * @param maxTokens Max tokens to generate
+     * @param temperature Temperature to use.
+     * @param stop Stop sequences
+     * @returns The completion from the AI
+     */
     public async getCompletion(
         prompt: string,
+        model   : string | AzureOAIModel,
         maxTokens?: number,
-        temperature?: number
+        temperature?: number,
+        stop?: string[]
     ): Promise<string> {
-        const request: oai.CreateCompletionRequest = {
-            model: this._modelSettings.deployment,
-            prompt: prompt,
-            max_tokens: maxTokens,
-            temperature: temperature,
-        };
+
+        let azureModel : AzureOAIModel;
+        let modelName : string;
+        if (typeof model === 'string') {  // Move this to core
+            Validator.notEmpty(model, 'model');
+            modelName = model as string;
+            azureModel = this.resolveModel(modelName);
+        }
+        else {
+            azureModel = model as AzureOAIModel;
+            modelName = azureModel.modelName;
+        }
+        // Completion and Chat models have different APIs! Older models have older APIs.
+        if (azureModel.type === ModelType.Completion) {
+            const request: oai.CreateCompletionRequest = {
+                model: azureModel.deployment,
+                prompt: prompt,
+                max_tokens: maxTokens,
+                temperature: temperature,
+                stop: stop
+            };
+            return this.firstCompletion(await this.createCompletion(request));
+        }
+        else if (azureModel.type === ModelType.Chat) {
+            const request: oai.CreateChatCompletionRequest = {
+                model: azureModel.deployment,
+                messages:[
+                    {
+                        role: oai.ChatCompletionRequestMessageRoleEnum.User,
+                        content: prompt
+                    }
+                ],
+                max_tokens: maxTokens,
+                temperature: temperature,
+            };
+            return this.firstChatCompletion(await this.createChatCompletion(request));
+        }
+        throw new TypechatException(TypechatErrorCode.ModelDoesNotSupportCompletion, modelName);
+    }
+
+    /**
+     * Get a completion from the AI - with automatic retries
+     * @param request CreateCompletionRequest
+     * @returns List of completions generated by the AI
+     */
+    public async createCompletion(
+        request : oai.CreateCompletionRequest
+    ): Promise<Array<oai.CreateCompletionResponseChoicesInner>> {
         return retry.executeWithRetry(
-            this._retrySettings.maxAttempts,
-            this._retrySettings.retryPauseMS,
-            () => this.getCompletionAttempt(request),
+            this._retrySettings,
+            () => this.createCompletionAttempt(request),
             this.isTransientError
         );
     }
 
-    public async getChatCompletion(
-        prompt: string,
-        maxTokens?: number,
-        temperature?: number
-    ): Promise<string> {
-        const request: oai.CreateChatCompletionRequest = {
-            model: this._modelSettings.deployment,
-            messages:[
-                {
-                    role: oai.ChatCompletionRequestMessageRoleEnum.User,
-                    content: prompt
-                }
-            ],
-            max_tokens: maxTokens,
-            temperature: temperature,
-        };
+    /**
+     * Get a chat completion from the AI - with automatic retries
+     * @param request CreateChatCompletionRequest
+     * @returns Chat completion
+     */
+    public async createChatCompletion(
+        request: oai.CreateChatCompletionRequest
+    ): Promise<Array<oai.CreateChatCompletionResponseChoicesInner>> {
         return retry.executeWithRetry(
-            this._retrySettings.maxAttempts,
-            this._retrySettings.retryPauseMS,
-            () => this.getChatCompletionAttempt(request),
+            this._retrySettings,
+            () => this.createChatCompletionAttempt(request),
             this.isTransientError
         );
     }
 
-    public async createEmbedding(text: string): Promise<Embedding> {
+    /**
+     * Create an embedding
+     * @param text Create an embedding for this text
+     * @param modelName Using this model
+     * @returns Embedding object
+     */
+    public async createEmbedding(text: string, modelName: string): Promise<Embedding> {
+        Validator.notEmpty(text, 'text');
+
+        const model = this.resolveModel(modelName);
+        if (model.type !== ModelType.Embedding) {
+            throw new TypechatException(TypechatErrorCode.ModelDoesNotSupportEmbeddings, modelName);
+        }
         const request: oai.CreateEmbeddingRequest = {
-            model: this._modelSettings.deployment,
+            model: modelName,
             input: [text],
         };
         const embeddings: Embedding[] = await retry.executeWithRetry(
-            this._retrySettings.maxAttempts,
-            this._retrySettings.retryPauseMS,
+            this._retrySettings,
             () => this.createEmbeddingsAttempt(request),
             this.isTransientError
         );
         return embeddings[0];
     }
 
-    public async createEmbeddings(texts: string[]): Promise<Embedding[]> {
+    /**
+     * Create embeddings
+     * @param texts Create embeddings for these texts
+     * @param modelName Using this model
+     * @returns A collection of embeddings
+     */
+    public async createEmbeddings(texts: string[], modelName: string): Promise<Embedding[]> {
         // Azure OAI is currently only allowing 1 embedding at a time, even though the API allows batching
-        // So we have to do this in a loop.
+        // So we have to do this in a loop for now.
         const embeddings: Embedding[] = new Array(texts.length);
         for (let i = 0; i < texts.length; ++i) {
-            embeddings[i] = await this.createEmbedding(texts[i]);
+            embeddings[i] = await this.createEmbedding(texts[i], modelName);
         }
         return embeddings;
     }
 
-    private async getCompletionAttempt(
+    private async createCompletionAttempt(
         request: oai.CreateCompletionRequest
-    ): Promise<string> {
+    ): Promise<Array<oai.CreateCompletionResponseChoicesInner>> {
         const response = await this._client.createCompletion(request);
-        if (response.status === 200) {
-            let text = response.data.choices[0].text;
-            if (!text) {
-                text = '';
-            }
-            return text;
-        }
-        throw new OpenAIException(response.status, response.statusText);
+        this.ensureSuccess(response);
+        return response.data.choices;
     }
 
-    private async getChatCompletionAttempt(
+    private async createChatCompletionAttempt(
         request: oai.CreateChatCompletionRequest
-    ): Promise<string> {
+    ): Promise<Array<oai.CreateChatCompletionResponseChoicesInner>> {
         const response = await this._client.createChatCompletion(request);
-        if (response.status === 200) {
-            let text = response.data.choices[0].message?.content;
-            if (!text) {
-                text = '';
-            }
-            return text;
-        }
-        throw new OpenAIException(response.status, response.statusText);
+        this.ensureSuccess(response);
+        return response.data.choices;
     }
 
     private async createEmbeddingsAttempt(
         request: oai.CreateEmbeddingRequest
     ): Promise<Embedding[]> {
         const response = await this._client.createEmbedding(request);
-        if (response.status == 200) {
-            return this.toEmbeddings(response.data);
+        this.ensureSuccess(response);
+        return this.toEmbeddings(response.data);
+    }
+
+    private firstCompletion(choices: Array<oai.CreateCompletionResponseChoicesInner>): string{
+        let text = choices[0].text;
+        if (!text) {
+            text = '';
         }
-        throw new OpenAIException(response.status, response.statusText);
+        return text;
+    }
+
+    private firstChatCompletion(choices: Array<oai.CreateChatCompletionResponseChoicesInner>): string {
+        let text = choices[0].message?.content;
+        if (!text) {
+            text = '';
+        }
+        return text;
     }
 
     private toEmbeddings(response: oai.CreateEmbeddingResponse): Embedding[] {
@@ -212,6 +309,14 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
         return embeddings;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private ensureSuccess(response : any) {
+        if (response.status !== 200) {
+            throw new AzureOAIException(response.status, response.statusText);
+        }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private isTransientError(e: any): boolean {
         if (e.response) {
             return retry.isTransientHttpError(e.response.status);
@@ -219,20 +324,53 @@ export class OpenAIClient implements ITextEmbeddingGenerator {
         if (e.status) {
             return retry.isTransientHttpError(e.status);
         }
-        if (e instanceof OpenAIException) {
-            return retry.isTransientHttpError((e as OpenAIException).errorCode);
+        if (e instanceof AzureOAIException) {
+            return retry.isTransientHttpError((e as AzureOAIException).errorCode);
         }
         return false;
     }
+
+    private resolveModel(modelName: string): AzureOAIModel {
+        const azureModel = this._models.getByName(modelName);
+        if (azureModel === undefined) {
+            throw new TypechatException(TypechatErrorCode.ModelNotFound, modelName);
+        }
+        return azureModel;
+    }
 }
 
-function createClient(settings: ModelAPISettings): any {
+export class AzureOAIModels {
+    private _models : AzureOAIModel[];
+
+    constructor(models: AzureOAIModel[]) {
+        this._models = models;
+        this.updateModelInfo();
+    }
+
+    public getByName(name: string) : AzureOAIModel | undefined {
+        return this._models.find((m) => m.modelName === name);
+    }
+    public getByType(type: ModelType): AzureOAIModel | undefined {
+        return this._models.find((m) => m.type === type);
+    }
+    private updateModelInfo() : void {
+        for (let i = 0; i < this._models.length; ++i) {
+            if (!this._models[i].type) {
+                const knownModel = findModel(this._models[i].modelName);
+                if (knownModel !== undefined) {
+                    this._models[i].type = knownModel.type;
+                }
+            }
+        }
+    }
+}
+
+function createClient(apiKey: string, endpoint: string): oai.OpenAIApi {
     const config: oai.Configuration = new oai.Configuration({
-        apiKey: settings.apiKey,
+        apiKey: apiKey,
         azure: {
-            apiKey: settings.apiKey,
-            endpoint: settings.endpoint,
-            deploymentName: settings.deployment,
+            apiKey: apiKey,
+            endpoint: endpoint
         },
     });
     const client: oai.OpenAIApi = new oai.OpenAIApi(config);
