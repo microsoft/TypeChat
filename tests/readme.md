@@ -1,5 +1,5 @@
 ## About Tests
-- The tests here will be ported to the Testy framework over the next few days.
+- The tests here will be ported to the Jest framework over the next few days.
 - They are only here to test out some of the new support code we are starting to check in. 
 - Tests for typechat proper are currently in the typechat code. They will be migrated in future weeks. 
 
@@ -14,7 +14,7 @@
 - If these instructions don't work, please fix them.
 
 ### New Code Tests ###
-(For now - updates coming for Testy)
+(For now - updates coming for Jest)
 -  Create an appConfig.json file in the test folder. 
 -  Clone /src/typeChatConfigSample.json as a basic
 -  Add keys for your Azure Open AI subscription. 
