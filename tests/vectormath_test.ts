@@ -1,5 +1,5 @@
 import {TestContext} from './testing';
-import * as vectormath from '../src/vectormath';
+import * as vectormath from '../src/lib/vectormath';
 
 export function runTests(context: TestContext): void {
     testCosine(context);

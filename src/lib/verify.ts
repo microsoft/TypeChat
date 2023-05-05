@@ -43,7 +43,7 @@ export function verifyJsonObject(
         ts.ScriptTarget.Latest
     );
     const host: ts.CompilerHost = {
-        getSourceFile: fileName =>
+        getSourceFile: (fileName) =>
             fileName === libFilePath
                 ? libSourceFile
                 : fileName === schemaFilePath
@@ -54,15 +54,15 @@ export function verifyJsonObject(
         getDefaultLibFileName: () => 'lib.d.ts',
         writeFile: () => {},
         getCurrentDirectory: () => '/',
-        getCanonicalFileName: fileName => fileName,
+        getCanonicalFileName: (fileName) => fileName,
         useCaseSensitiveFileNames: () => true,
         getNewLine: () => '\r',
-        fileExists: fileName =>
+        fileExists: (fileName) =>
             fileName === libFilePath ||
             fileName === schemaFilePath ||
             fileName === jsonFilePath,
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        readFile: fileName => '',
+        readFile: (fileName) => '',
     };
     const program = ts.createProgram(
         [libFilePath, schemaFilePath, jsonFilePath],
@@ -71,7 +71,7 @@ export function verifyJsonObject(
     );
     return program
         .getSemanticDiagnostics()
-        .map(d =>
+        .map((d) =>
             typeof d.messageText === 'string'
                 ? d.messageText
                 : d.messageText.messageText
@@ -88,9 +88,9 @@ function test() {
 
     const json = {
         items: [
-            {kind: 'pizza', description: 'Large with anchovies'},
-            {kind: 'beer'},
-            {kind: 'salad', description: 'half Greek'},
+            { kind: 'pizza', description: 'Large with anchovies' },
+            { kind: 'beer' },
+            { kind: 'salad', description: 'half Greek' },
         ],
     };
 

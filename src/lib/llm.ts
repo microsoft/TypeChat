@@ -1,4 +1,4 @@
-import {Configuration, OpenAIApi} from 'azure-openai';
+import { Configuration, OpenAIApi } from 'azure-openai';
 import * as procss from 'process';
 const apiKey = procss.env.OPENAI_API_KEY;
 const apiBase = procss.env.OPENAI_API_BASE;

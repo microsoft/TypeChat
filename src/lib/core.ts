@@ -36,7 +36,7 @@ export class ArgumentException extends Error {
 
 export class Validator {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    public static exists(value: any, name?: string) : void {
+    public static exists(value: any, name?: string): void {
         if (value === null || value === undefined) {
             throw new Error(`${name || 'Value'} must be defined`);
         }

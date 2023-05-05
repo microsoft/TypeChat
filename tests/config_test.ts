@@ -1,5 +1,5 @@
 import { TestContext } from './testing';
-import * as tcConfig from '../src/typechatConfig';
+import * as tcConfig from '../src/lib/typechatConfig';
 import * as fs from 'fs';
 import * as path from 'path';
 

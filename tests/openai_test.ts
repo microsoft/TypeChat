@@ -1,6 +1,6 @@
-import * as oai from '../src/openai';
-import * as config from '../src/typechatConfig';
-import { Embedding } from '../src/embeddings';
+import * as oai from '../src/lib/openai';
+import * as config from '../src/lib/typechatConfig';
+import { Embedding } from '../src/lib/embeddings';
 import { TestContext } from './testing';
 import * as fs from 'fs';
 import * as path from 'path';

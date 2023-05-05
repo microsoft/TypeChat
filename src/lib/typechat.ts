@@ -1,5 +1,5 @@
-import {llmComplete} from './llm';
-import {verifyJsonObject} from './verify';
+import { llmComplete } from './llm';
+import { verifyJsonObject } from './verify';
 import * as readline from 'readline';
 
 export interface ICompletionResult {
@@ -34,7 +34,7 @@ function validate<TSchema>(
     const start = ret.indexOf('{');
     // find the last '}' in ret
     const end = ret.lastIndexOf('}');
-    const result = {error: false} as ICompletionResult;
+    const result = { error: false } as ICompletionResult;
     if (start >= 0 && end >= 0) {
         const jsontext = ret.substring(start, end + 1);
         result.jsontext = jsontext;
@@ -107,7 +107,7 @@ export async function completeAndValidate<TSchema>(
         );
         return result;
     } else {
-        return {error: true} as ICompletionResult;
+        return { error: true } as ICompletionResult;
     }
 }
 
@@ -164,7 +164,7 @@ export async function runTest<TSchema>(
     // insert a delay
     if (delay > 0) {
         // console.log(`Delaying ${delay} seconds`);
-        await new Promise(r => setTimeout(r, Math.round(delay * 1000)));
+        await new Promise((r) => setTimeout(r, Math.round(delay * 1000)));
     }
     return result;
 }
