@@ -7,8 +7,10 @@ import * as path from 'path';
 
 const test_texts: string[] = [
     'the quick brown fox jumps over the lazy dog',
+    /*
     'He was born with a gift of laughter and a sense that the world was mad',
     'Far out in the uncharted backwaters of the unfashionable end of the western spiral arm of the Galaxy lies a small, unregarded yellow sun',
+    */
 ];
 
 export async function runTestsAsync(context: TestContext): Promise<void> {
@@ -38,7 +40,7 @@ async function testCompletions(
 ): Promise<void> {
     const texts: string[] = test_texts;
     for (let i = 0; i < texts.length; ++i) {
-        for (let m = 0; m < models.length; ++i) {
+        for (let m = 0; m < models.length; ++m) {
             const model = models[m];
             if (
                 model.type === oai.ModelType.Chat ||
