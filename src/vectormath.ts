@@ -1,8 +1,6 @@
 // (c) Copyright Microsoft Corp
 // Ultra vanilla, non-accelerated (currently), non-unrolled vector operations
 
-import exp from 'constants';
-
 const ERROR_ARRAYLENGTH = 'array length mismatch';
 
 export function dot(x: number[], y: number[]): number {
