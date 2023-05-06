@@ -1,4 +1,4 @@
-import {Query} from './endpoints';
+import { Query } from './endpoints';
 
 export function serializeQuery(query: Query): string {
     let result = '?';

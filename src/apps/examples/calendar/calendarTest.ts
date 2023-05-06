@@ -1,15 +1,12 @@
-// import the node fs api
-import * as fs from 'fs';
-// import the node path api
-import * as path from 'path';
-import {CalendarActions} from './calendarActionsSchema';
+import fs from 'fs';
+import path from 'path';
 import {
     makePromptsInteractive,
     runTests,
     runTestsInteractive,
     IPromptContext,
-} from '../../build/src/typechat';
-
+} from '../../../lib';
+import { CalendarActions } from './calendarActionsSchema';
 const schemaFilename = 'calendarActionsSchema.ts';
 
 // open schema file containing ts definitions
@@ -55,19 +52,19 @@ export async function calendarTests() {
 // read arguments from command line
 const args = process.argv.slice(2);
 // if there are no arguments, run the tests
-if (args.length == 0) {
+if (args.length === 0) {
     calendarTests();
 } else {
-    if (args.length == 1) {
+    if (args.length === 1) {
         const promptContext: IPromptContext<CalendarActions> = {
             typeInterp,
             frame,
             schemaText,
             typeName: 'CalendarActions',
         };
-        if (args[0] == '-i') {
+        if (args[0] === '-i') {
             runTestsInteractive(promptContext);
-        } else if (args[0] == '-p') {
+        } else if (args[0] === '-p') {
             makePromptsInteractive(promptContext);
         }
     }

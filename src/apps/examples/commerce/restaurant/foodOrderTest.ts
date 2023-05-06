@@ -1,18 +1,12 @@
-// import the node fs api
-import * as fs from 'fs';
-// import the node path api
-import * as path from 'path';
+import fs from 'fs';
+import path from 'path';
 import {
     Order,
     pizzaToppings,
     beerKind,
     saladIngredients,
 } from './foodOrderSchema';
-import {
-    runTests,
-    runTestsInteractive,
-    IPromptContext,
-} from '../../../build/src/typechat';
+import { runTests, runTestsInteractive, IPromptContext } from '../../../../lib';
 
 const schemaFilename = 'foodOrderSchema.ts';
 const schemaText = fs.readFileSync(

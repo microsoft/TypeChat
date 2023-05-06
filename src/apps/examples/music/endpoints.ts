@@ -1,6 +1,6 @@
 import axios from 'axios';
-import {SpotifyService} from './service';
-import {serializeQuery} from './util';
+import { SpotifyService } from './service';
+import { serializeQuery } from './util';
 
 export type Query = {
     q: string;
@@ -33,7 +33,13 @@ export async function search(query: Query, service: SpotifyService) {
         );
         return spotifyResult.data;
     } catch (e) {
-        return e.response.data;
+        // TODO: REVIEW: should we really be returing the response
+        // data in an error condition?
+        if (e instanceof axios.AxiosError) {
+            return e.response?.data;
+        } else {
+            throw e;
+        }
     }
 }
 
@@ -52,7 +58,13 @@ export async function getUserProfile(service: SpotifyService) {
 
         return spotifyResult.data;
     } catch (e) {
-        return e.response.data;
+        // TODO: REVIEW: should we really be returing the response
+        // data in an error condition?
+        if (e instanceof axios.AxiosError) {
+            return e.response?.data;
+        } else {
+            throw e;
+        }
     }
 }
 
@@ -76,7 +88,13 @@ export async function play(
 
         return spotifyResult.data;
     } catch (e) {
-        return e.response.data;
+        // TODO: REVIEW: should we really be returing the response
+        // data in an error condition?
+        if (e instanceof axios.AxiosError) {
+            return e.response?.data;
+        } else {
+            throw e;
+        }
     }
 }
 
@@ -95,7 +113,13 @@ export async function getDevices(service: SpotifyService) {
 
         return spotifyResult.data;
     } catch (e) {
-        return e.response.data;
+        // TODO: REVIEW: should we really be returing the response
+        // data in an error condition?
+        if (e instanceof axios.AxiosError) {
+            return e.response?.data;
+        } else {
+            throw e;
+        }
     }
 }
 
@@ -115,6 +139,12 @@ export async function pause(service: SpotifyService, deviceId: string) {
 
         return spotifyResult.data;
     } catch (e) {
-        return e.response.data;
+        // TODO: REVIEW: should we really be returing the response
+        // data in an error condition?
+        if (e instanceof axios.AxiosError) {
+            return e.response?.data;
+        } else {
+            throw e;
+        }
     }
 }

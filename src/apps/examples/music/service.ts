@@ -11,11 +11,11 @@ export type User = {
 };
 
 export class SpotifyService {
-    private accessToken: string;
+    private accessToken?: string;
     private clientId: string;
     private clientSecret: string;
     private loggedIn: boolean;
-    private loggedInUser: User;
+    private loggedInUser: User | null;
 
     constructor(clientData: ClientData) {
         this.clientId = clientData.clientId;
@@ -30,6 +30,9 @@ export class SpotifyService {
     }
 
     retrieveToken(): string {
+        if (!this.accessToken) {
+            throw new Error('SpotifyService: no accessToken');
+        }
         return this.accessToken;
     }
 
@@ -38,6 +41,9 @@ export class SpotifyService {
     }
 
     retrieveUser(): User {
+        if (this.loggedInUser === null) {
+            throw new Error('SpotifyService: no loggedInUser');
+        }
         return this.loggedInUser;
     }
 
@@ -63,8 +69,15 @@ export class SpotifyService {
             this.storeToken(authData.data.access_token);
 
             return authData.data;
-        } catch (error) {
-            return error.response.data;
+        } catch (e) {
+            // TODO: REVIEW: should we really be returing the response
+            // data in an error condition?
+            if (e instanceof axios.AxiosError) {
+                // TODO: REVIEW: the type returned here may not be Promise<Object>
+                return e.response?.data;
+            } else {
+                throw e;
+            }
         }
     }
 }

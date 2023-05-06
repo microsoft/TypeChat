@@ -1,14 +1,13 @@
-// import the node fs api
-import * as fs from 'fs';
-// import the node path api
-import * as path from 'path';
+import fs from 'fs';
+import path from 'path';
+import { CalendarActions } from './calendarActionsSchema';
 import {
     makePromptsInteractive,
     runTests,
     runTestsInteractive,
     IPromptContext,
-} from '../../build/src/typechat';
-import {CalendarActions} from './calendarActionsSchema';
+} from '../../../lib';
+
 const schemaFilename = 'calendarActionsSchema.ts';
 
 // open schema file containing ts definitions
