@@ -1,5 +1,5 @@
 import { TestContext } from './testing';
-import * as embeddings from '../src/lib/embeddings';
+import * as embeddings from '../../src/lib/embeddings';
 import * as random from './random';
 
 export function runTests(context: TestContext): void {
