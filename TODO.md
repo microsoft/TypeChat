@@ -1,3 +1,5 @@
+## TODO: put these into github issues
+
 ## Commit analysis
 * Get to the bottom of the CRLF vs LF issue
 * .tsconfig
