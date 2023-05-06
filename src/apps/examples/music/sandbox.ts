@@ -4,6 +4,8 @@
 // Fake keys follow to fix build break.
 const keys = { clientId: 'foobar', clientSecret: 'IWontTell' };
 
+import { SearchContent } from 'spotify-types';
+
 import {
     Query,
     getDevices,
@@ -15,7 +17,6 @@ import {
 } from './endpoints';
 
 import { SpotifyService } from './service';
-import { SearchContent } from 'spotify-types';
 
 const main = async () => {
     const clientData = {

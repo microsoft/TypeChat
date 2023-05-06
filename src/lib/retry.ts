@@ -14,6 +14,7 @@ export type RetrySettings = {
 export async function executeWithRetry<T>(
     retrySettings: RetrySettings,
     fn: () => Promise<T>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     isTransient: (e: any) => boolean
 ): Promise<T> {
     let maxAttempts: number = retrySettings.maxAttempts;
@@ -25,6 +26,7 @@ export async function executeWithRetry<T>(
     for (let i = 0; i < maxAttempts; ++i) {
         try {
             return await fn();
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (e: any) {
             if (!isTransient(e) || i === max_i) {
                 throw e;
