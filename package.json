@@ -9,13 +9,15 @@
   ],
   "scripts": {
     "build": "tsc",
+    "compile": "tsc",
     "lint": "gts lint",
     "clean": "gts clean",
     "fix": "gts fix",
     "postbuild": "copyfiles src/**/*Schema.ts build",
-    "prepare": "npm.cmd run compile",
-    "pretest": "npm.cmd run compile",
-    "posttest": "npm.cmd run lint",
+    "postcompile": "copyfiles src/**/*Schema.ts build",
+    "prepare": "npm run compile",
+    "pretest": "npm run compile",
+    "posttest": "npm run lint",
     "test": "jest"
   },
   "repository": {
