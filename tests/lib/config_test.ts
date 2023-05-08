@@ -10,7 +10,7 @@ runTests.TestName = 'Config';
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 function testConfig(context: TestContext): void {
-    const configPath = path.resolve('./tests/appConfig.json');
+    const configPath = path.resolve('./lib/tests/appConfig.json');
     if (!fs.existsSync(configPath)) {
         return;
     }

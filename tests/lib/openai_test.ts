@@ -14,15 +14,14 @@ const test_texts: string[] = [
 ];
 
 export async function runTestsAsync(context: TestContext): Promise<void> {
-    const configPath = path.resolve('./tests/appConfig.json');
+    let configPath = './tests/lib/appConfig.json';
+    configPath = path.resolve('./tests/lib/appConfig.json');
     if (!fs.existsSync(configPath)) {
         context.log('No Config Found. OpenAI tests will not run ');
         return;
     }
 
-    const tcConfig: config.TypechatConfig = config.loadConfig(
-        './tests/appConfig.json'
-    );
+    const tcConfig: config.TypechatConfig = config.loadConfig(configPath);
 
     const models = tcConfig.azureOAI.models;
     const client: oai.AzureOAIClient = new oai.AzureOAIClient(
