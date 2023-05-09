@@ -2,9 +2,8 @@
 // (c) Copyright Microsoft Corp
 
 import * as oai from 'azure-openai';
-import { Embedding, ITextEmbeddingGenerator } from './embeddings';
-import * as retry from './retry';
 import { Exception, Validator, strEqInsensitive } from './core';
+import * as retry from './retry';
 import { TypechatErrorCode, TypechatException } from './typechatException';
 
 /**
@@ -16,7 +15,17 @@ export enum ModelType {
     Chat = 'chat',
     Image = 'image',
 }
-
+/**
+ * Names of standard models
+ */
+export enum ModelNames {
+    Text_Davinci_002 = 'text-davinci-002',
+    // Davinci_3 is from the Gpt 3.5 family, not GPT 4
+    Text_Davinci_003 = 'text-davinci-003', 
+    Text_Embedding_Ada2 = 'text-embedding-ada-002',
+    Gpt35Turbo = 'gpt-3.5-turbo',
+    Gpt4 = 'gpt4',
+}
 /**
  * General model information, like token budgets, tokenizer to use,etc.
  */
@@ -25,7 +34,7 @@ export type ModelInfo = {
     type: ModelType;
     maxTokenLength: number;
     embeddingSize?: number;
-    // Add Tokenizer Name or Path here
+    // Tokenizer: Add a function to the tokenizer here
     // We will use that to estimate token budgets etc.
 };
 
@@ -36,28 +45,28 @@ export type ModelInfo = {
  */
 export const Models: ModelInfo[] = [
     {
-        name: 'text-davinci-002',
+        name: ModelNames.Text_Davinci_002,
         maxTokenLength: 4096,
         type: ModelType.Completion,
     },
     {
-        name: 'text-davinci-003',
+        name: ModelNames.Text_Davinci_003,
         maxTokenLength: 4096,
         type: ModelType.Completion,
     },
     {
-        name: 'text-embedding-ada-002',
+        name: ModelNames.Text_Embedding_Ada2,
         maxTokenLength: 8191,
         type: ModelType.Embedding,
         embeddingSize: 1536,
     },
     {
-        name: 'gpt-4',
+        name: ModelNames.Gpt4,
         maxTokenLength: 8192,
         type: ModelType.Chat,
     },
     {
-        name: 'gpt-3.5-turbo',
+        name: ModelNames.Gpt35Turbo,
         maxTokenLength: 4096,
         type: ModelType.Chat,
     },
@@ -84,13 +93,14 @@ function validateAzureOAIModel(settings: AzureOAIModel): void {
 
 /**
  * Settings to use with the AzureOAIClient
- * These settings can be loaded from config
+ * These settings are typically loaded from config
  */
 export type AzureOAISettings = {
     apiKey: string;
     endpoint: string;
     models: AzureOAIModel[]; // Models available at this endpoint
 };
+
 export function validateAzureOAISettings(settings: AzureOAISettings): void {
     Validator.notEmpty(settings.apiKey, 'apiKey');
     Validator.notEmpty(settings.endpoint, 'endpoint');
@@ -199,11 +209,7 @@ export class AzureOAIClient {
     public async createCompletion(
         request: oai.CreateCompletionRequest
     ): Promise<Array<oai.CreateCompletionResponseChoicesInner>> {
-        return retry.executeWithRetry(
-            this._retrySettings,
-            () => this.createCompletionAttempt(request),
-            this.isTransientError
-        );
+        return this.executeWithRetry(() => this.createCompletionAttempt(request));
     }
 
     /**
@@ -211,26 +217,22 @@ export class AzureOAIClient {
      * @param request CreateChatCompletionRequest
      * @returns Chat completion
      */
-    public async createChatCompletion(
+    public createChatCompletion(
         request: oai.CreateChatCompletionRequest
     ): Promise<Array<oai.CreateChatCompletionResponseChoicesInner>> {
-        return retry.executeWithRetry(
-            this._retrySettings,
-            () => this.createChatCompletionAttempt(request),
-            this.isTransientError
-        );
+        return this.executeWithRetry(() => this.createChatCompletionAttempt(request));
     }
 
     /**
      * Create an embedding
      * @param text Create an embedding for this text
      * @param modelName Using this model
-     * @returns Embedding object
+     * @returns embedding
      */
-    public async createEmbedding(
+    public createEmbedding(
         text: string,
         modelName: string
-    ): Promise<Embedding> {
+    ): Promise<number[]> {
         Validator.notEmpty(text, 'text');
 
         const model = this.resolveModel(modelName);
@@ -244,12 +246,7 @@ export class AzureOAIClient {
             model: modelName,
             input: [text],
         };
-        const embeddings: Embedding[] = await retry.executeWithRetry(
-            this._retrySettings,
-            () => this.createEmbeddingsAttempt(request),
-            this.isTransientError
-        );
-        return embeddings[0];
+        return this.executeWithRetry(() => this.createEmbeddingAttempt(request));
     }
 
     /**
@@ -261,10 +258,12 @@ export class AzureOAIClient {
     public async createEmbeddings(
         texts: string[],
         modelName: string
-    ): Promise<Embedding[]> {
-        // Azure OAI is currently only allowing 1 embedding at a time, even though the API allows batching
+    ): Promise<number[][]> {
+
+        // Azure OAI is currently only allowing 1 embedding at a time.
+        // Even though the API allows batching
         // So we have to do this in a loop for now.
-        const embeddings: Embedding[] = new Array(texts.length);
+        const embeddings: number[][] = new Array(texts.length);
         for (let i = 0; i < texts.length; ++i) {
             embeddings[i] = await this.createEmbedding(texts[i], modelName);
         }
@@ -287,12 +286,12 @@ export class AzureOAIClient {
         return response.data.choices;
     }
 
-    private async createEmbeddingsAttempt(
+    private async createEmbeddingAttempt(
         request: oai.CreateEmbeddingRequest
-    ): Promise<Embedding[]> {
+    ): Promise<number[]> {
         const response = await this._client.createEmbedding(request);
         this.ensureSuccess(response);
-        return this.toEmbeddings(response.data);
+        return this.firstEmbedding(response.data);
     }
 
     private firstCompletion(
@@ -315,13 +314,17 @@ export class AzureOAIClient {
         return text;
     }
 
-    private toEmbeddings(response: oai.CreateEmbeddingResponse): Embedding[] {
+    private firstEmbedding(response: oai.CreateEmbeddingResponse): number[] {
         const data = response.data;
-        const embeddings: Embedding[] = new Array(data.length);
-        for (let i = 0; i < data.length; ++i) {
-            embeddings[i] = new Embedding(data[i].embedding);
-        }
-        return embeddings;
+        return data[0].embedding;
+    }
+
+    private executeWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+        return  retry.executeWithRetry(
+            this._retrySettings,
+            fn,
+            this.isTransientError
+        );
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -382,24 +385,6 @@ export class AzureOAIModels {
                 }
             }
         }
-    }
-}
-
-export class TextEmbeddingGenerator implements ITextEmbeddingGenerator {
-    _modelName: string;
-    _oaiClient: AzureOAIClient;
-
-    constructor(oaiClient: AzureOAIClient, modelName: string) {
-        Validator.exists(oaiClient, 'oaiClient');
-        Validator.notEmpty(modelName, 'modelName');
-        this._oaiClient = oaiClient;
-        this._modelName = modelName;
-    }
-    public createEmbedding(text: string): Promise<Embedding> {
-        return this._oaiClient.createEmbedding(text, this._modelName);
-    }
-    public createEmbeddings(texts: string[]): Promise<Embedding[]> {
-        return this._oaiClient.createEmbeddings(texts, this._modelName);
     }
 }
 

@@ -27,7 +27,7 @@ export function validate(config: TypechatConfig): void {
  * @param autoValidate: useful for tools etc..
  * @returns Typechat configuration object
  */
-export function loadConfig(
+export function fromFile(
     configPath: string,
     autoValidate = true
 ): TypechatConfig {

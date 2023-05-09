@@ -15,6 +15,6 @@ function testConfig(context: TestContext): void {
         return;
     }
 
-    const config = tcConfig.loadConfig(configPath, false);
+    const config = tcConfig.fromFile(configPath, false);
     tcConfig.validate(config);
 }

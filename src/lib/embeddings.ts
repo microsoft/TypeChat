@@ -1,7 +1,7 @@
 // (c) Copyright Microsoft Corp
-import * as vector from './vectormath';
+import * as vectorMath from './vectormath';
 import { ArgumentException, Validator } from './core';
-import { match } from 'assert';
+import { AzureOAIClient } from './openai';
 
 export interface IEmbedding {
     length: number;
@@ -38,24 +38,24 @@ export class Embedding extends Float32Array implements IEmbedding {
         if (this._normalized) {
             return 1.0; // Unit vector
         }
-        return vector.euclideanLength32(this);
+        return vectorMath.euclideanLength32(this);
     }
 
     public dotProduct(other: Embedding): number {
-        return vector.dot32(this, other);
+        return vectorMath.dot32(this, other);
     }
 
     public cosineSimilarity(other: Embedding): number {
         if (this._normalized && other._normalized) {
-            return vector.dot32(this, other);
+            return vectorMath.dot32(this, other);
         }
         // We can also optimize this by skipping a square root
-        return vector.cosineSimilarity32(this, other);
+        return vectorMath.cosineSimilarity32(this, other);
     }
 
     public normalize(): void {
         if (!this._normalized) {
-            vector.normalize32(this);
+            vectorMath.normalize32(this);
             this._normalized = true;
         }
     }
@@ -71,9 +71,15 @@ export class VectorizedList<T> {
         this._embeddings = [];
     }
 
-    public add(item: T, embedding: Embedding) {
-        Validator.exists(embedding, 'embedding');
+    public add(item: T, vector: number[] | Embedding) {
+        Validator.exists(vector, 'vector');
 
+        let embedding: Embedding;
+        if (vector instanceof Embedding) {
+            embedding = vector as Embedding;
+        } else {
+            embedding = new Embedding(vector as number[]);
+        }
         this._items.push(item);
         embedding.normalize();
         this._embeddings.push(embedding);
@@ -146,6 +152,32 @@ export class VectorizedList<T> {
                 yield scoredValue;
             }
         }
+    }
+}
+
+export class TextEmbeddingGenerator implements ITextEmbeddingGenerator {
+    private _modelName: string;
+    private _oaiClient: AzureOAIClient;
+
+    constructor(oaiClient: AzureOAIClient, modelName: string) {
+        Validator.exists(oaiClient, 'oaiClient');
+        Validator.notEmpty(modelName, 'modelName');
+        this._oaiClient = oaiClient;
+        this._modelName = modelName;
+    }
+    public async createEmbedding(text: string): Promise<Embedding> {
+        const vector = await this._oaiClient.createEmbedding(
+            text,
+            this._modelName
+        );
+        return new Embedding(vector);
+    }
+    public async createEmbeddings(texts: string[]): Promise<Embedding[]> {
+        const vectors = await this._oaiClient.createEmbeddings(
+            texts,
+            this._modelName
+        );
+        return vectors.map((v) => new Embedding(v));
     }
 }
 
