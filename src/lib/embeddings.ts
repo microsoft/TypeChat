@@ -1,6 +1,7 @@
 // (c) Copyright Microsoft Corp
 import * as vector from './vectormath';
 import { ArgumentException, Validator } from './core';
+import { match } from 'assert';
 
 export interface IEmbedding {
     length: number;
@@ -86,7 +87,12 @@ export class VectorizedList<T> {
         return this._embeddings[index];
     }
 
-    public nearest(other: Embedding): T {
+    /**
+     * Return the nearest neighbor - the most cosine similar - of the given embedding
+     * @param other embedding to compare against
+     * @returns The nearest neighbor
+     */
+    public nearestNeighbor(other: Embedding): T {
         let bestScore: number = Number.MIN_VALUE;
         let iNearest = -1;
         for (let i = 0; i < this._embeddings.length; ++i) {
@@ -100,11 +106,33 @@ export class VectorizedList<T> {
     }
 
     /**
-     * Return indexes of all similar items, along with the score for each
+     * Return N nearest neighbors
+     * @param other embedding to compare against
+     * @param topN number of topN matches
+     * @param minScore the min nearness score neighbors must have
+     * @returns TopNCollection
+     */
+    public nearestNeighbors(
+        other: Embedding,
+        topN: number,
+        minScore: number = Number.MIN_VALUE
+    ): IScoredValue<T>[] {
+        const matches = new TopNCollection<T>(topN as number);
+        for (let i = 0; i < this._embeddings.length; ++i) {
+            const score: number = this._embeddings[i].cosineSimilarity(other);
+            if (score >= minScore) {
+                matches.add(this._items[i], score);
+            }
+        }
+        return matches.byRank();
+    }
+
+    /**
+     * Returns the cosine similarity of each item in the list
      * @param other The embedding to compare against
      * @param minScore Only select items with this minimal score
      */
-    public *similar(
+    public *similarityScore(
         other: Embedding,
         minScore: number
     ): IterableIterator<IScoredValue<T>> {
@@ -119,35 +147,15 @@ export class VectorizedList<T> {
             }
         }
     }
-
-    public search(
-        other: Embedding,
-        matches: TopNCollection<T>,
-        minScore: number = Number.MIN_VALUE
-    ): TopNCollection<T> {
-        for (let i = 0; i < this._embeddings.length; ++i) {
-            const score: number = this._embeddings[i].cosineSimilarity(other);
-            if (score >= minScore) {
-                matches.add(this._items[i], score);
-            }
-        }
-        return matches;
-    }
-
-    public searchTopN(
-        other: Embedding,
-        topNCount: number,
-        minScore: number = Number.MIN_VALUE,
-    ): TopNCollection<T> {
-        const matches = new TopNCollection<T>(topNCount);
-        return this.search(other, matches, minScore);
-    }
 }
 
+/**
+ * Min-Heap based topN match collection. Matches are ordered by lowest ranking
+ */
 export class TopNCollection<T> {
-    _items: IScoredValue<T>[];
-    _count: number;
-    _maxCount: number;
+    private _items: IScoredValue<T>[];
+    private _count: number;
+    private _maxCount: number;
 
     constructor(maxCount: number) {
         Validator.greaterThan(maxCount, 0, 'maxCount');
@@ -161,20 +169,24 @@ export class TopNCollection<T> {
         // The first item is a sentinel, always
     }
 
-    public get count() {
+    public get length() {
         return this._count;
     }
 
-    public get(index: number): IScoredValue<T> {
-        // Let the array do bounds checking
-        return this._items[index + 1];
+    public reset(): void {
+        this._count = 0;
+    }
+
+    // Returns the lowest scoring item in the collection
+    public get pop(): IScoredValue<T> {
+        return this.removeTop();
     }
 
     public get top(): IScoredValue<T> {
         return this._items[1];
     }
 
-    public add(value: T, score: number): void {
+    add(value: T, score: number): void {
         if (this._count === this._maxCount) {
             if (score < this.top.score) {
                 return;
@@ -183,7 +195,7 @@ export class TopNCollection<T> {
             scoredValue.value = value;
             scoredValue.score = score;
             this._count++;
-            this._items[this.count] = scoredValue;
+            this._items[this._count] = scoredValue;
         } else {
             this._count++;
             this._items.push({
@@ -194,12 +206,14 @@ export class TopNCollection<T> {
         this.upHeap(this._count);
     }
 
-    public clear(): void {
-        this._items.length = 1;
+    byRank(): IScoredValue<T>[] {
+        this.sortDescending();
+        this._items.shift();
+        return this._items;
     }
 
     // Heap sort in place
-    public sortDescending(): void {
+    private sortDescending(): void {
         const count = this._count;
         let i = count;
         while (this._count > 0) {
