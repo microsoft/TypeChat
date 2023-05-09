@@ -4,7 +4,6 @@
 
 import * as testFx from './testing';
 import * as vectormath_test from './vectormath_test';
-import * as embedding_tests from './embedding_test';
 import * as config_tests from './config_test';
 import * as openai_tests from './openai_test';
 
@@ -12,7 +11,6 @@ import * as openai_tests from './openai_test';
 const syncTests: testFx.TestFunction[] = [
     config_tests.runTests,
     vectormath_test.runTests,
-    embedding_tests.runTests,
 ];
 
 console.log('Sync tests Starting');

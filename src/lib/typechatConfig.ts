@@ -1,6 +1,7 @@
 // (c) Copyright Microsoft Corp
 
 import * as fs from 'fs';
+import * as process from 'process';
 import { Validator } from './core';
 import * as oai from './openai';
 
@@ -27,7 +28,7 @@ export function validate(config: TypechatConfig): void {
  * @param autoValidate: useful for tools etc..
  * @returns Typechat configuration object
  */
-export function loadConfig(
+export function fromFile(
     configPath: string,
     autoValidate = true
 ): TypechatConfig {
@@ -37,4 +38,28 @@ export function loadConfig(
         validate(config);
     }
     return config;
+}
+
+export function fromEnv(autoValidate = true) {
+    const config: TypechatConfig = {
+        azureOAI: settingsFromEnv(),
+    };
+    if (autoValidate) {
+        validate(config);
+    }
+    return config;
+}
+
+function settingsFromEnv(): oai.AzureOAISettings {
+    return {
+        apiKey: process.env.OPENAI_API_KEY as string,
+        endpoint: process.env.OPENAI_API_BASE as string,
+        models: [
+            {
+                modelName: process.env.MODEL_NAME as string,
+                deployment: process.env.DEPLOYMENT_NAME as string,
+                type: oai.ModelType.Completion,
+            },
+        ],
+    };
 }

@@ -21,7 +21,7 @@ export async function runTestsAsync(context: TestContext): Promise<void> {
         return;
     }
 
-    const tcConfig: config.TypechatConfig = config.loadConfig(configPath);
+    const tcConfig: config.TypechatConfig = config.fromFile(configPath);
 
     const models = tcConfig.azureOAI.models;
     const client: oai.AzureOAIClient = new oai.AzureOAIClient(
@@ -66,15 +66,11 @@ async function testEmbeddings(
     for (let m = 0; m < models.length; ++m) {
         const model = models[m];
         if (model.type === oai.ModelType.Embedding) {
-            const embeddings: Embedding[] = await client.createEmbeddings(
+            const embeddings: number[][] = await client.createEmbeddings(
                 texts,
                 model.modelName
             );
             context.assertTrue(embeddings.length === texts.length);
-            const x: Embedding = embeddings[0];
-            for (let i = 1; i < embeddings.length; ++i) {
-                x.cosineSimilarity(embeddings[i]);
-            }
         }
     }
 }
