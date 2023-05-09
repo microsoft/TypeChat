@@ -170,14 +170,22 @@ export class TopNCollection<T> {
         return this._items[index + 1];
     }
 
+    public get top(): IScoredValue<T> {
+        return this._items[1];
+    }
+
     public add(value: T, score: number): void {
         if (this._count === this._maxCount) {
+            if (score < this.top.score) {
+                return;
+            }
             const scoredValue = this.removeTop();
             scoredValue.value = value;
             scoredValue.score = score;
             this._count++;
             this._items[this.count] = scoredValue;
         } else {
+            this._count++;
             this._items.push({
                 value: value,
                 score: score,
@@ -209,8 +217,8 @@ export class TopNCollection<T> {
         }
         // At the top
         const item = this._items[1];
-        this._count--;
         this._items[1] = this._items[this._count];
+        this._count--;
         this.downHeap(1);
         return item;
     }
@@ -231,7 +239,7 @@ export class TopNCollection<T> {
 
     private downHeap(startAt: number): void {
         let i: number = startAt;
-        const maxParent = i >> 1;
+        const maxParent = this._count >> 1;
         const item = this._items[i];
         while (i <= maxParent) {
             let iChild = i + i;
