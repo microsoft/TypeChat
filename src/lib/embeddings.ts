@@ -181,6 +181,48 @@ export class TextEmbeddingGenerator implements ITextEmbeddingGenerator {
     }
 }
 
+export class VectorizedTextList extends VectorizedList<string> {
+    private _generator: ITextEmbeddingGenerator;
+    constructor(generator: ITextEmbeddingGenerator) {
+        Validator.exists(generator, 'generator');
+        super();
+        this._generator = generator;
+    }
+
+    get generator(): ITextEmbeddingGenerator {
+        return this._generator;
+    }
+
+    public async addVectorized(value: string | string[]): Promise<void> {
+        if (value instanceof String) {
+            const text: string = value as string;
+            const embedding = await this._generator.createEmbedding(text);
+            this.add(text, embedding);
+        } else {
+            const texts: string[] = value as string[];
+            const embeddings = await this._generator.createEmbeddings(texts);
+            for (let i = 0; i < texts.length; ++i) {
+                this.add(texts[i], embeddings[i]);
+            }
+        }
+    }
+
+    /**
+     * Find the nearest text neighbors in this
+     * @param text Find nearest neighbors to this text
+     * @param topN # of nearest neighbors to return
+     * @param minScore minimum similarity score
+     * @returns 
+     */
+    public async nearestText(
+        text: string,
+        topN: number,
+        minScore: number = Number.MIN_VALUE
+    ): Promise<IScoredValue<string>[]> {
+        const embedding = await this._generator.createEmbedding(text);
+        return this.nearestNeighbors(embedding, topN, minScore);
+    }
+}
 /**
  * Min-Heap based topN match collection. Matches are ordered by lowest ranking
  */

@@ -21,9 +21,10 @@ export enum ModelType {
 export enum ModelNames {
     Text_Davinci_002 = 'text-davinci-002',
     // Davinci_3 is from the Gpt 3.5 family, not GPT 4
-    Text_Davinci_003 = 'text-davinci-003', 
+    Text_Davinci_003 = 'text-davinci-003',
     Text_Embedding_Ada2 = 'text-embedding-ada-002',
     Gpt35Turbo = 'gpt-3.5-turbo',
+    AzureDV3 = 'azure-dv3', // Pre-release GPT4
     Gpt4 = 'gpt4',
 }
 /**
@@ -51,6 +52,11 @@ export const Models: ModelInfo[] = [
     },
     {
         name: ModelNames.Text_Davinci_003,
+        maxTokenLength: 4096,
+        type: ModelType.Completion,
+    },
+    {
+        name: ModelNames.AzureDV3,
         maxTokenLength: 4096,
         type: ModelType.Completion,
     },

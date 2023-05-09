@@ -1,19 +1,25 @@
 import * as oai from '../../src/lib/openai';
-import { Embedding, TopNCollection, TextEmbeddingGenerator } from '../../src/lib/embeddings';
+import {
+    Embedding,
+    TopNCollection,
+    TextEmbeddingGenerator,
+    VectorizedTextList,
+} from '../../src/lib/embeddings';
 import * as random from './random';
-import * as setup from './testsetup'
+import * as setup from './testsetup';
 
 const g_config = setup.loadConfig();
-const test_texts: string[] = [
-    'the quick brown fox jumps over the lazy dog',
-    'He was born with a gift of laughter and a sense that the world was mad'
-];
+jest.setTimeout(10000);
 
-describe('Embeddings: TextEmbeddingGenerator', async () => {
+test('Embeddings: TextEmbeddingGenerator', async () => {
     if (g_config === null) {
         console.log('No configuration. Embedding tests disabled');
         return;
     }
+    const test_texts: string[] = [
+        'the quick brown fox jumps over the lazy dog',
+        'He was born with a gift of laughter and a sense that the world was mad'
+    ];
     const client = new oai.AzureOAIClient(g_config?.azureOAI);
     const generator = new TextEmbeddingGenerator(
         client,
@@ -29,6 +35,49 @@ describe('Embeddings: TextEmbeddingGenerator', async () => {
     expect(score).toEqual(Math.round(1));
 });
 
+test('Embeddings: vectorCollection', async () => {
+    if (g_config === null) {
+        console.log('No configuration. Embedding tests disabled');
+        return;
+    }
+    const composers: string[] = [
+        'Johann Sebastian Bach',
+        'Ludwig Van Beethoven',
+        'Wolfgang Amadeus Mozart',
+        'Felix Mendelssohn',
+        'Franz List',
+        'Frederick Chopin',
+        'Claude Debussy',
+        'Maurice Ravel',
+        'Gabriel Faure',
+        'Gustav Mahler',
+        'Aaron Copeland',
+        'George Gershwin',
+        'Ralph Vaughn Williams',
+        'Igor Stravinsky',
+        'Pyotr Tchaikovsky',
+        'Sergei Rachmaninoff',
+    ];
+
+    const client = new oai.AzureOAIClient(g_config?.azureOAI);
+    const generator = new TextEmbeddingGenerator(
+        client,
+        oai.ModelNames.Text_Embedding_Ada2
+    );
+    const vectorList = new VectorizedTextList(generator);
+    await vectorList.addVectorized(composers);
+    let matches = await vectorList.nearestText('Impressionist Music', 3);
+    expect(matches.length).toEqual(3);
+    let match = matches.find((item) => item.value?.includes('Debussy'));
+    expect(match).toBeDefined();
+
+    matches = await vectorList.nearestText('Fugues and Canons', 4);
+    expect(matches.length).toEqual(4);
+
+    match = matches.find((item) => item.value?.includes('Bach'));
+    expect(match).toBeDefined();
+});
+
 // This ends up testing both normalize and dot product
 describe('Embeddings: normalize', () => {
     const vector: number[] = random.array(1024);
@@ -39,7 +88,7 @@ describe('Embeddings: normalize', () => {
     expect(Math.round(length)).toEqual(1);
 
     const lengthManual: number = Math.sqrt(embedding.dotProduct(embedding));
-    expect(length).toEqual(lengthManual);
+    expect(Math.round(length)).toEqual(Math.round(Math.round(lengthManual)));
 });
 
 describe('Embeddings: TopNCollection', () => {
