@@ -5,7 +5,7 @@ export type EventTimeRange = {
 };
 
 export type Event = {
-    // date (example: March 22, 2024) or relative date (example: tomorrow)
+    // date (example: March 22, 2024) or relative date (example: after EventReference)
     day: string;
     timeRange: EventTimeRange;
     description: string;
@@ -15,7 +15,7 @@ export type Event = {
 };
 
 export type EventReference = {
-    // date (example: March 22, 2024) or relative date (example: tomorrow)
+    // date (example: March 22, 2024) or relative date (example: after EventReference)
     day?: string;
     // (examples: this month, this week, in the next two days)
     dayRange?: string;

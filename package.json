@@ -3,16 +3,21 @@
   "version": "0.0.10",
   "description": "An exploration of using schemas to make prompt engineering simpler and more reliable.",
   "main": "./build/typechat.js",
-  "files": ["build/**/*", "src/**/*"],
+  "files": [
+    "build/**/*",
+    "src/**/*"
+  ],
   "scripts": {
     "build": "tsc",
+    "compile": "tsc",
     "lint": "gts lint",
     "clean": "gts clean",
-    "compile": "tsc",
     "fix": "gts fix",
-    "prepare": "npm.cmd run compile",
-    "pretest": "npm.cmd run compile",
-    "posttest": "npm.cmd run lint",
+    "postbuild": "copyfiles src/**/*Schema.ts build",
+    "postcompile": "copyfiles src/**/*Schema.ts build",
+    "prepare": "npm run compile",
+    "pretest": "npm run compile",
+    "posttest": "npm run lint",
     "test": "jest"
   },
   "repository": {
@@ -40,6 +45,7 @@
   "devDependencies": {
     "@types/jest": "^29.5.1",
     "@types/node": "^18.15.12",
+    "copyfiles": "^2.4.1",
     "gts": "^3.1.1",
     "jest": "^29.5.0",
     "spotify-types": "^1.0.7",
