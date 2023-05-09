@@ -18,5 +18,5 @@ function testNormalize(context: TestContext) {
     context.assertTrue(Math.round(length) === 1);
 
     const lengthManual: number = Math.sqrt(embedding.dotProduct(embedding));
-    context.assertTrue(length === lengthManual);
+    context.assertTrue(length === Math.round(lengthManual));
 }

@@ -2,7 +2,7 @@
 // (c) Copyright Microsoft Corp
 
 import * as oai from 'azure-openai';
-import { Embedding } from './embeddings';
+import { Embedding, ITextEmbeddingGenerator } from './embeddings';
 import * as retry from './retry';
 import { Exception, Validator, strEqInsensitive } from './core';
 import { TypechatErrorCode, TypechatException } from './typechatException';
@@ -152,7 +152,6 @@ export class AzureOAIClient {
         let azureModel: AzureOAIModel;
         let modelName: string;
         if (typeof model === 'string') {
-            // Move this to core
             Validator.notEmpty(model, 'model');
             modelName = model as string;
             azureModel = this.resolveModel(modelName);
@@ -383,6 +382,24 @@ export class AzureOAIModels {
                 }
             }
         }
+    }
+}
+
+export class TextEmbeddingGenerator implements ITextEmbeddingGenerator {
+    _modelName: string;
+    _oaiClient: AzureOAIClient;
+
+    constructor(oaiClient: AzureOAIClient, modelName: string) {
+        Validator.exists(oaiClient, 'oaiClient');
+        Validator.notEmpty(modelName, 'modelName');
+        this._oaiClient = oaiClient;
+        this._modelName = modelName;
+    }
+    public createEmbedding(text: string): Promise<Embedding> {
+        return this._oaiClient.createEmbedding(text, this._modelName);
+    }
+    public createEmbeddings(texts: string[]): Promise<Embedding[]> {
+        return this._oaiClient.createEmbeddings(texts, this._modelName);
     }
 }
 
