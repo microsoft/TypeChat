@@ -1,7 +1,7 @@
 import { Configuration, OpenAIApi } from 'azure-openai';
-import * as procss from 'process';
-const apiKey = procss.env.OPENAI_API_KEY;
-const apiBase = procss.env.OPENAI_API_BASE;
+import * as process from 'process';
+const apiKey = process.env.OPENAI_API_KEY;
+const apiBase = process.env.OPENAI_API_BASE;
 const apiDeploymentName: string = process.env.DEPLOYMENT_NAME
     ? process.env.DEPLOYMENT_NAME
     : 'error';
