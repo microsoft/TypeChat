@@ -72,7 +72,7 @@ export class VectorizedList<T> {
     }
 
     public add(item: T, vector: number[] | Embedding) {
-        Validator.exists(vector, 'vector');
+        Validator.defined(vector, 'vector');
 
         let embedding: Embedding;
         if (vector instanceof Embedding) {
@@ -160,7 +160,7 @@ export class TextEmbeddingGenerator implements ITextEmbeddingGenerator {
     private _oaiClient: AzureOAIClient;
 
     constructor(oaiClient: AzureOAIClient, modelName: string) {
-        Validator.exists(oaiClient, 'oaiClient');
+        Validator.defined(oaiClient, 'oaiClient');
         Validator.notEmpty(modelName, 'modelName');
         this._oaiClient = oaiClient;
         this._modelName = modelName;
@@ -184,7 +184,7 @@ export class TextEmbeddingGenerator implements ITextEmbeddingGenerator {
 export class VectorizedTextList extends VectorizedList<string> {
     private _generator: ITextEmbeddingGenerator;
     constructor(generator: ITextEmbeddingGenerator) {
-        Validator.exists(generator, 'generator');
+        Validator.defined(generator, 'generator');
         super();
         this._generator = generator;
     }

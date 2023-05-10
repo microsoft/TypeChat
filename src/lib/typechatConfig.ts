@@ -18,8 +18,8 @@ export type TypechatConfig = {
 // I am sure there is an automated way to do this.
 // This manually visits the tree for now
 export function validate(config: TypechatConfig): void {
-    Validator.exists(config, 'config');
-    Validator.exists(config.azureOAI, 'azureOAI');
+    Validator.defined(config, 'config');
+    Validator.defined(config.azureOAI, 'azureOAI');
     oai.validateAzureOAISettings(config.azureOAI);
 }
 /**
@@ -40,7 +40,7 @@ export function fromFile(
     return config;
 }
 
-export function fromEnv(autoValidate = true) {
+export function fromEnv(autoValidate = true): TypechatConfig {
     const config: TypechatConfig = {
         azureOAI: settingsFromEnv(),
     };
@@ -51,14 +51,18 @@ export function fromEnv(autoValidate = true) {
 }
 
 function settingsFromEnv(): oai.AzureOAISettings {
+    let modelName = process.env.MODEL_NAME;
+    const deployment = process.env.DEPLOYMENT_NAME;
+    if (modelName === undefined) {
+        modelName = deployment;
+    }
     return {
         apiKey: process.env.OPENAI_API_KEY as string,
         endpoint: process.env.OPENAI_API_BASE as string,
         models: [
             {
-                modelName: process.env.MODEL_NAME as string,
-                deployment: process.env.DEPLOYMENT_NAME as string,
-                type: oai.ModelType.Completion,
+                modelName: modelName as string,
+                deployment: deployment as string,
             },
         ],
     };

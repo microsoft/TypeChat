@@ -1,5 +1,10 @@
 import { Configuration, OpenAIApi } from 'azure-openai';
 import * as process from 'process';
+
+import * as config from './typechatConfig';
+import * as oai from './openai';
+import { TypechatErrorCode, TypechatException } from './typechatException';
+
 const apiKey = process.env.OPENAI_API_KEY;
 const apiBase = process.env.OPENAI_API_BASE;
 const apiDeploymentName: string = process.env.DEPLOYMENT_NAME
@@ -49,4 +54,29 @@ export async function llmComplete(prompt: string, max_tokens = 4000) {
         }
     }
     return `Error: ${retryCount} retries`;
+}
+
+// This is short term. Duplicating existing behavior
+const tcConfig: config.TypechatConfig = config.fromEnv();
+const openAIClient: oai.AzureOAIClient = new oai.AzureOAIClient(
+    tcConfig.azureOAI
+);
+
+export async function llmCompleteNew(
+    prompt: string,
+    max_tokens = 4000,
+    temperature = 0.05
+): Promise<string> {
+    const model = openAIClient.models.getCompletion();
+    if (model === undefined) {
+        throw new TypechatException(
+            TypechatErrorCode.CompletionModelNotAvailable
+        );
+    }
+    return await openAIClient.getCompletion(
+        prompt,
+        model,
+        max_tokens,
+        temperature
+    );
 }

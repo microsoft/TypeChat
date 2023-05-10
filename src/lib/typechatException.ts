@@ -3,6 +3,7 @@ import { Exception } from './core';
 export enum TypechatErrorCode {
     Unknown = 1,
     ModelNotFound,
+    CompletionModelNotAvailable,
     ModelDoesNotSupportCompletion,
     ModelDoesNotSupportEmbeddings,
 }

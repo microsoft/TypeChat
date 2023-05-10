@@ -24,8 +24,8 @@ export enum ModelNames {
     Text_Davinci_003 = 'text-davinci-003',
     Text_Embedding_Ada2 = 'text-embedding-ada-002',
     Gpt35Turbo = 'gpt-3.5-turbo',
-    AzureDV3 = 'azure-dv3', // Pre-release GPT4
-    Gpt4 = 'gpt4',
+    DV3 = 'dv3', // Pre-release GPT4, also called dv3. Obsolete.
+    Gpt4 = 'gpt-4',
 }
 /**
  * General model information, like token budgets, tokenizer to use,etc.
@@ -56,7 +56,7 @@ export const Models: ModelInfo[] = [
         type: ModelType.Completion,
     },
     {
-        name: ModelNames.AzureDV3,
+        name: ModelNames.DV3,
         maxTokenLength: 4096,
         type: ModelType.Completion,
     },
@@ -114,7 +114,7 @@ export function validateAzureOAISettings(settings: AzureOAISettings): void {
     Validator.validate(settings.models, validateAzureOAIModel);
 }
 
-export class AzureOAIException extends Exception<number> {
+export class OpenAIException extends Exception<number> {
     constructor(statusCode: number, message?: string) {
         super(statusCode, message);
     }
@@ -149,6 +149,9 @@ export class AzureOAIClient {
         }
     }
 
+    public get models(): AzureOAIModels {
+        return this._models;
+    }
     /**
      * Get a single completion for the given prompt. A simple method that includes the most common parameters
      * we use. And will use the right completion API underneath - since newer models use the 'chat' mechanism.
@@ -336,7 +339,7 @@ export class AzureOAIClient {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private ensureSuccess(response: any) {
         if (response.status !== 200) {
-            throw new AzureOAIException(response.status, response.statusText);
+            throw new OpenAIException(response.status, response.statusText);
         }
     }
 
@@ -348,9 +351,9 @@ export class AzureOAIClient {
         if (e.status) {
             return retry.isTransientHttpError(e.status);
         }
-        if (e instanceof AzureOAIException) {
+        if (e instanceof OpenAIException) {
             return retry.isTransientHttpError(
-                (e as AzureOAIException).errorCode
+                (e as OpenAIException).errorCode
             );
         }
         return false;
@@ -381,6 +384,13 @@ export class AzureOAIModels {
     }
     public getByType(type: ModelType): AzureOAIModel | undefined {
         return this._models.find((m) => m.type === type);
+    }
+    public getCompletion() : AzureOAIModel | undefined {
+        let model = this.getByType(ModelType.Chat); // Modern models are chat...
+        if (model === undefined) {
+            model = this.getByType(ModelType.Completion);
+        }
+        return model;
     }
     private updateModelInfo(): void {
         for (let i = 0; i < this._models.length; ++i) {
