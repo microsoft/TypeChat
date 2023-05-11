@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as process from 'process';
 import { Validator } from './core';
 import * as oai from './openai';
+import { TypechatErrorCode, TypechatException } from './typechatException';
 
 /**
  * Configuration for Typechat.
@@ -12,15 +13,28 @@ import * as oai from './openai';
  * But since time is of the essence...
  */
 export type TypechatConfig = {
-    azureOAI: oai.AzureOAISettings; // Azure AI configuration
+    azureOAI?: oai.OpenAISettings; // Azure AI configuration
+    OAI?: oai.OpenAISettings; // Open AI
 };
 
 // I am sure there is an automated way to do this.
 // This manually visits the tree for now
 export function validate(config: TypechatConfig): void {
-    Validator.exists(config, 'config');
-    Validator.exists(config.azureOAI, 'azureOAI');
-    oai.validateAzureOAISettings(config.azureOAI);
+    Validator.defined(config, 'config');
+
+    let hasOpenAISettings = false;
+    if (Validator.isDefined(config.azureOAI)) {
+        oai.validateOAISettings(config.azureOAI!);
+        hasOpenAISettings = true;
+    } else if (Validator.isDefined(config.OAI)) {
+        oai.validateOAISettings(config.OAI!);
+        hasOpenAISettings = true;
+    }
+    if (!hasOpenAISettings) {
+        throw new TypechatException(
+            TypechatErrorCode.ConfigMissingOpenAISettings
+        );
+    }
 }
 /**
  *
@@ -40,7 +54,7 @@ export function fromFile(
     return config;
 }
 
-export function fromEnv(autoValidate = true) {
+export function fromEnv(autoValidate = true): TypechatConfig {
     const config: TypechatConfig = {
         azureOAI: settingsFromEnv(),
     };
@@ -50,15 +64,19 @@ export function fromEnv(autoValidate = true) {
     return config;
 }
 
-function settingsFromEnv(): oai.AzureOAISettings {
+function settingsFromEnv(): oai.OpenAISettings {
+    let modelName = process.env.MODEL_NAME;
+    const deployment = process.env.DEPLOYMENT_NAME;
+    if (modelName === undefined) {
+        modelName = deployment;
+    }
     return {
         apiKey: process.env.OPENAI_API_KEY as string,
         endpoint: process.env.OPENAI_API_BASE as string,
         models: [
             {
-                modelName: process.env.MODEL_NAME as string,
-                deployment: process.env.DEPLOYMENT_NAME as string,
-                type: oai.ModelType.Completion,
+                modelName: modelName as string,
+                deployment: deployment as string,
             },
         ],
     };

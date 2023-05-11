@@ -1,6 +1,6 @@
 // Copyright Microsoft Corporation
 
-// Random number generation methods that are useful for testing etc. 
+// Random number generation methods that are useful for testing etc
 
 export function* numbers(count: number) {
     for (let i = 0; i < count; ++i) {
