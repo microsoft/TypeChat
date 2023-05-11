@@ -19,5 +19,15 @@
             "type": "embedding"
          }
       ]
-   } 
+   },
+   "OAI" : {
+      "apiKey": "Your Key",
+      "organization": "Your organization",
+      "models" : [
+         {
+            "modelName" : "text-davinci-002",
+            "type": "completion"
+         }
+      ]
+   }
 }

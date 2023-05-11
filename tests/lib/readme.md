@@ -16,7 +16,8 @@
 ### JEST tests ###
 -  Ensure you have Jest and related extensions installed.
 -  Create an **appConfig.json** file in the test folder. 
--  Clone /src/typeChatConfigSample.json as a basic
+-  Clone /src/typeChatConfigSample.json as a basis. 
+    - The OAI section is optional. You are strongly encouraged to use Azure OAI. 
 -  **You must add keys** for your Azure Open AI subscription. 
     - .gitignore is set up ensure this file does not get checked in, but do double check. 
     - We don't want to leak credentials

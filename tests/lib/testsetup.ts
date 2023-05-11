@@ -7,7 +7,7 @@ import * as process from 'process';
 
 export function loadConfig(): config.TypechatConfig | null {
     let configPath = './tests/lib/appConfig.json';
-    configPath = path.resolve('./tests/lib/appConfig.json');
+    configPath = path.resolve(configPath);
     if (!fs.existsSync(configPath)) {
         console.log('No Config Found. Embedding tests will not run ');
         return null;

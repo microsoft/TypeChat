@@ -2,7 +2,7 @@ import * as oai from '../../src/lib/openai';
 import {
     Embedding,
     TopNCollection,
-    TextEmbeddingGenerator,
+    OpenAITextEmbeddingGenerator,
     VectorizedTextList,
 } from '../../src/lib/embeddings';
 import * as random from './random';
@@ -12,16 +12,16 @@ const g_config = setup.loadConfig();
 jest.setTimeout(10000);
 
 test('Embeddings: TextEmbeddingGenerator', async () => {
-    if (g_config === null) {
+    if (g_config === null || g_config.azureOAI === undefined) {
         console.log('No configuration. Embedding tests disabled');
         return;
     }
     const test_texts: string[] = [
         'the quick brown fox jumps over the lazy dog',
-        'He was born with a gift of laughter and a sense that the world was mad'
+        'He was born with a gift of laughter and a sense that the world was mad',
     ];
-    const client = new oai.AzureOAIClient(g_config?.azureOAI);
-    const generator = new TextEmbeddingGenerator(
+    const client = new oai.OpenAIClient(g_config?.azureOAI, true);
+    const generator = new OpenAITextEmbeddingGenerator(
         client,
         oai.ModelNames.Text_Embedding_Ada2
     );
@@ -36,7 +36,7 @@ test('Embeddings: TextEmbeddingGenerator', async () => {
 });
 
 test('Embeddings: vectorCollection', async () => {
-    if (g_config === null) {
+    if (g_config === null || g_config.azureOAI === undefined) {
         console.log('No configuration. Embedding tests disabled');
         return;
     }
@@ -59,8 +59,8 @@ test('Embeddings: vectorCollection', async () => {
         'Sergei Rachmaninoff',
     ];
 
-    const client = new oai.AzureOAIClient(g_config?.azureOAI);
-    const generator = new TextEmbeddingGenerator(
+    const client = new oai.OpenAIClient(g_config?.azureOAI, true);
+    const generator = new OpenAITextEmbeddingGenerator(
         client,
         oai.ModelNames.Text_Embedding_Ada2
     );
@@ -79,7 +79,7 @@ test('Embeddings: vectorCollection', async () => {
 });
 
 // This ends up testing both normalize and dot product
-describe('Embeddings: normalize', () => {
+test('Embeddings: normalize', () => {
     const vector: number[] = random.array(1024);
     const embedding: Embedding = new Embedding(vector);
 
@@ -91,7 +91,7 @@ describe('Embeddings: normalize', () => {
     expect(Math.round(length)).toEqual(Math.round(Math.round(lengthManual)));
 });
 
-describe('Embeddings: TopNCollection', () => {
+test('Embeddings: TopNCollection', () => {
     const maxN = 8;
     const topN: TopNCollection<string> = new TopNCollection<string>(maxN);
 
