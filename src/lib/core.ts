@@ -101,12 +101,16 @@ export class StringBuilder {
         return this;
     }
 
+    public appendLine(value: string): StringBuilder {
+        this.append(value).append('\n');
+        return this;
+    }
     public reverse(): StringBuilder {
         this._buffer.reverse();
         return this;
     }
 
-    public toString(separator?: string): string {
-        return this._buffer.join(separator);
+    public toString(): string {
+        return this._buffer.join('');
     }
 }

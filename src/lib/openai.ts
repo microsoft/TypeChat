@@ -33,10 +33,10 @@ export enum ModelNames {
  * General model information, like token budgets, tokenizer to use,etc.
  */
 export type ModelInfo = {
-    name: string;
-    type: ModelType;
-    maxTokenLength: number;
-    embeddingSize?: number;
+    readonly name: string;
+    readonly type: ModelType;
+    readonly maxTokenLength: number;
+    readonly embeddingSize?: number;
     // Tokenizer: Add a function to the tokenizer here
     // We will use that to estimate token budgets etc.
 };
@@ -95,16 +95,13 @@ export class OpenAIException extends Exception<number> {
  * These settings can be loaded from config
  */
 export interface ModelSettings  {
-    modelName: string;
-    type?: ModelType;
-    deployment?: string; // Optional
+    readonly modelName: string;
+    readonly type?: ModelType;
+    readonly deployment?: string; // Optional
 }
 
 function validateOAIModel(model: ModelSettings): void {
     Validator.notEmpty(model.modelName, 'modelName');
-    if (!model.deployment) {
-        model.deployment = model.modelName;
-    }
 }
 
 /**
@@ -112,9 +109,9 @@ function validateOAIModel(model: ModelSettings): void {
  * These settings are typically loaded from config
  */
 export interface OpenAISettings {
-    apiKey: string;
-    endpoint: string;
-    organization?: string;
+    readonly apiKey: string;
+    readonly endpoint: string;
+    readonly organization?: string;
     models: ModelSettings[]; // Models available at this endpoint
     retrySettings?: retry.RetrySettings;
 }
@@ -151,10 +148,15 @@ export class OpenAIModels {
     }
     private updateModelInfo(): void {
         for (let i = 0; i < this._models.length; ++i) {
-            if (!this._models[i].type) {
+            const model = this._models[i];
+            if (!model.type) {
                 const knownModel = findModel(this._models[i].modelName);
                 if (knownModel !== undefined) {
-                    this._models[i].type = knownModel.type;
+                    this._models[i] = {
+                        modelName: model.modelName,
+                        deployment: model.deployment,
+                        type: knownModel.type
+                    };
                 }
             }
         }
@@ -406,7 +408,10 @@ class AzureOpenAIApiClient extends OpenAIRestClient {
     }
 
     public modelNameToUse(model: ModelSettings): string {
-        return model.deployment as string;
+        if (model.deployment) {
+            return model.deployment;
+        }
+        return model.modelName;
     }
 
     protected async createCompletionAttempt(

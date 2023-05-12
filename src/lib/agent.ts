@@ -3,16 +3,23 @@ import * as oai from './openai';
 import { TypechatErrorCode, TypechatException } from './typechatException';
 
 export interface AgentEvent<T> {
-    createDate: Date;
-    lastUsed?: Date;
-    data: T;
+    readonly createDate: Date;
+    lastUsed?: Date; // Last used is handy for relevancy
+    data: T; // This can also be rewritten by the AI
 }
 
 export interface AgentEventStream<T> {
+    length: number;
     append(data: T): void;
     allEvents(orderByNewest: boolean): IterableIterator<AgentEvent<T>>;
+    // More methods for last N, filtering by dates etc. 
 }
 
+//
+// The events in this class are deliberately mutable
+// This allows for easy experimentation with rewriting events, or compressing/merging
+// past events, or creating synthetic events from existing ones
+//
 export class EventHistory<T> implements AgentEventStream<T> {
     private _history: AgentEvent<T>[]; // Always sorted by timestamp
 
@@ -63,16 +70,16 @@ export enum SourceType {
 }
 
 export interface MessageSource {
-    type: SourceType;
-    name: string;
+    readonly type: SourceType;
+    readonly name: string;
 }
 
 export interface ChatMessage {
-    source: MessageSource;
-    text: string;
+    readonly source: MessageSource;
+    readonly text: string;
 }
 
-class ChatContextBuilder {
+export class ChatContextBuilder {
     private _sb: StringBuilder;
     private _maxLength: number;
 
@@ -81,13 +88,20 @@ class ChatContextBuilder {
         this._sb = new StringBuilder();
     }
 
+    public length() {
+        return this._sb.length;
+    }
+
     public start(): void {
         this._sb.reset();
     }
 
     public append(value: string): boolean {
-        if (this._sb.length + value.length <= this._maxLength) {
-            this._sb.append(value);
+        if (!value) {
+            return true;
+        }
+        if (this._sb.length + (value.length + 1) <= this._maxLength) {
+            this._sb.appendLine(value);
             return true;
         }
         return false;
@@ -103,17 +117,30 @@ class ChatContextBuilder {
     public appendEvents(
         events: IterableIterator<AgentEvent<ChatMessage>>
     ): boolean {
+        let result = true;
         for (const evt of events) {
             if (!this.appendMessage(evt.data)) {
-                return false;
+                result = false;
+                break;
             }
         }
-        return true;
+        return result;
     }
 
     public complete(): string {
         this._sb.reverse();
         return this._sb.toString();
+    }
+
+    public buildContext(
+        userInput: string,
+        events: IterableIterator<AgentEvent<ChatMessage>>
+    ): string {
+        this.start();
+        if (this.append(userInput)) {
+            this.appendEvents(events);
+        }
+        return this.complete();
     }
 }
 
@@ -135,11 +162,7 @@ export class Chat {
     private _history: AgentEventStream<ChatMessage>;
     private _contextBuilder: ChatContextBuilder;
 
-    constructor(
-        settings: IChatSettings,
-        client: oai.OpenAIClient,
-        contextBuilder: ChatContextBuilder
-    ) {
+    constructor(settings: IChatSettings, client: oai.OpenAIClient) {
         this._settings = settings;
         this._client = client;
         const modelSettings = client.models.getByName(settings.modelName);
@@ -152,7 +175,9 @@ export class Chat {
         } else {
             this._history = new EventHistory();
         }
-        this._contextBuilder = contextBuilder;
+        this._contextBuilder = new ChatContextBuilder(
+            this._settings.maxTokensIn
+        );
     }
 
     public get history() {
@@ -160,7 +185,7 @@ export class Chat {
     }
 
     public async getResponse(userMessage: string): Promise<string> {
-        const context = this.collectHistory(userMessage);
+        const context = this.buildContext(userMessage);
         const response = await this._client.getCompletion(
             context,
             this._model,
@@ -171,13 +196,12 @@ export class Chat {
         return response;
     }
 
-    public collectHistory(input?: string): string {
-        this._contextBuilder.start();
-        if (input) {
-            this._contextBuilder.append(input);
-        }
-        this._contextBuilder.appendEvents(this._history.allEvents(true));
-        return this._contextBuilder.complete();
+    private buildContext(userMessage: string): string {
+        userMessage = this.userName() + '\n' + userMessage;
+        return this._contextBuilder.buildContext(
+            userMessage,
+            this._history.allEvents(true)
+        );
     }
 
     public appendHistory(userMessage: string, response?: string): void {
@@ -185,18 +209,26 @@ export class Chat {
             text: userMessage,
             source: {
                 type: SourceType.User,
-                name: this._settings.userName || 'User',
+                name: this.userName(),
             },
         });
 
         if (response !== undefined) {
             this._history.append({
-                text: userMessage,
+                text: response,
                 source: {
                     type: SourceType.AI,
-                    name: this._settings.aiName || 'AI',
+                    name: this.aiName(),
                 },
             });
         }
+    }
+
+    private aiName(): string {
+        return (this._settings.aiName || 'Bot');
+    }
+
+    private userName(): string {
+        return (this._settings.userName || 'User');
     }
 }
