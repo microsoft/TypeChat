@@ -105,7 +105,7 @@ export class StringBuilder {
         this._buffer.reverse();
         return this;
     }
-    
+
     public toString(separator?: string): string {
         return this._buffer.join(separator);
     }

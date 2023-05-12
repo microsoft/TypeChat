@@ -125,6 +125,28 @@ export class VectorizedList<T> {
     }
 
     /**
+     * Return index of N nearest neighbors
+     * @param other embedding to compare against
+     * @param topN number of topN matches
+     * @param minScore the min nearness score neighbors must have
+     * @returns TopNCollection
+     */
+    public indexOfNearestNeighbors(
+        other: Embedding,
+        topN: number,
+        minScore: number = Number.MIN_VALUE
+    ): ScoredValue<number>[] {
+        const matches = new TopNCollection<number>(topN as number);
+        for (let i = 0; i < this._embeddings.length; ++i) {
+            const score: number = this._embeddings[i].cosineSimilarity(other);
+            if (score >= minScore) {
+                matches.add(i, score);
+            }
+        }
+        return matches.byRank();
+    }
+
+    /**
      * Returns the cosine similarity of each item in the list
      * @param other The embedding to compare against
      * @param minScore Only select items with this minimal score

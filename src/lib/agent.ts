@@ -1,6 +1,6 @@
-import { StringBuilder } from "./core";
-import * as oai from "./openai";
-import { TypechatErrorCode, TypechatException } from "./typechatException";
+import { StringBuilder } from './core';
+import * as oai from './openai';
+import { TypechatErrorCode, TypechatException } from './typechatException';
 
 export interface AgentEvent<T> {
     createDate: Date;
@@ -13,11 +13,19 @@ export interface AgentEventStream<T> {
     allEvents(orderByNewest: boolean): IterableIterator<AgentEvent<T>>;
 }
 
-class EventHistory<T> implements AgentEventStream<T> {
+export class EventHistory<T> implements AgentEventStream<T> {
     private _history: AgentEvent<T>[]; // Always sorted by timestamp
 
     constructor() {
         this._history = [];
+    }
+
+    public get length() {
+        return this._history.length;
+    }
+
+    public get(index: number): AgentEvent<T> {
+        return this._history[index];
     }
 
     public append(data: T): void {
@@ -27,7 +35,7 @@ class EventHistory<T> implements AgentEventStream<T> {
         });
     }
 
-    public *allEvents(orderByNewest: boolean): IterableIterator<AgentEvent<T>> {
+    public *allEvents(orderByNewest = true): IterableIterator<AgentEvent<T>> {
         if (orderByNewest) {
             for (let i = this._history.length - 1; i >= 0; --i) {
                 yield this._history[i];
@@ -36,6 +44,15 @@ class EventHistory<T> implements AgentEventStream<T> {
             for (let i = 0; i < this._history.length; ++i) {
                 yield this._history[i];
             }
+        }
+    }
+
+    // Trim history by this much
+    public trim(count: number): void {
+        if (count >= this._history.length) {
+            this._history.length = 0;
+        } else {
+            this._history.splice(0, count);
         }
     }
 }
@@ -89,7 +106,7 @@ class ChatContextBuilder {
         for (const evt of events) {
             if (!this.appendMessage(evt.data)) {
                 return false;
-            };
+            }
         }
         return true;
     }
@@ -103,12 +120,15 @@ class ChatContextBuilder {
 export interface IChatSettings {
     userName?: string;
     aiName?: string;
+    history?: AgentEventStream<ChatMessage>;
     modelName: string;
-    maxTokens?: number;
+    maxTokensIn: number;
+    maxTokensOut?: number;
     temperature?: number;
 }
+
 // Basic Chat Bot
-class Chat {
+export class Chat {
     private _settings: IChatSettings;
     private _client: oai.OpenAIClient;
     private _model: oai.ModelSettings; // Model we are speaking with
@@ -118,7 +138,6 @@ class Chat {
     constructor(
         settings: IChatSettings,
         client: oai.OpenAIClient,
-        history: AgentEventStream<ChatMessage>,
         contextBuilder: ChatContextBuilder
     ) {
         this._settings = settings;
@@ -128,8 +147,16 @@ class Chat {
             throw new TypechatException(TypechatErrorCode.ModelNotFound);
         }
         this._model = modelSettings;
-        this._history = history;
+        if (settings.history !== undefined) {
+            this._history = settings.history;
+        } else {
+            this._history = new EventHistory();
+        }
         this._contextBuilder = contextBuilder;
+    }
+
+    public get history() {
+        return this._history;
     }
 
     public async getResponse(userMessage: string): Promise<string> {
@@ -137,16 +164,18 @@ class Chat {
         const response = await this._client.getCompletion(
             context,
             this._model,
-            this._settings.maxTokens,
+            this._settings.maxTokensOut,
             this._settings.temperature
         );
         this.appendHistory(userMessage, response);
         return response;
     }
 
-    public collectHistory(input: string): string {
+    public collectHistory(input?: string): string {
         this._contextBuilder.start();
-        this._contextBuilder.append(input);
+        if (input) {
+            this._contextBuilder.append(input);
+        }
         this._contextBuilder.appendEvents(this._history.allEvents(true));
         return this._contextBuilder.complete();
     }
@@ -157,7 +186,7 @@ class Chat {
             source: {
                 type: SourceType.User,
                 name: this._settings.userName || 'User',
-            }
+            },
         });
 
         if (response !== undefined) {
