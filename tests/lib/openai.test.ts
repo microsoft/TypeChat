@@ -32,13 +32,17 @@ test('OpenAI: AzureOpenAI Direct', async () => {
         return;
     }
     const client = new oai.OpenAIClient(g_config?.azureOAI, true);
-    const model = client.models.getCompletion();
-    if (model === undefined) {
-        console.log('No completion model. Test will not run');
-        return;
+    let model = client.models.getByType(oai.ModelType.Completion);
+    if (model !== undefined) {
+        const response = await client.getCompletion(test_texts[0], model, 100);
+        expect(response.length).toBeGreaterThan(0);
     }
-    const response = await client.getCompletion(test_texts[0], model, 100);
-    expect(response.length).toBeGreaterThan(0);
+    model = client.models.getByType(oai.ModelType.Chat);
+    if (model !== undefined) {
+        // Also do a completion on the chat model
+        const response = await client.getCompletion(test_texts[0], model, 100);
+        expect(response.length).toBeGreaterThan(0);
+    }
 });
 
 // Here we duplicate some functions in llm.ts

@@ -75,3 +75,38 @@ const strEqIOptions = { sensitivity: 'base' };
 export function strEqInsensitive(x: string, y: string): boolean {
     return x.localeCompare(y, undefined, strEqIOptions) === 0;
 }
+
+export class StringBuilder {
+    private _buffer: string[];
+    private _length: number;
+
+    constructor() {
+        this._buffer = [];
+        this._length = 0;
+    }
+
+    public get length() {
+        return this._length;
+    }
+
+    public reset(): StringBuilder {
+        this._buffer.length = 0;
+        this._length = 0;
+        return this;
+    }
+
+    public append(value: string): StringBuilder {
+        this._length += value.length;
+        this._buffer.push(value);
+        return this;
+    }
+
+    public reverse(): StringBuilder {
+        this._buffer.reverse();
+        return this;
+    }
+    
+    public toString(separator?: string): string {
+        return this._buffer.join(separator);
+    }
+}
