@@ -2,6 +2,7 @@
 import * as vectorMath from './vectormath';
 import { ArgumentException, Validator } from './core';
 import { OpenAIClient } from './openai';
+import { assert } from 'console';
 
 export interface TextEmbeddingGenerator {
     createEmbedding(text: string): Promise<Embedding>;
@@ -9,7 +10,7 @@ export interface TextEmbeddingGenerator {
 }
 
 export interface ScoredValue<T> {
-    value?: T;
+    value: T;
     score: number;
 }
 
@@ -53,43 +54,34 @@ export class Embedding extends Float32Array {
 }
 
 // Always normalizes embeddings in place, for speed
-export class VectorizedList<T> {
-    _items: T[];
+export class EmbeddingList {
     _embeddings: Embedding[];
 
     constructor() {
-        this._items = [];
         this._embeddings = [];
     }
 
-    public add(item: T, vector: number[] | Embedding) {
+    public add(vector: number[] | Embedding) {
         Validator.defined(vector, 'vector');
-
         let embedding: Embedding;
         if (vector instanceof Embedding) {
             embedding = vector as Embedding;
         } else {
             embedding = new Embedding(vector as number[]);
         }
-        this._items.push(item);
         embedding.normalize();
         this._embeddings.push(embedding);
     }
 
-    public get(index: number): T {
-        return this._items[index];
+    public push(vector: number[] | Embedding) {
+        this.add(vector);
     }
 
-    public embedding(index: number): Embedding {
+    public get(index: number): Embedding {
         return this._embeddings[index];
     }
 
-    /**
-     * Return the nearest neighbor - the most cosine similar - of the given embedding
-     * @param other embedding to compare against
-     * @returns The nearest neighbor
-     */
-    public nearestNeighbor(other: Embedding): T {
+    public indexOfNearestNeighbor(other: Embedding): number {
         let bestScore: number = Number.MIN_VALUE;
         let iNearest = -1;
         for (let i = 0; i < this._embeddings.length; ++i) {
@@ -99,29 +91,7 @@ export class VectorizedList<T> {
                 iNearest = i;
             }
         }
-        return this._items[iNearest];
-    }
-
-    /**
-     * Return N nearest neighbors
-     * @param other embedding to compare against
-     * @param topN number of topN matches
-     * @param minScore the min nearness score neighbors must have
-     * @returns TopNCollection
-     */
-    public nearestNeighbors(
-        other: Embedding,
-        topN: number,
-        minScore: number = Number.MIN_VALUE
-    ): ScoredValue<T>[] {
-        const matches = new TopNCollection<T>(topN as number);
-        for (let i = 0; i < this._embeddings.length; ++i) {
-            const score: number = this._embeddings[i].cosineSimilarity(other);
-            if (score >= minScore) {
-                matches.add(this._items[i], score);
-            }
-        }
-        return matches.byRank();
+        return iNearest;
     }
 
     /**
@@ -129,14 +99,14 @@ export class VectorizedList<T> {
      * @param other embedding to compare against
      * @param topN number of topN matches
      * @param minScore the min nearness score neighbors must have
-     * @returns TopNCollection
+     * @returns Top N matches
      */
     public indexOfNearestNeighbors(
         other: Embedding,
         topN: number,
         minScore: number = Number.MIN_VALUE
     ): ScoredValue<number>[] {
-        const matches = new TopNCollection<number>(topN as number);
+        const matches = new TopNCollection<number>(topN as number, 0);
         for (let i = 0; i < this._embeddings.length; ++i) {
             const score: number = this._embeddings[i].cosineSimilarity(other);
             if (score >= minScore) {
@@ -146,25 +116,54 @@ export class VectorizedList<T> {
         return matches.byRank();
     }
 
-    /**
-     * Returns the cosine similarity of each item in the list
-     * @param other The embedding to compare against
-     * @param minScore Only select items with this minimal score
-     */
-    public *similarityScore(
-        other: Embedding,
-        minScore: number
-    ): IterableIterator<ScoredValue<T>> {
+    public *similarityScore(other: Embedding): IterableIterator<number> {
         for (let i = 0; i < this._embeddings.length; ++i) {
-            const score: number = this._embeddings[i].cosineSimilarity(other);
-            if (score >= minScore) {
-                const scoredValue: ScoredValue<T> = {
-                    value: this._items[i],
-                    score: score,
-                };
-                yield scoredValue;
-            }
+            yield this._embeddings[i].cosineSimilarity(other);
         }
+    }
+
+    public trim(trimBy: number): void {
+        if (trimBy >= this._embeddings.length) {
+            this._embeddings.length = 0;
+        } else {
+            this._embeddings.splice(0, trimBy);
+        }
+    }
+}
+
+// Always normalizes embeddings in place, for speed
+export class VectorizedList<T> {
+    _items: T[];
+    _embeddings: EmbeddingList;
+
+    constructor() {
+        this._items = [];
+        this._embeddings = new EmbeddingList();
+    }
+
+    public add(item: T, vector: number[] | Embedding) {
+        this._items.push(item);
+        this._embeddings.add(vector);
+    }
+
+    public get(index: number): T {
+        return this._items[index];
+    }
+
+    public embedding(index: number): Embedding {
+        return this._embeddings.get(index);
+    }
+
+    public indexOfNearest(other: Embedding): number {
+        return this._embeddings.indexOfNearestNeighbor(other);
+    }
+
+    public indexOfNearestNeighbors(
+        other: Embedding,
+        topN: number,
+        minScore: number = Number.MIN_VALUE
+    ): ScoredValue<number>[] {
+        return this._embeddings.indexOfNearestNeighbors(other, minScore);
     }
 }
 
@@ -220,38 +219,41 @@ export class VectorizedTextList extends VectorizedList<string> {
         }
     }
 
-    /**
-     * Find the nearest text neighbors in this
-     * @param text Find nearest neighbors to this text
-     * @param topN # of nearest neighbors to return
-     * @param minScore minimum similarity score
-     * @returns An array of scored values
-     */
     public async nearestText(
         text: string,
         topN: number,
         minScore: number = Number.MIN_VALUE
     ): Promise<ScoredValue<string>[]> {
         const embedding = await this._generator.createEmbedding(text);
-        return this.nearestNeighbors(embedding, topN, minScore);
+        const matches = this.indexOfNearestNeighbors(embedding, topN, minScore);
+        const textMatches: ScoredValue<string>[] = new Array(matches.length);
+        for (let i = 0; i < matches.length; ++i) {
+            const match = matches[i];
+            textMatches.push({
+                value: this.get(match.value),
+                score: match.score,
+            });
+        }
+        return textMatches;
     }
 }
 /**
  * Min-Heap based topN match collection. Matches are ordered by lowest ranking
  */
+
 export class TopNCollection<T> {
     private _items: ScoredValue<T>[];
     private _count: number;
     private _maxCount: number;
 
-    constructor(maxCount: number) {
+    constructor(maxCount: number, defaultT: T) {
         Validator.greaterThan(maxCount, 0, 'maxCount');
         this._items = [];
         this._count = 0;
         this._maxCount = maxCount;
         this._items.push({
             score: Number.MIN_VALUE,
-            value: undefined,
+            value: defaultT,
         });
         // The first item is a sentinel, always
     }

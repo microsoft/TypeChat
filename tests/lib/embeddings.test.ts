@@ -93,7 +93,7 @@ test('Embeddings: normalize', () => {
 
 test('Embeddings: TopNCollection', () => {
     const maxN = 8;
-    const topN: TopNCollection<string> = new TopNCollection<string>(maxN);
+    const topN: TopNCollection<string> = new TopNCollection<string>(maxN, '');
 
     topN.reset();
     topN.add('4.0', 4.0);

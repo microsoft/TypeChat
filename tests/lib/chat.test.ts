@@ -1,18 +1,31 @@
 import * as chat from '../../src/lib/chatAgent';
 import * as setup from './testsetup';
 import * as oai from '../../src/lib/openai';
+import * as vector from '../../src/lib/embeddings';
+
+import { get } from 'http';
+import { TypechatErrorCode, TypechatException } from '../../src/lib';
 
 const g_config = setup.loadConfig();
-let g_ai: oai.OpenAIClient;
-
-if (g_config === null || g_config?.azureOAI === undefined) {
-    console.log('No AI configuration. Chat tests disabled');
-} else {
-    g_ai = new oai.OpenAIClient(g_config.azureOAI, true);
-}
 
 // These tests can go long due to throttling
-jest.setTimeout(60000);
+jest.setTimeout(120 * 1000);
+
+function getChatAI(): [oai.OpenAIClient, oai.ModelSettings] {
+    if (g_config === null || g_config?.azureOAI === undefined) {
+        throw new TypechatException(
+            TypechatErrorCode.CompletionModelNotAvailable
+        );
+    }
+    const client = new oai.OpenAIClient(g_config.azureOAI, true);
+    const model = client.models.getCompletion();
+    if (model === undefined) {
+        throw new TypechatException(
+            TypechatErrorCode.CompletionModelNotAvailable
+        );
+    }
+    return [client, model];
+}
 
 test('Chat: EventHistory', async () => {
     const history = new chat.EventHistory<chat.Message>();
@@ -50,29 +63,65 @@ test('Chat: EventHistory', async () => {
 });
 
 test('Chat: Basic Chat', async () => {
-    if (g_ai === undefined) {
-        console.log('No AI configuration. Chat: Basic Chat disabled');
-        return;
-    }
-    const model = g_ai.models.getCompletion();
-    if (model === undefined) {
-        console.log('No available model. Chat: Basic Chat disabled');
-        return;
-    }
-    const settings: chat.ChatSettings = {
+    const [chatAI, model] = getChatAI();
+    const settings: chat.ChatBotSettings = {
         userName: 'Toby',
         botName: 'Simon',
         chatModelName: model.modelName,
     };
     settings.promptStartBlock = `You are friendly bot named ${settings.botName} having a conversation with ${settings.userName}`;
-    const chatBot = new chat.ChatBot(g_ai, settings);
+    const chatBot = new chat.ChatBot(chatAI, settings);
     chatBot.maxContextLength = 256;
     const messages = [
         'Hello, my name is Toby McDuff. I am a cute cairn terrier!',
         'Woof woof',
         'Oh yeah? Tell me more!',
     ];
-    const history = chatBot.history as chat.EventHistory<chat.Message>;
+    await runMessages(chatBot, messages);
+});
+
+test('Chat: Relevance Chat', async () => {
+    const [chatAI, model] = getChatAI();
+    const emodel = chatAI.models.getByType(oai.ModelType.Embedding);
+    if (emodel === undefined) {
+        throw new TypechatException(
+            TypechatErrorCode.EmbeddingModelNotAvailable
+        );
+    }
+    const embeddingGenerator = new vector.OpenAITextEmbeddingGenerator(
+        chatAI,
+        emodel.modelName
+    );
+    const settings: chat.ChatBotSettings = {
+        userName: 'Toby',
+        botName: 'Simon',
+        chatModelName: model.modelName,
+        relevancy: {
+            embeddingGenerator: embeddingGenerator,
+            topN: 2,
+            minScore: 0,
+        },
+    };
+    settings.promptStartBlock = `You are friendly bot named ${settings.botName} having a conversation with ${settings.userName}`;
+    const chatBot = new chat.ChatBot(chatAI, settings);
+    chatBot.maxContextLength = 256;
+    const messageSource: chat.MessageSource = {
+        name: 'Toby',
+        type: chat.MessageSourceType.User,
+    };
+    const messages = [
+        'Hello, my name is Toby McDuff. I am a cute cairn terrier!',
+        'Woof woof',
+        'Oh yeah? Tell me more!',
+    ];
+    await runMessages(chatBot, messages);
+});
+
+async function runMessages(
+    chatBot: chat.ChatBot,
+    messages: string[]
+): Promise<void> {
+    const history = chatBot.history;
     for (let i = 0; i < messages.length; ++i) {
         const response = await chatBot.getCompletion(messages[i], 100, 0.7);
         expect(history.count).toBe((i + 1) * 2);
@@ -82,4 +131,4 @@ test('Chat: Basic Chat', async () => {
         expect(requestData.text).toEqual(messages[i]);
         expect(responseData.text).toEqual(response);
     }
-});
+}

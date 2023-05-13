@@ -1,12 +1,14 @@
+import { assert } from 'console';
 import { PropertyBag, StringBuilder, Validator } from './core';
 import * as vector from './embeddings';
 import * as oai from './openai';
 import * as oaiapi from 'openai';
+import { TypechatErrorCode, TypechatException } from './typechatException';
+import { match } from 'assert';
 
 export interface AgentEvent<T> {
     readonly seqNumber: number;
     readonly createDate: Date;
-    lastUsed?: Date; // Last used is handy for relevancy
     data: T; // This can also be rewritten by the AI
 }
 
@@ -14,6 +16,10 @@ export interface AgentEventStream<T> {
     count: number;
     append(data: T): void;
     allEvents(orderByNewest: boolean): IterableIterator<AgentEvent<T>>;
+    eventsInTimeRange(
+        minDate: Date,
+        maxDate: Date
+    ): IterableIterator<AgentEvent<T>>;
     // More methods for last N, filtering by dates etc.
 }
 
@@ -60,12 +66,28 @@ export class EventHistory<T> implements AgentEventStream<T> {
         }
     }
 
+    public *eventsInTimeRange(
+        minDate: Date,
+        maxDate: Date
+    ): IterableIterator<AgentEvent<T>> {
+        // First quick cut. We can easily optimize this by binary searching or using a better store
+        assert(minDate <= maxDate);
+        for (let i = this._history.length - 1; i >= 0; --i) {
+            const evt = this._history[i];
+            if (evt.createDate < minDate) {
+                break;
+            } else if (evt.createDate <= maxDate) {
+                yield evt;
+            }
+        }
+    }
+
     // Trim history by this much
-    public trim(count: number): void {
-        if (count >= this._history.length) {
+    public trim(trimBy: number): void {
+        if (trimBy >= this._history.length) {
             this._history.length = 0;
         } else {
-            this._history.splice(0, count);
+            this._history.splice(0, trimBy);
         }
     }
 }
@@ -161,7 +183,7 @@ export interface IChatPipeline {
     buildPrompt: (
         chat: Chat,
         message: Message,
-        context?: string,
+        context?: string
     ) => string | undefined;
     // Use this to retrieve cached responses...
     getResponse?: (chat: Chat, prompt: string) => Promise<string | undefined>;
@@ -173,6 +195,9 @@ export interface IChatPipeline {
     appendToHistory?: (chat: Chat, message: Message) => Promise<void>;
 }
 
+/**
+ * Implements a customizable and hookable chat message pipeline
+ */
 export class Chat {
     private _client: oai.OpenAIClient;
     private _model: oai.ModelSettings; // Model we are speaking with
@@ -237,7 +262,6 @@ export class Chat {
         requestMessage: Message,
         requestParams: oaiapi.CreateCompletionRequest
     ): Promise<Message> {
-
         // Pre-process message before sending
         requestMessage = await this.startingRequest(requestMessage);
         // Collect context to send to the AI
@@ -316,46 +340,85 @@ export class Chat {
     }
 }
 
-export interface ChatSettings {
+class ChatBotHistory extends EventHistory<Message> {
+    _embeddings?: vector.EmbeddingList;
+
+    constructor(approxSearch: boolean) {
+        super();
+        if (approxSearch) {
+            this._embeddings = new vector.EmbeddingList();
+        }
+    }
+
+    public append(data: Message): void {
+        super.append(data);
+        if (this._embeddings) {
+            if (!data.embedding) {
+                throw new TypechatException(TypechatErrorCode.MissingEmbedding);
+            }
+            this._embeddings?.add(data.embedding);
+        }
+    }
+
+    public *nearestEvents(
+        embedding: vector.Embedding,
+        topNCount: number,
+        minScore: number
+    ): IterableIterator<AgentEvent<Message>> {
+        if (this._embeddings) {
+            const matches = this._embeddings.indexOfNearestNeighbors(
+                embedding,
+                topNCount,
+                minScore
+            );
+            for (let i = 0; i < matches?.length; ++i) {
+                yield this.get(i);
+            }
+        }
+    }
+
+    public trim(trimBy: number): void {
+        super.trim(trimBy);
+        this._embeddings?.trim(trimBy);
+    }
+}
+
+export interface ChatBotSettings {
     promptStartBlock?: string;
     promptEndBlock?: string;
     userName?: string;
     botName?: string;
     chatModelName: string;
-    embeddingGenerator?: vector.TextEmbeddingGenerator;
-    embeddingModelName?: string;
-    history?: AgentEventStream<Message>;
+    history?: ChatBotHistory;
+    relevancy?: {
+        embeddingGenerator?: vector.TextEmbeddingGenerator;
+        topN: number;
+        minScore: number;
+    };
 }
 
-// Basic Chat Bot
+/**
+ * A Simple Chatbot pipeline with included history and context instruction
+ */
 export class ChatBot extends Chat {
-    private _settings: ChatSettings;
-    private _history: AgentEventStream<Message>;
+    private _settings: ChatBotSettings;
+    private _history: ChatBotHistory;
     private _contextBuilder: ContextBuilder;
-    private _embeddingsModel?: oai.ModelSettings;
+    private _embeddings?: vector.TextEmbeddingGenerator;
 
-    constructor(client: oai.OpenAIClient, settings: ChatSettings) {
+    constructor(client: oai.OpenAIClient, settings: ChatBotSettings) {
         const modelSettings = client.models.resolveModel(
             settings.chatModelName
         );
         super(client, modelSettings!);
         this._settings = settings;
-        if (this._settings.history) {
-            this._history = this._settings.history;
-        } else {
-            this._history = new EventHistory<Message>();
-        }
+        this._history = this.createHistory();
         this._contextBuilder = new ContextBuilder(256);
-        if (settings.embeddingModelName) {
-            this._embeddingsModel = client.models.resolveModel(
-                settings.embeddingModelName
-            );
-        }
     }
-    public get settings() {
+    public get settings(): ChatBotSettings {
         return this._settings;
     }
-    public get history() {
+    public get history(): ChatBotHistory {
         return this._history;
     }
     public get maxContextLength(): number {
@@ -385,12 +448,24 @@ export class ChatBot extends Chat {
         message: Message
     ): Promise<string | undefined> {
         let context = await super.collectContext(message);
-        if (!context) {
-            context = this.collectRecentHistoryWindow(
-                this.contextBuilder(),
-                message
-            );
+        if (context) {
+            return context;
         }
+        const builder = this.contextBuilder();
+        builder.start();
+        if (message) {
+            if (message.source.name) {
+                builder.append(message.source.name);
+            }
+            builder.append(message.text);
+        }
+        if (this._settings.relevancy !== undefined) {
+            this.collectRelevantHistoryWindow(builder, message);
+        } else {
+            this.collectRecentHistoryWindow(builder, message);
+        }
+        context = builder.complete();
+
         return context;
     }
     protected buildPrompt(
@@ -415,26 +490,53 @@ export class ChatBot extends Chat {
         return response;
     }
     protected async appendToHistory(message: Message): Promise<void> {
-        if (this.settings.embeddingGenerator && !message.embedding) {
-            message.embedding =
-                await this._settings.embeddingGenerator?.createEmbedding(
-                    message.text
-                );
+        if (this._embeddings && !message.embedding) {
+            message.embedding = await this._embeddings?.createEmbedding(
+                message.text
+            );
         }
         this.history.append(message);
     }
+
     public collectRecentHistoryWindow(
         builder: ContextBuilder,
-        message?: Message
-    ): string {
-        builder.start();
-        if (message) {
-            if (message.source.name) {
-                builder.append(message.source.name);
-            }
-            builder.append(message.text);
-        }
+        message: Message
+    ): void {
         builder.appendEvents(this._history.allEvents(true));
-        return builder.complete();
+    }
+
+    public async collectRelevantHistoryWindow(
+        builder: ContextBuilder,
+        message: Message
+    ): Promise<void> {
+        const relevancy = this._settings.relevancy;
+        if (relevancy !== undefined) {
+            const embedding = await this._embeddings?.createEmbedding(
+                message.text
+            );
+            const matches = this._history.nearestEvents(
+                embedding!,
+                relevancy.topN,
+                relevancy.minScore
+            );
+            builder.appendEvents(matches);
+        }
+    }
+
+    private createHistory(): ChatBotHistory {
+        if (this._settings.history !== undefined) {
+            return this._settings.history!;
+        }
+
+        if (!this._settings.relevancy) {
+            return new ChatBotHistory(false);
+        }
+
+        Validator.defined(
+            this._settings.relevancy.embeddingGenerator,
+            'embeddingGenerator'
+        );
+        this._embeddings = this._settings.relevancy.embeddingGenerator;
+        return new ChatBotHistory(true);
     }
 }

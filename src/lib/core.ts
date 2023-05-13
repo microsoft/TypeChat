@@ -3,6 +3,8 @@
 // For speed of experimentation, core  libraries parked here for now. As project evolves, some of these will be replaced by
 // standard libraries. Others will get refactored into their own modules.
 
+import { assert } from "console";
+
 export class Exception<TError> extends Error {
     private _errorCode: TError;
     private _innerEx?: Error;
