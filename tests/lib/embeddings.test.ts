@@ -65,7 +65,7 @@ test('Embeddings: vectorCollection', async () => {
         oai.ModelNames.Text_Embedding_Ada2
     );
     const vectorList = new VectorizedTextList(generator);
-    await vectorList.addVectorized(composers);
+    await vectorList.vectorizeAndAdd(composers);
     let matches = await vectorList.nearestText('Impressionist Music', 3);
     expect(matches.length).toEqual(3);
     let match = matches.find((item) => item.value?.includes('Debussy'));

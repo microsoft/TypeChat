@@ -80,7 +80,7 @@ export const Models: ModelInfo[] = [
     },
 ];
 
-function findModel(name: string): ModelInfo | undefined {
+export function getKnownModel(name: string): ModelInfo | undefined {
     return Models.find((m) => strEqInsensitive(m.name, name));
 }
 
@@ -146,11 +146,21 @@ export class OpenAIModels {
         }
         return model;
     }
+    public resolveModel(name: string): ModelSettings {
+        const modelSettings = this.getByName(name);
+        if (modelSettings === undefined) {
+            throw new TypechatException(
+                TypechatErrorCode.ModelNotFound,
+                name
+            );
+        }
+        return modelSettings;
+    }
     private updateModelInfo(): void {
         for (let i = 0; i < this._models.length; ++i) {
             const model = this._models[i];
             if (!model.type) {
-                const knownModel = findModel(this._models[i].modelName);
+                const knownModel = getKnownModel(this._models[i].modelName);
                 if (knownModel !== undefined) {
                     this._models[i] = {
                         modelName: model.modelName,

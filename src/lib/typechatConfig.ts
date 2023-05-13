@@ -5,7 +5,9 @@ import * as process from 'process';
 import { Validator } from './core';
 import * as oai from './openai';
 import { TypechatErrorCode, TypechatException } from './typechatException';
+import dotenv from 'dotenv';
 
+dotenv.config();
 /**
  * Configuration for Typechat.
  * Typically parsed from a JSON source.

@@ -206,7 +206,7 @@ export class VectorizedTextList extends VectorizedList<string> {
         return this._generator;
     }
 
-    public async addVectorized(value: string | string[]): Promise<void> {
+    public async vectorizeAndAdd(value: string | string[]): Promise<void> {
         if (value instanceof String) {
             const text: string = value as string;
             const embedding = await this._generator.createEmbedding(text);

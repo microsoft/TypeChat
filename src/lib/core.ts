@@ -113,4 +113,11 @@ export class StringBuilder {
     public toString(): string {
         return this._buffer.join('');
     }
+
+    public static join(...args: (string | undefined)[]): string {
+        return args.join('');
+    }
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type PropertyBag = { [key: string]: any };
