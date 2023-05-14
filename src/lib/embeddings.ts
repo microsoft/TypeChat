@@ -163,7 +163,7 @@ export class VectorizedList<T> {
         topN: number,
         minScore: number = Number.MIN_VALUE
     ): ScoredValue<number>[] {
-        return this._embeddings.indexOfNearestNeighbors(other, minScore);
+        return this._embeddings.indexOfNearestNeighbors(other, topN, minScore);
     }
 }
 
@@ -229,10 +229,10 @@ export class VectorizedTextList extends VectorizedList<string> {
         const textMatches: ScoredValue<string>[] = new Array(matches.length);
         for (let i = 0; i < matches.length; ++i) {
             const match = matches[i];
-            textMatches.push({
+            textMatches[i] = {
                 value: this.get(match.value),
                 score: match.score,
-            });
+            };
         }
         return textMatches;
     }
