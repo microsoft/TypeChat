@@ -3,6 +3,8 @@
 // For speed of experimentation, core  libraries parked here for now. As project evolves, some of these will be replaced by
 // standard libraries. Others will get refactored into their own modules.
 
+import { assert } from "console";
+
 export class Exception<TError> extends Error {
     private _errorCode: TError;
     private _innerEx?: Error;
@@ -75,3 +77,49 @@ const strEqIOptions = { sensitivity: 'base' };
 export function strEqInsensitive(x: string, y: string): boolean {
     return x.localeCompare(y, undefined, strEqIOptions) === 0;
 }
+
+export class StringBuilder {
+    private _buffer: string[];
+    private _length: number;
+
+    constructor() {
+        this._buffer = [];
+        this._length = 0;
+    }
+
+    public get length() {
+        return this._length;
+    }
+
+    public reset(): StringBuilder {
+        this._buffer.length = 0;
+        this._length = 0;
+        return this;
+    }
+
+    public append(value: string): StringBuilder {
+        this._length += value.length;
+        this._buffer.push(value);
+        return this;
+    }
+
+    public appendLine(value: string): StringBuilder {
+        this.append(value).append('\n');
+        return this;
+    }
+    public reverse(): StringBuilder {
+        this._buffer.reverse();
+        return this;
+    }
+
+    public toString(): string {
+        return this._buffer.join('');
+    }
+
+    public static join(...args: (string | undefined)[]): string {
+        return args.join('');
+    }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type PropertyBag = { [key: string]: any };

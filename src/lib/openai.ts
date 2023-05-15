@@ -33,10 +33,10 @@ export enum ModelNames {
  * General model information, like token budgets, tokenizer to use,etc.
  */
 export type ModelInfo = {
-    name: string;
-    type: ModelType;
-    maxTokenLength: number;
-    embeddingSize?: number;
+    readonly name: string;
+    readonly type: ModelType;
+    readonly maxTokenLength: number;
+    readonly embeddingSize?: number;
     // Tokenizer: Add a function to the tokenizer here
     // We will use that to estimate token budgets etc.
 };
@@ -80,7 +80,7 @@ export const Models: ModelInfo[] = [
     },
 ];
 
-function findModel(name: string): ModelInfo | undefined {
+export function getKnownModel(name: string): ModelInfo | undefined {
     return Models.find((m) => strEqInsensitive(m.name, name));
 }
 
@@ -95,16 +95,13 @@ export class OpenAIException extends Exception<number> {
  * These settings can be loaded from config
  */
 export interface ModelSettings  {
-    modelName: string;
-    type?: ModelType;
-    deployment?: string; // Optional
+    readonly modelName: string;
+    readonly type?: ModelType;
+    readonly deployment?: string; // Optional
 }
 
 function validateOAIModel(model: ModelSettings): void {
     Validator.notEmpty(model.modelName, 'modelName');
-    if (!model.deployment) {
-        model.deployment = model.modelName;
-    }
 }
 
 /**
@@ -112,9 +109,9 @@ function validateOAIModel(model: ModelSettings): void {
  * These settings are typically loaded from config
  */
 export interface OpenAISettings {
-    apiKey: string;
-    endpoint: string;
-    organization?: string;
+    readonly apiKey: string;
+    readonly endpoint: string;
+    readonly organization?: string;
     models: ModelSettings[]; // Models available at this endpoint
     retrySettings?: retry.RetrySettings;
 }
@@ -149,26 +146,31 @@ export class OpenAIModels {
         }
         return model;
     }
+    public resolveModel(name: string): ModelSettings {
+        const modelSettings = this.getByName(name);
+        if (modelSettings === undefined) {
+            throw new TypechatException(
+                TypechatErrorCode.ModelNotFound,
+                name
+            );
+        }
+        return modelSettings;
+    }
     private updateModelInfo(): void {
         for (let i = 0; i < this._models.length; ++i) {
-            if (!this._models[i].type) {
-                const knownModel = findModel(this._models[i].modelName);
+            const model = this._models[i];
+            if (!model.type) {
+                const knownModel = getKnownModel(this._models[i].modelName);
                 if (knownModel !== undefined) {
-                    this._models[i].type = knownModel.type;
+                    this._models[i] = {
+                        modelName: model.modelName,
+                        deployment: model.deployment,
+                        type: knownModel.type
+                    };
                 }
             }
         }
     }
-}
-
-export interface TextCompletionRequest {
-    prompt: string,
-    model: ModelSettings,
-    maxTokens?: number,
-    temperature?: number,
-    presencePenalty?: number;
-    frequencyPenalty?: number;
-    stop?: string[]
 }
 
 interface TextCompletion {
@@ -197,7 +199,9 @@ export class OpenAIClient {
     public get client(): OpenAIRestClient {
         return this._client;
     }
-
+    public modelNameToUse(model: ModelSettings): string {
+        return this._client.modelNameToUse(model);
+    }
     public async getCompletion(
         prompt: string,
         model: string | ModelSettings,
@@ -214,28 +218,31 @@ export class OpenAIClient {
             modelSettings = model as ModelSettings;
         }
 
-        const request: TextCompletionRequest = {
-            model: modelSettings,
+        const request: oai.CreateCompletionRequest = {
+            model: '',
             prompt: prompt,
-            maxTokens: maxTokens,
+            max_tokens: maxTokens,
             temperature: temperature,
             stop: stop,
         };
-        return this.getTextCompletion(request);
+        return this.getTextCompletion(modelSettings, request);
     }
 
-    public async getTextCompletion(request: TextCompletionRequest) : Promise<string> {
+    public async getTextCompletion(model: ModelSettings, request: oai.CreateCompletionRequest) : Promise<string> {
+        Validator.defined(model, 'model');
         Validator.defined(request, 'request');
+
+        request.model = this.modelNameToUse(model);
         // Completion and Chat models have different APIs! Older models have older APIs.
         let completions: TextCompletion[];
-        if (request.model.type === ModelType.Completion) {
+        if (model.type === ModelType.Completion) {
             completions = await this._client.getTextCompletion(request);
-        } else if (request.model.type === ModelType.Chat) {
-            completions = await this._client.getChatCompletion(request);
+        } else if (model.type === ModelType.Chat) {
+            completions = await this._client.getTextCompletionFromChat(request);
         } else {
             throw new TypechatException(
                 TypechatErrorCode.ModelDoesNotSupportCompletion,
-                request.model.modelName
+                model.modelName
             );
         }
         return this.firstCompletion(completions);
@@ -302,9 +309,60 @@ abstract class OpenAIRestClient {
         }
     }
 
-    public abstract getTextCompletion(request: TextCompletionRequest) : Promise<TextCompletion[]>;
-    public abstract getChatCompletion(request: TextCompletionRequest) : Promise<TextCompletion[]>;
-    public abstract createTextEmbedding(text: string, modelName: string): Promise<number[]>;
+    public abstract modelNameToUse(model: ModelSettings): string;
+
+    public async getTextCompletion(request: oai.CreateCompletionRequest) : Promise<TextCompletion[]> {
+        return await this.createCompletion(request);
+    }
+
+    public async getTextCompletionFromChat(request: oai.CreateCompletionRequest) : Promise<TextCompletion[]> {
+        const completionRequest: oai.CreateChatCompletionRequest = {
+            model: request.model,
+            messages: [
+                {
+                    role: oai.ChatCompletionRequestMessageRoleEnum.User,
+                    content: request.prompt as string,
+                },
+            ],
+            max_tokens: request.max_tokens as number,
+            temperature: request.temperature,
+            presence_penalty: request.presence_penalty,
+            frequency_penalty: request.frequency_penalty,
+            stop: request.stop as string[]
+        };
+        const response = await this.createChatCompletion(completionRequest);
+        return response.map((r) => {
+            return {text : r.message?.content}
+        });
+    }
+
+    public async createCompletion(
+        request: oai.CreateCompletionRequest
+    ): Promise<Array<oai.CreateCompletionResponseChoicesInner>> {
+        return await this.executeWithRetry(() => this.createCompletionAttempt(request));
+    }
+
+    public async createChatCompletion(
+        request: oai.CreateChatCompletionRequest
+    ): Promise<Array<oai.CreateChatCompletionResponseChoicesInner>> {
+        return await this.executeWithRetry(() => this.createChatCompletionAttempt(request));
+    }
+
+    public async createTextEmbedding(text: string, modelName: string): Promise<number[]> {
+        const request: oai.CreateEmbeddingRequest = {
+            model: modelName,
+            input: [text],
+        };
+        const response = await this.createEmbedding(request);
+        const data = response.data;
+        return data[0].embedding;
+    }
+
+    public async createEmbedding(
+        request: oai.CreateEmbeddingRequest
+    ): Promise<oai.CreateEmbeddingResponse> {
+        return await this.executeWithRetry(() => this.createEmbeddingAttempt(request));
+    }
 
     protected executeWithRetry<T>(fn: () => Promise<T>): Promise<T> {
         return  retry.executeWithRetry(
@@ -336,6 +394,18 @@ abstract class OpenAIRestClient {
         }
         return false;
     }
+
+    protected abstract createCompletionAttempt(
+        request: oai.CreateCompletionRequest
+    ): Promise<Array<oai.CreateCompletionResponseChoicesInner>>;
+
+    protected abstract createChatCompletionAttempt(
+        request: oai.CreateChatCompletionRequest
+    ): Promise<Array<oai.CreateChatCompletionResponseChoicesInner>>;
+
+    protected abstract createEmbeddingAttempt(
+        request: oai.CreateEmbeddingRequest
+    ): Promise<oai.CreateEmbeddingResponse>;
 }
 
 class AzureOpenAIApiClient extends OpenAIRestClient {
@@ -347,87 +417,32 @@ class AzureOpenAIApiClient extends OpenAIRestClient {
         this._client = createAzureClient(apiSettings.apiKey, apiSettings.endpoint);
     }
 
-    public async getTextCompletion(request: TextCompletionRequest) : Promise<TextCompletion[]> {
-        const completionRequest: aoai.CreateCompletionRequest = {
-            model: request.model.deployment as string,
-            prompt : request.prompt,
-            max_tokens: request.maxTokens,
-            temperature: request.temperature,
-            presence_penalty: request.presencePenalty,
-            frequency_penalty: request.frequencyPenalty,
-            stop: request.stop
-        };
-        return await this.createCompletion(completionRequest);
+    public modelNameToUse(model: ModelSettings): string {
+        if (model.deployment) {
+            return model.deployment;
+        }
+        return model.modelName;
     }
 
-    public async getChatCompletion(request: TextCompletionRequest) : Promise<TextCompletion[]> {
-        const completionRequest: aoai.CreateChatCompletionRequest = {
-            model: request.model.deployment as string,
-            messages: [
-                {
-                    role: aoai.ChatCompletionRequestMessageRoleEnum.User,
-                    content: request.prompt,
-                },
-            ],
-            max_tokens: request.maxTokens,
-            temperature: request.temperature,
-            presence_penalty: request.presencePenalty,
-            frequency_penalty: request.frequencyPenalty,
-            stop: request.stop
-        };
-        const response = await this.createChatCompletion(completionRequest);
-        return response.map((r) => {
-            return {text : r.message?.content}
-        });
-    }
-
-    public async createTextEmbedding(text: string, modelName: string): Promise<number[]> {
-        const request: aoai.CreateEmbeddingRequest = {
-            model: modelName,
-            input: [text],
-        };
-        const response = await this.createEmbedding(request);
-        const data = response.data;
-        return data[0].embedding;
-    }
-
-    public async createCompletion(
-        request: aoai.CreateCompletionRequest
-    ): Promise<Array<aoai.CreateCompletionResponseChoicesInner>> {
-        return await this.executeWithRetry(() => this.createCompletionAttempt(request));
-    }
-
-    public async createChatCompletion(
-        request: aoai.CreateChatCompletionRequest
-    ): Promise<Array<aoai.CreateChatCompletionResponseChoicesInner>> {
-        return await this.executeWithRetry(() => this.createChatCompletionAttempt(request));
-    }
-
-    public async createEmbedding(
-        request: aoai.CreateEmbeddingRequest
-    ): Promise<aoai.CreateEmbeddingResponse> {
-        return await this.executeWithRetry(() => this.createEmbeddingAttempt(request));
-    }
-
-    private async createCompletionAttempt(
-        request: aoai.CreateCompletionRequest
-    ): Promise<Array<aoai.CreateCompletionResponseChoicesInner>> {
+    protected async createCompletionAttempt(
+        request: oai.CreateCompletionRequest
+    ): Promise<Array<oai.CreateCompletionResponseChoicesInner>> {
         const response = await this._client.createCompletion(request);
         this.ensureSuccess(response);
         return response.data.choices;
     }
 
-    private async createChatCompletionAttempt(
-        request: aoai.CreateChatCompletionRequest
-    ): Promise<Array<aoai.CreateChatCompletionResponseChoicesInner>> {
+    protected async createChatCompletionAttempt(
+        request: oai.CreateChatCompletionRequest
+    ): Promise<Array<oai.CreateChatCompletionResponseChoicesInner>> {
         const response = await this._client.createChatCompletion(request);
         this.ensureSuccess(response);
         return response.data.choices;
     }
 
-    private async createEmbeddingAttempt(
-        request: aoai.CreateEmbeddingRequest
-    ): Promise<aoai.CreateEmbeddingResponse> {
+    protected async createEmbeddingAttempt(
+        request: oai.CreateEmbeddingRequest
+    ): Promise<oai.CreateEmbeddingResponse> {
         const response = await this._client.createEmbedding(request);
         this.ensureSuccess(response);
         return response.data;
@@ -443,69 +458,11 @@ class OpenAIApiClient extends OpenAIRestClient {
         this._client = createOAIClient(apiSettings.apiKey, apiSettings.organization);
     }
 
-    public async getTextCompletion(request: TextCompletionRequest) : Promise<TextCompletion[]> {
-        const completionRequest: oai.CreateCompletionRequest = {
-            model: request.model.deployment as string,
-            prompt : request.prompt,
-            max_tokens: request.maxTokens,
-            temperature: request.temperature,
-            presence_penalty: request.presencePenalty,
-            frequency_penalty: request.frequencyPenalty,
-            stop: request.stop
-        };
-        return await this.createCompletion(completionRequest);
+    public modelNameToUse(model: ModelSettings): string {
+        return model.modelName;
     }
 
-    public async getChatCompletion(request: TextCompletionRequest) : Promise<TextCompletion[]> {
-        const completionRequest: oai.CreateChatCompletionRequest = {
-            model: request.model.deployment as string,
-            messages: [
-                {
-                    role: aoai.ChatCompletionRequestMessageRoleEnum.User,
-                    content: request.prompt,
-                },
-            ],
-            max_tokens: request.maxTokens,
-            temperature: request.temperature,
-            presence_penalty: request.presencePenalty,
-            frequency_penalty: request.frequencyPenalty,
-            stop: request.stop
-        };
-        const response = await this.createChatCompletion(completionRequest);
-        return response.map((r) => {
-            return {text : r.message?.content}
-        });
-    }
-
-    public async createTextEmbedding(text: string, modelName: string): Promise<number[]> {
-        const request: oai.CreateEmbeddingRequest = {
-            model: modelName,
-            input: [text],
-        };
-        const response = await this.createEmbedding(request);
-        const data = response.data;
-        return data[0].embedding;
-    }
-
-    public async createCompletion(
-        request: oai.CreateCompletionRequest
-    ): Promise<Array<oai.CreateCompletionResponseChoicesInner>> {
-        return await this.executeWithRetry(() => this.createCompletionAttempt(request));
-    }
-
-    public async createChatCompletion(
-        request: oai.CreateChatCompletionRequest
-    ): Promise<Array<oai.CreateChatCompletionResponseChoicesInner>> {
-        return await this.executeWithRetry(() => this.createChatCompletionAttempt(request));
-    }
-
-    public async createEmbedding(
-        request: oai.CreateEmbeddingRequest
-    ): Promise<oai.CreateEmbeddingResponse> {
-        return await this.executeWithRetry(() => this.createEmbeddingAttempt(request));
-    }
-
-    private async createCompletionAttempt(
+    protected async createCompletionAttempt(
         request: oai.CreateCompletionRequest
     ): Promise<Array<oai.CreateCompletionResponseChoicesInner>> {
         const response = await this._client.createCompletion(request);
@@ -513,7 +470,7 @@ class OpenAIApiClient extends OpenAIRestClient {
         return response.data.choices;
     }
 
-    private async createChatCompletionAttempt(
+    protected async createChatCompletionAttempt(
         request: oai.CreateChatCompletionRequest
     ): Promise<Array<oai.CreateChatCompletionResponseChoicesInner>> {
         const response = await this._client.createChatCompletion(request);
@@ -521,7 +478,7 @@ class OpenAIApiClient extends OpenAIRestClient {
         return response.data.choices;
     }
 
-    private async createEmbeddingAttempt(
+    protected async createEmbeddingAttempt(
         request: oai.CreateEmbeddingRequest
     ): Promise<oai.CreateEmbeddingResponse> {
         const response = await this._client.createEmbedding(request);

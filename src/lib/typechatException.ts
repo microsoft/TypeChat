@@ -6,8 +6,11 @@ export enum TypechatErrorCode {
     // Model Errors
     ModelNotFound,
     CompletionModelNotAvailable,
+    EmbeddingModelNotAvailable,
     ModelDoesNotSupportCompletion,
     ModelDoesNotSupportEmbeddings,
+    // Chat errors
+    MissingEmbedding
 }
 
 export class TypechatException extends Exception<TypechatErrorCode> {
