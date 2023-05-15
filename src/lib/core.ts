@@ -48,6 +48,12 @@ export class Validator {
         }
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    public static true(value: boolean, name?: string): void {
+        if (value) {
+            throw new Error(`${name || 'Value'} must be true`);
+        }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     public static notEmpty(value: string | Array<any>, name?: string): void {
         if (value === null || value === undefined || value.length === 0) {
             throw new Error(`${name || 'Value'} must not be null or empty`);

@@ -10,7 +10,7 @@ export enum TypechatErrorCode {
     ModelDoesNotSupportCompletion,
     ModelDoesNotSupportEmbeddings,
     // Chat errors
-    MissingEmbedding
+    MissingEmbedding,
 }
 
 export class TypechatException extends Exception<TypechatErrorCode> {
