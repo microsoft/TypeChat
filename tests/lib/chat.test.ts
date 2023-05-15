@@ -1,9 +1,18 @@
-import * as chat from '../../src/lib/chatAgent';
+import { AgentEventList } from '../../src/lib/chat/agentHistory';
+import {
+    Message,
+    MessageSource,
+    MessageSourceType,
+} from '../../src/lib/chat/agent';
+import {
+    ChatBot,
+    ChatBotSettings,
+    ContextBuilder,
+} from '../../src/lib/chat/chatBot';
 import * as setup from './testsetup';
-import * as oai from '../../src/lib/openai';
+import { OpenAIClient, ModelSettings, ModelType } from '../../src/lib/openai';
 import * as vector from '../../src/lib/embeddings';
 
-import { get } from 'http';
 import { TypechatErrorCode, TypechatException } from '../../src/lib';
 
 const g_config = setup.loadConfig();
@@ -11,13 +20,13 @@ const g_config = setup.loadConfig();
 // These tests can go long due to throttling
 jest.setTimeout(120 * 1000);
 
-function getChatAI(): [oai.OpenAIClient, oai.ModelSettings] {
+function getChatAI(): [OpenAIClient, ModelSettings] {
     if (g_config === null || g_config?.azureOAI === undefined) {
         throw new TypechatException(
             TypechatErrorCode.CompletionModelNotAvailable
         );
     }
-    const client = new oai.OpenAIClient(g_config.azureOAI, true);
+    const client = new OpenAIClient(g_config.azureOAI, true);
     const model = client.models.getCompletion();
     if (model === undefined) {
         throw new TypechatException(
@@ -28,13 +37,11 @@ function getChatAI(): [oai.OpenAIClient, oai.ModelSettings] {
 }
 
 test('Chat: EventHistory', async () => {
-    const history = new chat.EventHistory<chat.Message>();
+    const history = new AgentEventList<Message>();
     const numMessages = 50;
     for (let i = 0; i < numMessages; ++i) {
         const sourceType =
-            i % 2 === 0
-                ? chat.MessageSourceType.User
-                : chat.MessageSourceType.AI;
+            i % 2 === 0 ? MessageSourceType.User : MessageSourceType.AI;
         history.append({
             text: 'Message: ' + i.toString(),
             source: {
@@ -51,7 +58,7 @@ test('Chat: EventHistory', async () => {
     }
 
     const targetLength = 100;
-    const context = new chat.ContextBuilder(targetLength);
+    const context = new ContextBuilder(targetLength);
     context.start();
     context.append('foo');
     context.appendEvents(history.allEvents());
@@ -64,13 +71,13 @@ test('Chat: EventHistory', async () => {
 
 test('Chat: Basic Chat', async () => {
     const [chatAI, model] = getChatAI();
-    const settings: chat.ChatBotSettings = {
+    const settings: ChatBotSettings = {
         userName: 'Toby',
         botName: 'Simon',
         chatModelName: model.modelName,
     };
     settings.promptStartBlock = `You are friendly bot named ${settings.botName} having a conversation with ${settings.userName}`;
-    const chatBot = new chat.ChatBot(chatAI, settings);
+    const chatBot = new ChatBot(chatAI, settings);
     chatBot.maxContextLength = 256;
     const messages = [
         'Hello, my name is Toby McDuff. I am a cute cairn terrier!',
@@ -82,7 +89,7 @@ test('Chat: Basic Chat', async () => {
 
 test('Chat: Relevance Chat', async () => {
     const [chatAI, model] = getChatAI();
-    const emodel = chatAI.models.getByType(oai.ModelType.Embedding);
+    const emodel = chatAI.models.getByType(ModelType.Embedding);
     if (emodel === undefined) {
         throw new TypechatException(
             TypechatErrorCode.EmbeddingModelNotAvailable
@@ -92,7 +99,7 @@ test('Chat: Relevance Chat', async () => {
         chatAI,
         emodel.modelName
     );
-    const settings: chat.ChatBotSettings = {
+    const settings: ChatBotSettings = {
         userName: 'Toby',
         botName: 'Simon',
         chatModelName: model.modelName,
@@ -103,11 +110,11 @@ test('Chat: Relevance Chat', async () => {
         },
     };
     settings.promptStartBlock = `You are friendly bot named ${settings.botName} having a conversation with ${settings.userName}`;
-    const chatBot = new chat.ChatBot(chatAI, settings);
+    const chatBot = new ChatBot(chatAI, settings);
     chatBot.maxContextLength = 256;
-    const messageSource: chat.MessageSource = {
+    const messageSource: MessageSource = {
         name: 'Toby',
-        type: chat.MessageSourceType.User,
+        type: MessageSourceType.User,
     };
     const messages = [
         'Hello, my name is Toby McDuff. I am a cute cairn terrier!',
@@ -118,7 +125,7 @@ test('Chat: Relevance Chat', async () => {
 });
 
 async function runMessages(
-    chatBot: chat.ChatBot,
+    chatBot: ChatBot,
     messages: string[]
 ): Promise<void> {
     const history = chatBot.history;
