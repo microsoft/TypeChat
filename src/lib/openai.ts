@@ -192,7 +192,9 @@ export class OpenAIClient {
             this._client = new OpenAIApiClient(this._apiSettings);
         }
     }
-
+    public get settings(): OpenAISettings {
+        return this._apiSettings;
+    }
     public get models(): OpenAIModels {
         return this._models;
     }

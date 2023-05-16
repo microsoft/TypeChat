@@ -129,8 +129,8 @@ export class Agent {
 
     public async getCompletion(
         message: string,
-        maxTokens: number,
-        temperature: number
+        maxTokens?: number,
+        temperature?: number
     ): Promise<string> {
         Validator.defined(message, 'message');
         const requestMessage: Message = {
