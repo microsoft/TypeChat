@@ -142,10 +142,10 @@ export class ChatBot extends Agent {
         const builder = this.contextBuilder();
         builder.start();
         if (message) {
+            builder.append(message.text);
             if (message.source.name) {
                 builder.append(message.source.name);
             }
-            builder.append(message.text);
         }
         if (this._settings.relevancy !== undefined) {
             this.collectRelevantHistoryWindow(builder, message);
@@ -175,6 +175,7 @@ export class ChatBot extends Agent {
         if (!response.source.name) {
             response.source.name = this.botName();
         }
+        response.text = response.text.trim();
         return response;
     }
     protected async appendToHistory(message: Message): Promise<void> {
