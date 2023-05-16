@@ -6,6 +6,13 @@ import { Message, Agent, MessageList } from './agent';
 import { TextEmbeddingGenerator } from '../embeddings';
 import * as oai from '../openai';
 
+//
+// Use to collect context that does not exceed an upper max # of characters
+// append methods return false if max hit
+// Since events are appended typically 'newest' first, but the prompt must be
+// oldest first..in conversation order... collects an array of string blocks that forms the context
+// Then reverses the array before joining into a big block
+//
 export class ContextBuilder {
     private _sb: StringBuilder;
     private _maxLength: number;
@@ -65,8 +72,10 @@ export class ContextBuilder {
         return result;
     }
 
-    public complete(): string {
-        this._sb.reverse();
+    public complete(reverseString = true): string {
+        if (reverseString) {
+            this._sb.reverse();
+        }
         return this._sb.toString();
     }
 }

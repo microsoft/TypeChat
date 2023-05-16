@@ -81,6 +81,7 @@ export interface MessagePipeline {
     ) => string | undefined;
     // Use this to retrieve cached responses...
     getResponse?: (chat: Agent, prompt: string) => Promise<string | undefined>;
+    // Handle a received response. 
     responseReceived?: (
         chat: Agent,
         request: Message,
