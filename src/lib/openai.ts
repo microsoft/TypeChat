@@ -181,11 +181,13 @@ export class OpenAIClient {
     private _apiSettings: OpenAISettings;
     private _models: OpenAIModels;
     private _client: OpenAIRestClient;
+    private _isAzure: boolean;
 
     constructor(apiSettings: OpenAISettings, isAzure: boolean) {
         validateOAISettings(apiSettings, isAzure);
         this._apiSettings = apiSettings;
         this._models = new OpenAIModels(apiSettings.models);
+        this._isAzure = isAzure;
         if (isAzure) {
             this._client = new AzureOpenAIApiClient(this._apiSettings);
         } else {
@@ -200,6 +202,9 @@ export class OpenAIClient {
     }
     public get client(): OpenAIRestClient {
         return this._client;
+    }
+    public get isAzure(): boolean {
+        return this._isAzure;
     }
     public modelNameToUse(model: ModelSettings): string {
         return this._client.modelNameToUse(model);

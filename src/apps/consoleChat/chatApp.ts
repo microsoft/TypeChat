@@ -3,7 +3,10 @@ import { ChatBot, ChatBotSettings } from '../../lib/chat/chatBot';
 import { ConsoleUI } from './consoleui';
 import { OpenAIClient } from '../../lib';
 
-class ChatApp {
+//
+// Have a conversation with the AI
+//
+export class ChatApp {
     private _bot: ChatBot;
     private _maxTokens: number;
     private _temperature: number;
@@ -25,9 +28,9 @@ class ChatApp {
         return this._bot;
     }
 
-    public async InputHandler(value: string): Promise<string> {
+    public async InputHandler(userInput: string): Promise<string> {
         return this._bot.getCompletion(
-            value,
+            userInput,
             this._maxTokens,
             this._temperature
         );
@@ -48,28 +51,24 @@ class ChatApp {
 
     private createBotSettings(client: OpenAIClient): ChatBotSettings {
         const settings: ChatBotSettings = {
-            userName: getArg(0, 'Toby'),
-            botName: getArg(1, 'Simon'),
+            userName: ConsoleUI.getArg(0, 'Toby'),
+            botName: ConsoleUI.getArg(1, 'Simon'),
             chatModelName: client.settings.models[0].modelName,
         };
+        //
+        // This prompt should be moved to use the prompt template object
+        // Allow for easy customization, loading template from a file etc
+        //
         let prompt = `This is a conversation between ${settings.userName} and you.\n`;
         prompt += `Your Name: ${settings.botName}\n`;
         prompt += `ONLY SPEAK FOR ${settings.botName}\n. *NEVER* SAY ANYTHING AS ${settings.userName}`;
         prompt +=
-            `${settings.userName}\n I have a question. Can you help?\n` +
-            `${settings.botName}\n Of course. Go on!\n`;
+            `${settings.userName}\n Looking forward to our talk? Here goes\n` +
+            `${settings.botName}\n Of course, me too. Go on!\n`;
         settings.promptStartBlock = prompt;
         settings.promptEndBlock = `\n${settings.botName}\n`;
         return settings;
     }
-}
-
-function getArg(index: number, defaultValue: string): string {
-    const actualArg = index + 2;
-    if (actualArg < process.argv.length) {
-        return process.argv[actualArg];
-    }
-    return defaultValue;
 }
 
 const chat = new ChatApp(1000, 1000, 0.7);

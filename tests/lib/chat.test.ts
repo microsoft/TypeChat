@@ -7,7 +7,7 @@ import {
 import {
     ChatBot,
     ChatBotSettings,
-    ContextBuilder,
+    ContextBuffer,
 } from '../../src/lib/chat/chatBot';
 import * as setup from './testsetup';
 import { OpenAIClient, ModelSettings, ModelType } from '../../src/lib/openai';
@@ -58,7 +58,7 @@ test('Chat: EventHistory', async () => {
     }
 
     const targetLength = 100;
-    const context = new ContextBuilder(targetLength);
+    const context = new ContextBuffer(targetLength);
     context.start();
     context.append('foo');
     context.appendEvents(history.allEvents());

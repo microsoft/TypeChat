@@ -84,4 +84,12 @@ export class ConsoleUI {
             console.log(this._settings.goodbye);
         }
     }
+
+    public static getArg(index: number, defaultValue: string): string {
+        const actualArg = index + 2;
+        if (actualArg < process.argv.length) {
+            return process.argv[actualArg];
+        }
+        return defaultValue;
+    }
 }

@@ -69,25 +69,37 @@ export class MessageList extends AgentEventList<Message> {
 }
 
 export interface MessagePipeline {
-    startingRequest?: (chat: Agent, message: Message) => Message;
+    startingRequest?: (agent: Agent, message: Message) => Message;
     collectContext?: (
-        chat: Agent,
+        agent: Agent,
         message: Message
     ) => Promise<string | undefined>;
     buildPrompt?: (
-        chat: Agent,
+        agent: Agent,
         message: Message,
         context?: string
     ) => string | undefined;
-    // Use this to retrieve cached responses...
-    getResponse?: (chat: Agent, prompt: string) => Promise<string | undefined>;
-    // Handle a received response. 
+    getResponse?: (
+        agent: Agent,
+        request: Message
+    ) => Promise<Message | undefined>;
+    validateResponse?: (
+        agent: Agent,
+        request: Message,
+        response: Message
+    ) => Promise<ResponseValidationResult>;
+    // Handle a valid received response
     responseReceived?: (
-        chat: Agent,
+        agent: Agent,
         request: Message,
         response: Message
     ) => Message;
-    appendToHistory?: (chat: Agent, message: Message) => Promise<void>;
+    appendToHistory?: (agent: Agent, message: Message) => Promise<void>;
+}
+
+export interface ResponseValidationResult {
+    isValid: boolean;
+    errorMessage?: string;
 }
 
 /**
@@ -99,6 +111,7 @@ export class Agent {
     private _modelInfo?: oai.ModelInfo;
     private _pipeline?: MessagePipeline;
     private _properties: PropertyBag;
+    private _maxValidationAttempts: number;
 
     constructor(
         client: oai.OpenAIClient,
@@ -110,6 +123,7 @@ export class Agent {
         this._modelInfo = oai.getKnownModel(model.modelName);
         this._pipeline = pipeline;
         this._properties = {};
+        this._maxValidationAttempts = 1;
     }
 
     public get modelInfo(): oai.ModelInfo | undefined {
@@ -127,7 +141,13 @@ export class Agent {
     public get properties(): PropertyBag {
         return this._properties;
     }
-
+    public get maxValidationAttempts(): number {
+        return this._maxValidationAttempts;
+    }
+    public set maxValidationATtempts(value: number) {
+        Validator.greaterThan(value, 0, 'maxValidationAttempts');
+        this._maxValidationAttempts = value;
+    }
     public async getCompletion(
         message: string,
         maxTokens?: number,
@@ -154,43 +174,34 @@ export class Agent {
     }
 
     public async runCompletion(
-        requestMessage: Message,
+        request: Message,
         requestParams: oaiapi.CreateCompletionRequest
     ): Promise<Message> {
         // Pre-process message before sending
-        requestMessage = await this.startingRequest(requestMessage);
-        // Collect context to send to the AI
-        const context = await this.collectContext(requestMessage);
+        request = await this.startingRequest(request);
+
+        // Collect historical context to send to the AI
+        const context = await this.collectContext(request);
+
         // Use message and context to build a prompt
-        let prompt = this.buildPrompt(requestMessage, context);
+        let prompt = this.buildPrompt(request, context);
         if (!prompt) {
-            prompt = requestMessage.text;
+            prompt = request.text;
         }
         requestParams.prompt = prompt;
-        // Get a cached or canned response if one exists
-        let responseText = await this.getResponse(prompt);
-        if (!responseText) {
-            // Lets get a fresh resposne
-            responseText = await this._client.getTextCompletion(
-                this._model,
-                requestParams
-            );
-        }
-        let responseMessage: Message = {
-            source: {
-                type: MessageSourceType.AI,
-            },
-            text: responseText,
-        };
-        // Post-process the response
-        responseMessage = await this.onResponse(
-            requestMessage,
-            responseMessage
+
+        let response: Message = await this.getValidResponse(
+            request,
+            requestParams
         );
+
+        // Post-process the response
+        response = await this.onResponse(request, response);
+
         // Save to history
-        await this.appendToHistory(requestMessage);
-        await this.appendToHistory(responseMessage);
-        return responseMessage;
+        await this.appendToHistory(request);
+        await this.appendToHistory(response);
+        return response;
     }
 
     protected startingRequest(message: Message): Message {
@@ -216,11 +227,58 @@ export class Agent {
         }
         return undefined;
     }
-    protected async getResponse(prompt: string): Promise<string | undefined> {
+    protected async getResponse(
+        request: Message
+    ): Promise<Message | undefined> {
         if (this._pipeline?.getResponse) {
-            return await this._pipeline.getResponse(this, prompt);
+            return await this._pipeline.getResponse(this, request);
         }
         return undefined;
+    }
+    protected async getValidResponse(
+        request: Message,
+        requestParams: oaiapi.CreateCompletionRequest
+    ): Promise<Message> {
+        const cachedResponse = await this.getResponse(request);
+        if (cachedResponse) {
+            return cachedResponse!;
+        }
+        const originalPrompt = requestParams.prompt;
+        const response: Message = {
+            source: {
+                type: MessageSourceType.AI,
+            },
+            text: '',
+        };
+        for (let i = 0; i < this._maxValidationAttempts; ++i) {
+            response.text = await this._client.getTextCompletion(
+                this._model,
+                requestParams
+            );
+            // Verify the response
+            const validation = await this.validateResponse(request, response);
+            if (validation.isValid) {
+                return response;
+            }
+            if (validation.errorMessage) {
+                requestParams.prompt = originalPrompt + validation.errorMessage;
+            }
+        }
+        response.text = ''; // Eat the bad message
+        return response;
+    }
+    protected async validateResponse(
+        request: Message,
+        response: Message
+    ): Promise<ResponseValidationResult> {
+        if (this._pipeline?.validateResponse) {
+            return await this._pipeline.validateResponse(
+                this,
+                request,
+                response
+            );
+        }
+        return { isValid: true };
     }
     protected onResponse(message: Message, response: Message): Message {
         if (this._pipeline?.responseReceived) {

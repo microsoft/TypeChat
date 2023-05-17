@@ -2,7 +2,7 @@
 
 import { StringBuilder, Validator } from '../core';
 import { AgentEvent } from './agentHistory';
-import { Message, Agent, MessageList } from './agent';
+import { Message, Agent, MessageList, MessagePipeline } from './agent';
 import { TextEmbeddingGenerator } from '../embeddings';
 import * as oai from '../openai';
 
@@ -13,7 +13,7 @@ import * as oai from '../openai';
 // oldest first..in conversation order... collects an array of string blocks that forms the context
 // Then reverses the array before joining into a big block
 //
-export class ContextBuilder {
+export class ContextBuffer {
     private _sb: StringBuilder;
     private _maxLength: number;
 
@@ -86,7 +86,11 @@ export interface ChatBotSettings {
     userName?: string;
     botName?: string;
     chatModelName: string;
+    // Inspect and modify message flow by attaching a custom message pipeline
+    messagePipeline?: MessagePipeline;
     history?: MessageList;
+    // Use this setting if you want context selection from history to find nearest/most similar 
+    // messages instead of a simple sliding window
     relevancy?: {
         embeddingGenerator?: TextEmbeddingGenerator;
         topN: number;
@@ -100,7 +104,7 @@ export interface ChatBotSettings {
 export class ChatBot extends Agent {
     private _settings: ChatBotSettings;
     private _history: MessageList;
-    private _contextBuilder: ContextBuilder;
+    private _context: ContextBuffer;
     private _embeddings?: TextEmbeddingGenerator;
 
     constructor(client: oai.OpenAIClient, settings: ChatBotSettings) {
@@ -110,7 +114,7 @@ export class ChatBot extends Agent {
         super(client, modelSettings!);
         this._settings = settings;
         this._history = this.createHistory();
-        this._contextBuilder = new ContextBuilder(256);
+        this._context = new ContextBuffer(256);
     }
     public get settings(): ChatBotSettings {
         return this._settings;
@@ -119,10 +123,10 @@ export class ChatBot extends Agent {
         return this._history;
     }
     public get maxContextLength(): number {
-        return this._contextBuilder.maxLength;
+        return this._context.maxLength;
     }
     public set maxContextLength(value: number) {
-        this._contextBuilder.maxLength = value;
+        this._context.maxLength = value;
     }
     private botName(): string {
         return this._settings.botName || 'Bot';
@@ -131,7 +135,7 @@ export class ChatBot extends Agent {
         return this._settings.userName || 'User';
     }
     private contextBuilder() {
-        return this._contextBuilder;
+        return this._context;
     }
 
     protected startingRequest(message: Message): Message {
@@ -197,14 +201,14 @@ export class ChatBot extends Agent {
     }
 
     public collectRecentHistoryWindow(
-        builder: ContextBuilder,
+        builder: ContextBuffer,
         message: Message
     ): void {
         builder.appendEvents(this._history.allEvents(true));
     }
 
     public async collectRelevantHistoryWindow(
-        builder: ContextBuilder,
+        builder: ContextBuffer,
         message: Message
     ): Promise<void> {
         const relevancy = this._settings.relevancy;
