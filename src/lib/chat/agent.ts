@@ -72,7 +72,7 @@ export interface MessagePipeline {
     startingRequest?: (agent: Agent, message: Message) => Message;
     collectContext?: (
         agent: Agent,
-        message: Message
+        request: Message
     ) => Promise<string | undefined>;
     buildPrompt?: (
         agent: Agent,
@@ -87,7 +87,7 @@ export interface MessagePipeline {
         agent: Agent,
         request: Message,
         response: Message
-    ) => Promise<ResponseValidationResult>;
+    ) => Promise<ValidationResult>;
     // Handle a valid received response
     responseReceived?: (
         agent: Agent,
@@ -97,9 +97,9 @@ export interface MessagePipeline {
     appendToHistory?: (agent: Agent, message: Message) => Promise<void>;
 }
 
-export interface ResponseValidationResult {
+export interface ValidationResult {
     isValid: boolean;
-    errorMessage?: string;
+    errorForAI?: string;
 }
 
 /**
@@ -260,8 +260,8 @@ export class Agent {
             if (validation.isValid) {
                 return response;
             }
-            if (validation.errorMessage) {
-                requestParams.prompt = originalPrompt + validation.errorMessage;
+            if (validation.errorForAI) {
+                requestParams.prompt = originalPrompt + validation.errorForAI;
             }
         }
         response.text = ''; // Eat the bad message
@@ -270,7 +270,7 @@ export class Agent {
     protected async validateResponse(
         request: Message,
         response: Message
-    ): Promise<ResponseValidationResult> {
+    ): Promise<ValidationResult> {
         if (this._pipeline?.validateResponse) {
             return await this._pipeline.validateResponse(
                 this,
@@ -290,5 +290,79 @@ export class Agent {
         if (this._pipeline?.appendToHistory) {
             await this._pipeline.appendToHistory(this, message);
         }
+    }
+}
+
+//
+// Use to collect context that does not exceed an upper max # of characters
+// append methods return false if max hit
+// Since events are appended typically 'newest' first, but the prompt must be
+// oldest first..in conversation order... collects an array of string blocks that forms the context
+// Then reverses the array before joining into a big block
+//
+export class PromptBuffer {
+    private _sb: StringBuilder;
+    private _maxLength: number;
+
+    constructor(maxLength: number) {
+        this._maxLength = maxLength;
+        this._sb = new StringBuilder();
+    }
+
+    public get length() {
+        return this._sb.length;
+    }
+
+    public get maxLength(): number {
+        return this._maxLength;
+    }
+    public set maxLength(value: number) {
+        Validator.greaterThan(value, 0, 'maxLength');
+        this._maxLength = value;
+    }
+
+    public start(): void {
+        this._sb.reset();
+    }
+
+    public append(value: string): boolean {
+        if (!value) {
+            return true;
+        }
+        if (this._sb.length + (value.length + 1) <= this._maxLength) {
+            this._sb.appendLine(value);
+            return true;
+        }
+        return false;
+    }
+
+    public appendMessage(chatMessage: Message): boolean {
+        if (this.append(chatMessage.text)) {
+            if (chatMessage.source.name) {
+                return this.append(chatMessage.source.name);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    public appendEvents(
+        events: IterableIterator<AgentEvent<Message>>
+    ): boolean {
+        let result = true;
+        for (const evt of events) {
+            if (!this.appendMessage(evt.data)) {
+                result = false;
+                break;
+            }
+        }
+        return result;
+    }
+
+    public complete(reverseString = true): string {
+        if (reverseString) {
+            this._sb.reverse();
+        }
+        return this._sb.toString();
     }
 }

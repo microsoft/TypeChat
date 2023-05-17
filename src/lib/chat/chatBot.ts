@@ -1,90 +1,22 @@
 // Copyright Microsoft Corp
 
 import { StringBuilder, Validator } from '../core';
-import { AgentEvent } from './agentHistory';
-import { Message, Agent, MessageList, MessagePipeline } from './agent';
+import {
+    Message,
+    Agent,
+    MessageList,
+    MessagePipeline,
+    PromptBuffer,
+} from './agent';
 import { TextEmbeddingGenerator } from '../embeddings';
 import * as oai from '../openai';
-
-//
-// Use to collect context that does not exceed an upper max # of characters
-// append methods return false if max hit
-// Since events are appended typically 'newest' first, but the prompt must be
-// oldest first..in conversation order... collects an array of string blocks that forms the context
-// Then reverses the array before joining into a big block
-//
-export class ContextBuffer {
-    private _sb: StringBuilder;
-    private _maxLength: number;
-
-    constructor(maxLength: number) {
-        this._maxLength = maxLength;
-        this._sb = new StringBuilder();
-    }
-
-    public get length() {
-        return this._sb.length;
-    }
-
-    public get maxLength(): number {
-        return this._maxLength;
-    }
-    public set maxLength(value: number) {
-        Validator.greaterThan(value, 0, 'maxLength');
-        this._maxLength = value;
-    }
-
-    public start(): void {
-        this._sb.reset();
-    }
-
-    public append(value: string): boolean {
-        if (!value) {
-            return true;
-        }
-        if (this._sb.length + (value.length + 1) <= this._maxLength) {
-            this._sb.appendLine(value);
-            return true;
-        }
-        return false;
-    }
-
-    public appendMessage(chatMessage: Message): boolean {
-        if (this.append(chatMessage.text)) {
-            if (chatMessage.source.name) {
-                return this.append(chatMessage.source.name);
-            }
-            return true;
-        }
-        return false;
-    }
-
-    public appendEvents(
-        events: IterableIterator<AgentEvent<Message>>
-    ): boolean {
-        let result = true;
-        for (const evt of events) {
-            if (!this.appendMessage(evt.data)) {
-                result = false;
-                break;
-            }
-        }
-        return result;
-    }
-
-    public complete(reverseString = true): string {
-        if (reverseString) {
-            this._sb.reverse();
-        }
-        return this._sb.toString();
-    }
-}
 
 export interface ChatBotSettings {
     promptStartBlock?: string;
     promptEndBlock?: string;
     userName?: string;
     botName?: string;
+    botPersonality?: string;
     chatModelName: string;
     // Inspect and modify message flow by attaching a custom message pipeline
     messagePipeline?: MessagePipeline;
@@ -104,17 +36,17 @@ export interface ChatBotSettings {
 export class ChatBot extends Agent {
     private _settings: ChatBotSettings;
     private _history: MessageList;
-    private _context: ContextBuffer;
+    private _context: PromptBuffer;
     private _embeddings?: TextEmbeddingGenerator;
 
     constructor(client: oai.OpenAIClient, settings: ChatBotSettings) {
         const modelSettings = client.models.resolveModel(
             settings.chatModelName
         );
-        super(client, modelSettings!);
+        super(client, modelSettings!, settings.messagePipeline);
         this._settings = settings;
         this._history = this.createHistory();
-        this._context = new ContextBuffer(256);
+        this._context = new PromptBuffer(256);
     }
     public get settings(): ChatBotSettings {
         return this._settings;
@@ -201,14 +133,14 @@ export class ChatBot extends Agent {
     }
 
     public collectRecentHistoryWindow(
-        builder: ContextBuffer,
+        builder: PromptBuffer,
         message: Message
     ): void {
         builder.appendEvents(this._history.allEvents(true));
     }
 
     public async collectRelevantHistoryWindow(
-        builder: ContextBuffer,
+        builder: PromptBuffer,
         message: Message
     ): Promise<void> {
         const relevancy = this._settings.relevancy;
