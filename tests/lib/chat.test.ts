@@ -3,12 +3,9 @@ import {
     Message,
     MessageSource,
     MessageSourceType,
+    PromptBuffer,
 } from '../../src/lib/chat/agent';
-import {
-    ChatBot,
-    ChatBotSettings,
-    ContextBuilder,
-} from '../../src/lib/chat/chatBot';
+import { ChatBot, ChatBotSettings } from '../../src/lib/chat/chatBot';
 import * as setup from './testsetup';
 import { OpenAIClient, ModelSettings, ModelType } from '../../src/lib/openai';
 import * as vector from '../../src/lib/embeddings';
@@ -58,7 +55,7 @@ test('Chat: EventHistory', async () => {
     }
 
     const targetLength = 100;
-    const context = new ContextBuilder(targetLength);
+    const context = new PromptBuffer(targetLength);
     context.start();
     context.append('foo');
     context.appendEvents(history.allEvents());

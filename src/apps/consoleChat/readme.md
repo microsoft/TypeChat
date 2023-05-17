@@ -7,6 +7,9 @@ You must add these environment variables
 
 You can put the variables in launch.json or in in **.env** file - which we will automatically load using dotenv.
 
-VS Code: 
-- Configure launch.json to launch a program 
-- Set "console": "externalTerminal"
+To run the Chat Bot in VS Code: 
+- Configure launch.json like so: 
+{
+    "program": "${workspaceFolder}/src/apps/consoleChat/chatApp.ts",
+    "console": "externalTerminal"
+}

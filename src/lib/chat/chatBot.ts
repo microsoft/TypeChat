@@ -1,83 +1,28 @@
 // Copyright Microsoft Corp
 
 import { StringBuilder, Validator } from '../core';
-import { AgentEvent } from './agentHistory';
-import { Message, Agent, MessageList } from './agent';
+import {
+    Message,
+    Agent,
+    MessageList,
+    MessagePipeline,
+    PromptBuffer,
+} from './agent';
 import { TextEmbeddingGenerator } from '../embeddings';
 import * as oai from '../openai';
-
-export class ContextBuilder {
-    private _sb: StringBuilder;
-    private _maxLength: number;
-
-    constructor(maxLength: number) {
-        this._maxLength = maxLength;
-        this._sb = new StringBuilder();
-    }
-
-    public get length() {
-        return this._sb.length;
-    }
-
-    public get maxLength(): number {
-        return this._maxLength;
-    }
-    public set maxLength(value: number) {
-        Validator.greaterThan(value, 0, 'maxLength');
-        this._maxLength = value;
-    }
-
-    public start(): void {
-        this._sb.reset();
-    }
-
-    public append(value: string): boolean {
-        if (!value) {
-            return true;
-        }
-        if (this._sb.length + (value.length + 1) <= this._maxLength) {
-            this._sb.appendLine(value);
-            return true;
-        }
-        return false;
-    }
-
-    public appendMessage(chatMessage: Message): boolean {
-        if (this.append(chatMessage.text)) {
-            if (chatMessage.source.name) {
-                return this.append(chatMessage.source.name);
-            }
-            return true;
-        }
-        return false;
-    }
-
-    public appendEvents(
-        events: IterableIterator<AgentEvent<Message>>
-    ): boolean {
-        let result = true;
-        for (const evt of events) {
-            if (!this.appendMessage(evt.data)) {
-                result = false;
-                break;
-            }
-        }
-        return result;
-    }
-
-    public complete(): string {
-        this._sb.reverse();
-        return this._sb.toString();
-    }
-}
 
 export interface ChatBotSettings {
     promptStartBlock?: string;
     promptEndBlock?: string;
     userName?: string;
     botName?: string;
+    botPersonality?: string;
     chatModelName: string;
+    // Inspect and modify message flow by attaching a custom message pipeline
+    messagePipeline?: MessagePipeline;
     history?: MessageList;
+    // Use this setting if you want context selection from history to find nearest/most similar 
+    // messages instead of a simple sliding window
     relevancy?: {
         embeddingGenerator?: TextEmbeddingGenerator;
         topN: number;
@@ -91,17 +36,17 @@ export interface ChatBotSettings {
 export class ChatBot extends Agent {
     private _settings: ChatBotSettings;
     private _history: MessageList;
-    private _contextBuilder: ContextBuilder;
+    private _context: PromptBuffer;
     private _embeddings?: TextEmbeddingGenerator;
 
     constructor(client: oai.OpenAIClient, settings: ChatBotSettings) {
         const modelSettings = client.models.resolveModel(
             settings.chatModelName
         );
-        super(client, modelSettings!);
+        super(client, modelSettings!, settings.messagePipeline);
         this._settings = settings;
         this._history = this.createHistory();
-        this._contextBuilder = new ContextBuilder(256);
+        this._context = new PromptBuffer(256);
     }
     public get settings(): ChatBotSettings {
         return this._settings;
@@ -110,10 +55,10 @@ export class ChatBot extends Agent {
         return this._history;
     }
     public get maxContextLength(): number {
-        return this._contextBuilder.maxLength;
+        return this._context.maxLength;
     }
     public set maxContextLength(value: number) {
-        this._contextBuilder.maxLength = value;
+        this._context.maxLength = value;
     }
     private botName(): string {
         return this._settings.botName || 'Bot';
@@ -122,7 +67,7 @@ export class ChatBot extends Agent {
         return this._settings.userName || 'User';
     }
     private contextBuilder() {
-        return this._contextBuilder;
+        return this._context;
     }
 
     protected startingRequest(message: Message): Message {
@@ -188,14 +133,14 @@ export class ChatBot extends Agent {
     }
 
     public collectRecentHistoryWindow(
-        builder: ContextBuilder,
+        builder: PromptBuffer,
         message: Message
     ): void {
         builder.appendEvents(this._history.allEvents(true));
     }
 
     public async collectRelevantHistoryWindow(
-        builder: ContextBuilder,
+        builder: PromptBuffer,
         message: Message
     ): Promise<void> {
         const relevancy = this._settings.relevancy;
