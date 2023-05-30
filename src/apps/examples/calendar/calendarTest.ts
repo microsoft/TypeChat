@@ -27,7 +27,7 @@ const typeInterp = 'the list of requested calendar actions';
 const frame = `a bot is helping a person work with a calendar. today is ${todaysDate()}`;
 
 const testPrompts = [
-    'I need to get my tires changed from 12:00 to 2:00 pm on Friday March 15, 2024',
+    'I need to get mytires changed from 12:00 to 2:00 pm on Friday March 15, 2024',
     'Search for any meetings with Gavin this week',
     'Set up an event for friday named Jeffs pizza party at 6pm',
     'Please add Jennifer to the scrum next Thursday',
