@@ -6,8 +6,9 @@ export type ClientData = {
 };
 
 export type User = {
-    username: string;
+    username?: string;
     token: string;
+    id?: string;
 };
 
 export class SpotifyService {

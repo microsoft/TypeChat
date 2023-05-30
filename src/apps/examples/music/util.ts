@@ -1,6 +1,6 @@
-import { Query } from './endpoints';
-
-export function serializeQuery(query: Query): string {
+export function serializeQuery(
+    query: SpotifyApi.SearchForItemParameterObject
+): string {
     let result = '?';
 
     for (const key in query) {
@@ -9,13 +9,7 @@ export function serializeQuery(query: Query): string {
                 result += `q=${encodeURIComponent(query.q)}`;
                 break;
             case 'type':
-                result += '&type=';
-                for (let i = 0; i < query.type.length; i++) {
-                    result += query.type[i];
-                    if (i !== query.type.length - 1) {
-                        result += ',';
-                    }
-                }
+                result += `&type=${encodeURIComponent(query.type)}`;
                 break;
             case 'include_external':
                 result += `&internal_external=${query.include_external}`;
