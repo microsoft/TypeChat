@@ -130,17 +130,12 @@ function localParser(userPrompt: string) {
     return undefined;
 }
 
-const planOnly = true;
 async function handleResult(
     plan: SpotifyActions,
     clientContext: IClientContext
 ) {
     chalkPlan(plan);
-    // only track list results for now
     const results = [] as SpotifyApi.TrackObjectFull[][];
-    if (planOnly) {
-        return;
-    }
     for (let i = 0; i < plan.actions.length; i++) {
         const action = plan.actions[i];
         results[i] = [];

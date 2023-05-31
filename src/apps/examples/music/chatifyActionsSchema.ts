@@ -65,7 +65,7 @@ export interface FilterTracksAction extends ActionWithInput {
     // filter -> (constraint combiner?)+
     // constraint -> artist:keyword-list | genre:keyword-list | year:year-range | match-description:string
     // combiner -> 'AND' | 'OR'
-    // the match-description constraint value can be any string describing a constraint not expressable by the other constraint choices
+    // the match-description constraint value describes a constraint not expressable as a combination of genre, artist and year constraints
     filter?: string;
     // keep the tracks that do not match, instead of the tracks that match; default false
     negate?: boolean;
