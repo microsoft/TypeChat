@@ -13,6 +13,6 @@ export const applications = [
 export type ApplicationAreas = {
     // one or more strings from the applications array; each string represents an application related to the user request
     areas: string[];
-    // the complete text of the user request
-    description: string;
+    // the exact text of the user request
+    text: string;
 };

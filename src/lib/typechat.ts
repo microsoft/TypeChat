@@ -93,6 +93,7 @@ export function makePrompt<TSchema>(
         preamble +
         promptContext.schemaText +
         postamble +
+        '\nText of user request:\n' +
         text +
         '\nJSON object:\n';
     return prompt;
