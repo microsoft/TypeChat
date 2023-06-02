@@ -14,6 +14,8 @@ export type Event = {
     participants?: string[];
 };
 
+// properties used by the requester in referring to an event
+// these properties are only specified if given directly by the requester
 export type EventReference = {
     // date (example: March 22, 2024) or relative date (example: after EventReference)
     day?: string;
@@ -51,18 +53,35 @@ export type ChangeTimeRangeAction = {
     timeRange: EventTimeRange;
 };
 
+export type ChangeDescriptionAction = {
+    actionType: 'change description';
+    // event to be changed
+    eventReference?: EventReference;
+    // new description for the event
+    description: string;
+};
+
 export type FindEventsAction = {
     actionType: 'find events';
     // one or more event properties to use to search for matching events
     eventReference: EventReference;
 };
 
+// if the user types text that can not easily be understood as a calendar action, this action is used
+export interface UnknownAction {
+    actionType: 'unknown';
+    // text typed by the user that the system did not understand
+    text: string;
+}
+
 export type Action =
     | AddEventAction
     | RemoveEventAction
     | AddParticipantsAction
     | ChangeTimeRangeAction
-    | FindEventsAction;
+    | ChangeDescriptionAction
+    | FindEventsAction
+    | UnknownAction;
 
 export type CalendarActions = {
     actions: Action[];

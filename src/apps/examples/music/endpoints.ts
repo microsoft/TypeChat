@@ -196,6 +196,29 @@ export async function getUserProfile(service: SpotifyService) {
     return undefined;
 }
 
+export async function getPlaybackState(service: SpotifyService) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    try {
+        const spotifyResult = await axios.get(
+            'https://api.spotify.com/v1/me/player',
+            config
+        );
+
+        return spotifyResult.data as SpotifyApi.CurrentPlaybackResponse;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
 export async function play(
     service: SpotifyService,
     deviceId: string,
