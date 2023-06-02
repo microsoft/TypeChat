@@ -10,9 +10,13 @@ export const applications = [
     'controlling a browser',
 ];
 
-export type ApplicationAreas = {
-    // one or more strings from the applications array; each string represents an application related to the user request
-    areas: string[];
+export type Request = {
+    // a string from the applications array; the string represents the application related to the user request
+    area: string;
     // the exact text of the user request
     text: string;
+};
+
+export type Requests = {
+    requests: Request[];
 };

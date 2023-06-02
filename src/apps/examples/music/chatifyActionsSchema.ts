@@ -62,7 +62,7 @@ export interface ListInputAction extends ActionWithInput {
     offset?: number;
 }
 // input: Track List; output: Track List
-// apply a filter or use a language model to match tracks; result is the tracks that match the filter or matchDescription
+// apply a filter to match tracks; result is the tracks that match the filter
 export interface FilterTracksAction extends ActionWithInput {
     type: 'filterTracks';
     // a filter string, which has the following structure (written as a grammar)

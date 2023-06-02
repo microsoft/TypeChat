@@ -53,7 +53,7 @@ export type Salad = {
     itemType: 'salad';
     // default: half
     portion?: string;
-    // default: garden
+    // default: Garden
     style?: string;
     // an array of strings from the saladIngredients array
     addedIngredients?: string[];

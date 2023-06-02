@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { runTests, runTestsInteractive, IPromptContext } from '../../../lib';
-import { ApplicationAreas } from './metaSchema';
+import { Requests } from './metaSchema';
 
 const schemaFilename = 'metaSchema.ts';
 const schemaText = fs.readFileSync(
@@ -9,7 +9,8 @@ const schemaText = fs.readFileSync(
     'utf8'
 );
 
-const typeInterp = 'the set of possible relevant applications';
+const typeInterp =
+    'a list of user requests and the application relevant to that request';
 const frame =
     'A person is working with a generative AI model on a broad set of applications';
 
@@ -27,11 +28,11 @@ const testPrompts = [
     'get my top ten tracks since January',
 ];
 
-const promptContext: IPromptContext<ApplicationAreas> = {
+const promptContext: IPromptContext<Requests> = {
     typeInterp,
     frame,
     schemaText,
-    typeName: 'ApplicationAreas',
+    typeName: 'Requests',
 };
 
 export async function metaTests() {
