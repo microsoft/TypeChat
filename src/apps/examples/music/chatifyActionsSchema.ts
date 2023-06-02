@@ -46,16 +46,20 @@ export interface SearchTracksAction {
 // play some or all items from the input list
 export interface PlayInputAction extends ActionWithInput {
     type: 'playInput';
-    // number of tracks to play, starting with the first item on the list; default 1
+    // number of tracks to play; default 1
     count?: number;
+    // index of first track to play; default 0
+    offset?: number;
 }
 
 // input: Track List
 // print out some or all items from the input list
 export interface ListInputAction extends ActionWithInput {
     type: 'listInput';
-    // number of tracks to print out, starting with the first item on the list; default 1
+    // number of tracks to print out; default input.length
     count?: number;
+    // index of first track to list; default 0
+    offset?: number;
 }
 // input: Track List; output: Track List
 // apply a filter or use a language model to match tracks; result is the tracks that match the filter or matchDescription
@@ -63,10 +67,10 @@ export interface FilterTracksAction extends ActionWithInput {
     type: 'filterTracks';
     // a filter string, which has the following structure (written as a grammar)
     // filter -> (constraint combiner?)+
-    // constraint -> artist:keyword-list | genre:keyword-list | year:year-range | match-description:string
-    // combiner -> 'AND' | 'OR'
-    // the match-description constraint value can be any string describing a constraint not expressable by the other constraint choices
-    filter?: string;
+    // constraint -> artist:string | genre:string | year:year-range | description:string
+    // combiner -> 'AND' | 'OR' (AND is the default and may be omitted)
+    // the description constraint value describes any constraint not expressable as a combination of genre, artist and year constraints
+    filter: string;
     // keep the tracks that do not match, instead of the tracks that match; default false
     negate?: boolean;
 }

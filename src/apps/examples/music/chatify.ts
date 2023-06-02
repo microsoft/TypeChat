@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Authzor } from './authz';
 import chalk from 'chalk';
+import * as Filter from './trackFilter';
 
 import {
     runTests,
@@ -22,6 +23,8 @@ import {
     pause,
     // getArtist,
     createPlaylist,
+    getArtist,
+    getPlaybackState,
 } from './endpoints';
 import { SpotifyService, User } from './service';
 const schemaFilename = 'chatifyActionsSchema.ts';
@@ -75,7 +78,14 @@ function printTrackNames(tracks: SpotifyApi.TrackObjectFull[]) {
     }
 }
 
-/*
+function uniqueTracks(tracks: SpotifyApi.TrackObjectFull[]) {
+    const map = new Map<string, SpotifyApi.TrackObjectFull>();
+    for (const track of tracks) {
+        map.set(track.id, track);
+    }
+    return [...map.values()];
+}
+
 async function llmFilter(
     description: string,
     tracks: SpotifyApi.TrackObjectFull[]
@@ -91,7 +101,6 @@ async function llmFilter(
     const ret = await llmComplete(prompt);
     return ret;
 }
-*/
 
 function chalkPlan(plan: SpotifyActions) {
     console.log(chalk.green('Plan Validated:'));
@@ -130,17 +139,165 @@ function localParser(userPrompt: string) {
     return undefined;
 }
 
-const planOnly = true;
+const filterDiag = false;
+
+async function applyFilterExpr(
+    clientContext: IClientContext,
+    filterExpr: Filter.FilterNode,
+    tracks: SpotifyApi.TrackObjectFull[],
+    negate = false
+): Promise<SpotifyApi.TrackObjectFull[]> {
+    if (tracks.length === 0) {
+        return tracks;
+    }
+    switch (filterExpr.type) {
+        case 'constraint':
+            switch (filterExpr.constraintType) {
+                case Filter.FilterConstraintType.Genre: {
+                    process.stdout.write(
+                        `fetching genre for ${tracks.length} tracks`
+                    );
+                    const genre = filterExpr.constraintValue;
+                    const results = [] as SpotifyApi.TrackObjectFull[];
+                    for (const track of tracks) {
+                        process.stdout.write('.');
+                        const wrapper = await getArtist(
+                            clientContext.service,
+                            track.album.artists[0].id
+                        );
+                        if (wrapper) {
+                            let hit = wrapper.artists[0].genres.includes(genre);
+                            if (negate) {
+                                hit = !hit;
+                            }
+                            if (hit) {
+                                results.push(track);
+                            }
+                        }
+                    }
+                    process.stdout.write('\n');
+                    tracks = results;
+                    break;
+                }
+                case Filter.FilterConstraintType.Artist: {
+                    process.stdout.write(
+                        `fetching artist for ${tracks.length} tracks`
+                    );
+                    const results = [] as SpotifyApi.TrackObjectFull[];
+                    for (const track of tracks) {
+                        process.stdout.write('.');
+                        const wrapper = await getArtist(
+                            clientContext.service,
+                            track.album.artists[0].id
+                        );
+                        if (wrapper) {
+                            let hit = false;
+                            for (const artist of wrapper.artists) {
+                                if (filterDiag) {
+                                    console.log(
+                                        `${artist.name.toLowerCase()} vs ${filterExpr.constraintValue.toLowerCase()}`
+                                    );
+                                }
+                                if (
+                                    artist.name
+                                        .toLowerCase()
+                                        .includes(
+                                            filterExpr.constraintValue.toLowerCase()
+                                        )
+                                ) {
+                                    hit = true;
+                                }
+                                if (negate) {
+                                    hit = !hit;
+                                }
+                                if (hit) {
+                                    results.push(track);
+                                }
+                                if (hit) {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    process.stdout.write('\n');
+                    tracks = results;
+                    break;
+                }
+                case Filter.FilterConstraintType.Year: {
+                    const results = [] as SpotifyApi.TrackObjectFull[];
+                    for (const track of tracks) {
+                        // TODO year ranges
+                        if (filterDiag) {
+                            console.log(
+                                `${track.album.release_date} vs ${filterExpr.constraintValue}`
+                            );
+                        }
+                        if (
+                            track.album.release_date.includes(
+                                filterExpr.constraintValue
+                            )
+                        ) {
+                            results.push(track);
+                        }
+                    }
+                    tracks = results;
+                    break;
+                }
+                case Filter.FilterConstraintType.Description: {
+                    const results = [] as SpotifyApi.TrackObjectFull[];
+
+                    const indicesStr = await llmFilter(
+                        filterExpr.constraintValue,
+                        tracks
+                    );
+                    if (indicesStr) {
+                        const indices = JSON.parse(indicesStr) as number[];
+                        for (const j of indices) {
+                            results.push(tracks[j]);
+                        }
+                    }
+                    tracks = results;
+                    break;
+                }
+            }
+            break;
+        case 'combiner':
+            if (filterExpr.combinerType === Filter.FilterCombinerType.AND) {
+                for (const childExpr of filterExpr.operands) {
+                    tracks = await applyFilterExpr(
+                        clientContext,
+                        childExpr,
+                        tracks,
+                        negate
+                    );
+                }
+            } else if (
+                filterExpr.combinerType === Filter.FilterCombinerType.OR
+            ) {
+                let subTracks = [] as SpotifyApi.TrackObjectFull[];
+                for (const childExpr of filterExpr.operands) {
+                    subTracks = subTracks.concat(
+                        await applyFilterExpr(
+                            clientContext,
+                            childExpr,
+                            tracks,
+                            negate
+                        )
+                    );
+                }
+                tracks = uniqueTracks(subTracks);
+            }
+            break;
+    }
+    return tracks;
+}
+
 async function handleResult(
     plan: SpotifyActions,
     clientContext: IClientContext
 ) {
     chalkPlan(plan);
-    // only track list results for now
     const results = [] as SpotifyApi.TrackObjectFull[][];
-    if (planOnly) {
-        return;
-    }
     for (let i = 0; i < plan.actions.length; i++) {
         const action = plan.actions[i];
         results[i] = [];
@@ -160,7 +317,10 @@ async function handleResult(
                     input = results[action.inputFromAction];
                 }
                 const count = action.count ? action.count : 1;
-                const uris = input.slice(0, count).map((track) => track.uri);
+                const offset = action.offset ? action.offset : 0;
+                const uris = input
+                    .slice(offset, offset + count)
+                    .map((track) => track.uri);
                 if (clientContext.deviceId) {
                     await play(
                         clientContext.service,
@@ -178,14 +338,16 @@ async function handleResult(
                 ) {
                     input = results[action.inputFromAction];
                 }
-                printTrackNames(input);
+                const count = action.count ? action.count : input.length;
+                const offset = action.offset ? action.offset : 0;
+                printTrackNames(input.slice(offset, offset + count));
                 break;
             }
             case 'searchTracks': {
                 const query: SpotifyApi.SearchForItemParameterObject = {
                     q: action.query,
                     type: 'track',
-                    limit: 10,
+                    limit: 50,
                     offset: 0,
                 };
                 const data = await search(query, clientContext.service);
@@ -225,48 +387,25 @@ async function handleResult(
                 break;
             }
             case 'filterTracks': {
-                /* let input = results[i - 1];
-                if (
-                    action.inputFromAction !== undefined &&
-                    action.inputFromAction !== i - 1
-                ) {
-                    input = results[action.inputFromAction];
+                // TODO: add filter validation to overall instance validation
+                const result = Filter.parseFilter(action.filter);
+                if (result.ast) {
+                    let input = results[i - 1];
+                    if (
+                        action.inputFromAction !== undefined &&
+                        action.inputFromAction !== i - 1
+                    ) {
+                        input = results[action.inputFromAction];
+                    }
+                    results[i] = await applyFilterExpr(
+                        clientContext,
+                        result.ast,
+                        input,
+                        action.negate
+                    );
+                } else {
+                    console.log(result.diagnostics);
                 }
-                if (action.genre) {
-                    process.stdout.write(
-                        `fetching genre for ${input.length} tracks`
-                    );
-                    for (const track of input) {
-                        process.stdout.write('.');
-                        const wrapper = await getArtist(
-                            clientContext.service,
-                            track.album.artists[0].id
-                        );
-                        if (wrapper) {
-                            let hit = wrapper.artists[0].genres.includes(
-                                action.genre
-                            );
-                            if (action.negate) {
-                                hit = !hit;
-                            }
-                            if (hit) {
-                                results[i].push(track);
-                            }
-                        }
-                    }
-                    process.stdout.write('\n');
-                } else if (action.description) {
-                    const indicesStr = await llmFilter(
-                        action.description,
-                        input
-                    );
-                    if (indicesStr) {
-                        const indices = JSON.parse(indicesStr) as number[];
-                        for (const j of indices) {
-                            results[i].push(input[j]);
-                        }
-                    }
-                } */
                 break;
             }
             case 'sortTracks':
@@ -293,16 +432,35 @@ async function handleResult(
             }
             case 'setVolume': {
                 if (action.newVolumeLevel) {
-                    // console.log(`new volume level ${action.newVolumeLevel}`);
                     if (action.newVolumeLevel > 50) {
                         action.newVolumeLevel = 50;
                     }
+                    console.log(
+                        chalk.yellowBright(
+                            `setting volume to ${action.newVolumeLevel} ...`
+                        )
+                    );
                     await setVolume(
                         clientContext.service,
                         action.newVolumeLevel
                     );
                 } else if (action.volumeChangeAmount) {
-                    // get current volume and change it
+                    const playback = await getPlaybackState(
+                        clientContext.service
+                    );
+                    if (playback && playback.device) {
+                        const volpct = playback.device.volume_percent || 50;
+                        let nv = Math.floor(
+                            (1.0 + action.volumeChangeAmount / 100.0) * volpct
+                        );
+                        if (nv > 80) {
+                            nv = 80;
+                        }
+                        console.log(
+                            chalk.yellowBright(`setting volume to ${nv} ...`)
+                        );
+                        await setVolume(clientContext.service, nv);
+                    }
                 }
                 break;
             }

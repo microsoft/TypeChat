@@ -15,7 +15,7 @@ const schemaText = fs.readFileSync(
     'utf8'
 );
 
-function todaysDate() {
+export function todaysDate() {
     const d = new Date();
     const month = d.getMonth() + 1;
     const day = d.getDate();
@@ -24,7 +24,7 @@ function todaysDate() {
 }
 
 const typeInterp = 'the list of requested calendar actions';
-const frame = `a bot is helping a person work with a calendar. today is ${todaysDate()}`;
+const frame = 'a bot is helping a person work with a calendar';
 
 const testPrompts = [
     'I need to get mytires changed from 12:00 to 2:00 pm on Friday March 15, 2024',
