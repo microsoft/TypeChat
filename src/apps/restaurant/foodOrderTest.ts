@@ -6,7 +6,7 @@ import {
     beerKind,
     saladIngredients,
 } from './foodOrderSchema';
-import { runTests, runTestsInteractive, IPromptContext } from '../../../../lib';
+import { runTests, runTestsInteractive, IPromptContext } from '../../lib';
 
 const schemaFilename = 'foodOrderSchema.ts';
 const schemaText = fs.readFileSync(

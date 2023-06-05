@@ -9,7 +9,7 @@ import {
     runTestsInteractive,
     IPromptContext,
     llmComplete,
-} from '../../../lib';
+} from '../../lib';
 import { SpotifyActions } from './chatifyActionsSchema';
 import {
     play,

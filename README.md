@@ -7,11 +7,11 @@ In our experiences so far with building systems around LLMs, we have observed th
 3. The approach of using formal schemas works best when the LLM has trained on many tokens from the given formal language.
 4. For specifying schemas, some schema languages such as JSON Schema are more verbose (4-5X) than programming languages like TypeScript or simple schema languages like YAML schema  
 5. Developers have requested a way to bridge between the approximate world of natural language chat and the precise world of software that takes actions on systems of record. Of course, the need for this bridge depends on the type of LLM application under development. For applications like search and draft generation, the system can remain in the approximate world because the human is in the loop selecting search results and reviewing draft edits.  For applications like updating a database, the bridge is an important step toward updating systems of record. Even for applications like search, the use of a schema increases reliability and simplifies processing.
-6. Many developers will already have an informal or formal schema describing a program they would like to use to work with a chat output. For those with only an informal schema, we are working on a tool that uses LLM interaction to help the developer to craft a formal schema. Early versions of this tool are promising. The schemas in the example directories that begin with the prefix "gen" were created using LLMs. 
+6. Many developers will already have an informal or formal schema describing a program they would like to use to work with a chat output. For those with only an informal schema, we are working on a tool that uses LLM interaction to help the developer to craft a formal schema. Early versions of this tool are promising. In the restaurant and calendar app directories there are schemas that have the suffix ".gen.ts" and were created using LLMs.  These schemas are not the default but if used they will deliver high accuracy.
 
-This repo supplies one possible method for implementing one of two parts of a bridge: validating that the LLM output conforms to a schema that describes the instances that the system can work with.  Once the validity of an instance is established, the system using typechat must still verify that the valid instance corresponds to the end-user's actual intent. 
+This repo supplies a method for implementing the first part the bridge: validating that the LLM output conforms to a schema that describes the instances that the system can work with.  Once the validity of an instance is established, the system using typechat must finish crossing the bridge by verifying that the valid instance corresponds to the end-user's actual intent. An application will choose a method for verifying intent that balances efficiency of execution with the potential harm of an incorrect change. 
 
-To support validation, the developer creates a schema using a TypeScript module, a Relax NG compact schema or a YAML schema. The developer selects a root type from the schema that corresponds to the XML or JSON output requested of the LLM.  The developer describes in natural language the meaning of the root type (for example, a set of calendar update actions) and also the overall framing of the application (for example, a person is working with a bot to update a calendar).  
+To support validation, the developer creates a schema using a TypeScript type, a Relax NG compact schema or a YAML schema. The developer selects a root type from the schema that corresponds to the XML or JSON output requested of the LLM.  The developer describes in natural language the meaning of the root type (for example, a set of calendar update actions) and also the overall framing of the application (for example, a person is working with a bot to update a calendar).  
 
 The developer can combine these inputs with end-user input to create a prompt that will result in the LLM generating a JSON or YAML instance. The typechat library validates the instance against the schema provided by the developer, simplifying the task of verifying that the captured end-user intent can be successfully processed by the system. The system can convert both JSON and YAML instances into objects native to the host programming language (TypeScript/JavaScript or python), simplifying post-processing.
 
@@ -45,10 +45,7 @@ For more information, see the [GitHub Codespaces Overview](https://docs.github.c
 ```     
 npm run build
 ```
-This will build the module but not the examples.
-
-## Examples
-For now, build each example directory separately by typing `tsc` in the example directory and then using node to run the resulting `.js` output file.
+This will build the library module and the apps.
 
 ## Environment Variables
 Currently, the experiments are only running on Azure OpenAI endpoints.  To configure environment for this set the following variables:

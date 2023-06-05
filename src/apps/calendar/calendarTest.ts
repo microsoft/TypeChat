@@ -5,7 +5,7 @@ import {
     runTests,
     runTestsInteractive,
     IPromptContext,
-} from '../../../lib';
+} from '../../lib';
 import { CalendarActions } from './calendarActionsSchema';
 const schemaFilename = 'calendarActionsSchema.ts';
 

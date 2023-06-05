@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { runTests, runTestsInteractive, IPromptContext } from '../../../lib';
+import { runTests, runTestsInteractive, IPromptContext } from '../../lib';
 import { Requests } from './metaSchema';
 
 const schemaFilename = 'metaSchema.ts';
