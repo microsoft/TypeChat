@@ -1,41 +1,70 @@
-import { readFileSync } from "fs";
-import * as readline from "readline/promises";
-import { complete } from "./llm";
-import { validateJsonText } from "./validate";
-import { Cart, Product } from "./coffeeShopSchema";
+import fs from "fs";
+import path from "path";
+import readline from "readline/promises";
+import { llmComplete } from "../../lib";
+import { parseAndValidateJsonText } from "./validate";
+import { Cart } from "./coffeeShopSchema";
 
-function createPrompt(schema: string, typeName: string, request: string) {
-    return `The following is a TypeScript definition of the schema for a JSON object.\n` +
-        `${schema}\n` +
-        `In the following paragraph is a request. Translate this request to a **single** JSON object of type ${typeName}.\n` +
-        `${request}\n` +
-        `JSON object with no comments and no null or undefined values:\n`;
+const schema = fs.readFileSync(path.join(__dirname, "coffeeShopSchema.ts"), "utf8");
+const coffeeCup = "\u{2615}";
+
+function createPrompt(request: string, schema: string, typeName: string) {
+    return `You are a service that translates user requests into JSON objects of type "${typeName}" according to the following TypeScript definitions:\n` +
+        `###\n${schema}###\n\n` +
+        `The following is a user request:\n` +
+        `"""\n${request}\n"""\n\n` +
+        `The following is the user request translated to a single JSON object with no comments and no null or undefined values:\n`;
+}
+
+async function processRequests(interactivePrompt: string, inputFileName: string | undefined, processRequest: (request: string) => Promise<void>) {
+    if (inputFileName) {
+        const lines = fs.readFileSync(inputFileName).toString().split(/\r?\n/);
+        for (const line of lines) {
+            if (line.length) {
+                console.log(interactivePrompt + line);
+                await processRequest(line);
+            }
+        }
+    }
+    else {
+        const stdio = readline.createInterface({ input: process.stdin, output: process.stdout });
+        while (true) {
+            const input = await stdio.question(interactivePrompt);
+            if (input.toLowerCase() === "quit" || input.toLowerCase() === "exit") {
+                break;
+            }
+            else if (input.length) {
+                await processRequest(input);
+            }
+        }
+        stdio.close();
+    }
 }
 
 function processOrder(cart: Cart) {
     // Process the items in the cart
 }
 
-async function test() {
-    const schema = readFileSync("coffeeShopSchema.ts", "utf8");
-    const stdio = readline.createInterface({ input: process.stdin, output: process.stdout });
-    while (true) {
-        const input = await stdio.question("Order? ");
-        if (input.length === 0) break;
-        const prompt = createPrompt(schema, "Cart", input);
-        const response = await complete(prompt);
-        const result = response.success ? validateJsonText(response.data, schema, "Cart") : response;
-        if (result.success) {
-            console.log(JSON.stringify(result.data, undefined, 2));
-            processOrder(result.data as Cart);
+// Process requests interactively or from the input file specified on the command line
+processRequests(`${coffeeCup}> `, process.argv[2], async (request) => {
+    try {
+        const response = await llmComplete(createPrompt(request, schema, "Cart"));
+        console.log(response);
+        const cart = parseAndValidateJsonText(response, schema, "Cart") as Cart;
+        if (!cart.items.some(item => item.type === "unknown")) {
+            processOrder(cart);
+            console.log("Success!");
         }
         else {
-            console.log(result.message);
-            if (result.diagnostics) {
-                console.log(result.diagnostics.join("\n"));
+            console.log("I didn't understand the following:");
+            for (const item of cart.items) {
+                if (item.type === "unknown") console.log(item.text);
             }
         }
     }
-}
-
-test();
+    catch (e) {
+        if (e instanceof Error) {
+            console.log(e.message);
+        }
+    }
+});
