@@ -11,7 +11,7 @@ const openAIClient: oai.OpenAIClient = new oai.OpenAIClient(
 
 export async function llmComplete(
     prompt: string,
-    max_tokens = 4000,
+    max_tokens = 2000,
     temperature = 0.05
 ): Promise<string> {
     const model = openAIClient.models.getCompletion();
