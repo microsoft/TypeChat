@@ -19,16 +19,12 @@ jest.setTimeout(120 * 1000);
 
 function getChatAI(): [OpenAIClient, ModelSettings] {
     if (g_config === null || g_config?.azureOAI === undefined) {
-        throw new TypechatException(
-            TypechatErrorCode.CompletionModelNotAvailable
-        );
+        throw new TypechatException(TypechatErrorCode.CompletionModelNotAvailable, "Completion model not available");
     }
     const client = new OpenAIClient(g_config.azureOAI, true);
     const model = client.models.getCompletion();
     if (model === undefined) {
-        throw new TypechatException(
-            TypechatErrorCode.CompletionModelNotAvailable
-        );
+        throw new TypechatException(TypechatErrorCode.CompletionModelNotAvailable, "Completion model not available");
     }
     return [client, model];
 }
@@ -88,9 +84,7 @@ test('Chat: Relevance Chat', async () => {
     const [chatAI, model] = getChatAI();
     const emodel = chatAI.models.getByType(ModelType.Embedding);
     if (emodel === undefined) {
-        throw new TypechatException(
-            TypechatErrorCode.EmbeddingModelNotAvailable
-        );
+        throw new TypechatException(TypechatErrorCode.EmbeddingModelNotAvailable, "Embedding model not available");
     }
     const embeddingGenerator = new vector.OpenAITextEmbeddingGenerator(
         chatAI,

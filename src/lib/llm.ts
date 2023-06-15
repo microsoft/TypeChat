@@ -16,9 +16,7 @@ export async function llmComplete(
 ): Promise<string> {
     const model = openAIClient.models.getCompletion();
     if (model === undefined) {
-        throw new TypechatException(
-            TypechatErrorCode.CompletionModelNotAvailable
-        );
+        throw new TypechatException(TypechatErrorCode.CompletionModelNotAvailable, "Completion model not available");
     }
     return await openAIClient.getCompletion(
         prompt,

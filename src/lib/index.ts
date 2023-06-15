@@ -7,4 +7,4 @@ export * from './typechat';
 export * from './typechatConfig';
 export * from './typechatException';
 export * from './vectormath';
-export * from './verify';
+export * from './validate';
