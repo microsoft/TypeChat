@@ -3,30 +3,6 @@
 // For speed of experimentation, core  libraries parked here for now. As project evolves, some of these will be replaced by
 // standard libraries. Others will get refactored into their own modules.
 
-import { assert } from "console";
-
-export class Exception<TError> extends Error {
-    private _errorCode: TError;
-    private _innerEx?: Error;
-
-    public constructor(errorCode: TError, message?: string, innerEx?: Error) {
-        if (message === undefined || message === null) {
-            message = '';
-        }
-        message = `Typescript Error: ${errorCode}. ${message}`;
-        super(message);
-        this._errorCode = errorCode;
-        this._innerEx = innerEx;
-    }
-
-    get errorCode(): TError {
-        return this._errorCode;
-    }
-    get innerEx() {
-        return this._innerEx;
-    }
-}
-
 export class ArgumentException extends Error {
     public constructor(message: string, name?: string) {
         if (name) {

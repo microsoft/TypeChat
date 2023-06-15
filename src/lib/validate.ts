@@ -14,6 +14,14 @@ function createFileMapEntry(filePath: string, fileText: string): [string, ts.Sou
     return [filePath, ts.createSourceFile(filePath, fileText, ts.ScriptTarget.Latest)];
 }
 
+export class ValidationError extends Error {
+    readonly diagnostics?: string[];
+    constructor(message: string, diagnostics?: string[]) {
+        super(message);
+        this.diagnostics = diagnostics;
+    }
+}
+
 export function validateJsonObject(json: object, schema: string, typeName: string): object {
     const options = { ...ts.getDefaultCompilerOptions(), strict: true, skipLibCheck: true, noLib: true, types: [] };
     const fileMap = new Map([
@@ -33,9 +41,11 @@ export function validateJsonObject(json: object, schema: string, typeName: strin
         readFile: fileName => "",
     };
     const program = ts.createProgram(Array.from(fileMap.keys()), options, host);
-    const diagnostics = program.getSemanticDiagnostics().map(d => typeof d.messageText === "string" ? d.messageText : d.messageText.messageText);
+    const syntacticDiagnostics = program.getSyntacticDiagnostics();
+    const diagnostics = syntacticDiagnostics.length ? syntacticDiagnostics : program.getSemanticDiagnostics();
     if (diagnostics.length) {
-        throw new Error("JSON instance does not match schema:\n" + diagnostics.join("\n"));
+        const diagnosticMessages = diagnostics.map(d => typeof d.messageText === "string" ? d.messageText : d.messageText.messageText);
+        throw new ValidationError("JSON instance does not match schema", diagnosticMessages);
     }
     return json;
 }
@@ -44,7 +54,7 @@ export function parseAndValidateJsonText(text: string, schema: string, typeName:
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
     if (!(start >= 0 && end > start)) {
-        throw new Error("Response is not a JSON string");
+        throw new ValidationError("Response is not a JSON string");
     }
     const json = JSON.parse(text.substring(start, end + 1));
     validateJsonObject(json, schema, typeName);

@@ -1,5 +1,5 @@
 import { llmComplete } from './llm';
-import { verifyJsonObject } from './verify';
+import { ValidationError, parseAndValidateJsonText } from './validate';
 import * as readline from 'readline';
 
 export interface ICompletionResult {
@@ -28,52 +28,34 @@ export interface IPromptContext<TSchema> {
     localParser?: (userPrompt: string) => string | undefined;
 }
 
-function validate<TSchema>(
+function validate<TSchema extends object>(
     ret: string,
     schemaText: string,
     typeName: string,
     checkConstraints?: (result: TSchema) => string[]
 ) {
-    // find the first '{' in ret
-    const start = ret.indexOf('{');
-    // find the last '}' in ret
-    const end = ret.lastIndexOf('}');
     const result = { error: false } as ICompletionResult;
-    if (start >= 0 && end >= 0) {
-        const jsontext = ret.substring(start, end + 1);
-        result.jsontext = jsontext;
-
-        try {
-            const testJSON = JSON.parse(jsontext);
-            const diagnostics = verifyJsonObject(
-                testJSON,
-                schemaText,
-                typeName
-            );
-            if (checkConstraints) {
-                const constraintDiagnostics = checkConstraints(testJSON);
-                if (constraintDiagnostics && constraintDiagnostics.length > 0) {
-                    if (diagnostics) {
-                        diagnostics.push(...constraintDiagnostics);
-                    } else {
-                        result.diagnostics = constraintDiagnostics;
-                    }
-                }
-            }
-            if (diagnostics && diagnostics.length > 0) {
-                result.diagnostics = diagnostics;
+    const start = ret.indexOf('{');
+    const end = ret.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+        result.jsontext = ret.substring(start, end + 1);
+    }
+    try {
+        const testJSON = parseAndValidateJsonText(ret, schemaText, typeName) as TSchema;
+        if (checkConstraints) {
+            const constraintDiagnostics = checkConstraints(testJSON);
+            if (constraintDiagnostics && constraintDiagnostics.length > 0) {
                 result.error = true;
-                result.errorMessage = 'JSON instance does not match schema';
+                result.diagnostics = constraintDiagnostics;
+                result.errorMessage = 'JSON instance does not match constraints';
             }
-        } catch (e) {
-            result.error = true;
-            result.errorMessage = 'JSON parse error';
-            console.log(jsontext);
         }
-    } else {
+    }
+    catch (e) {
+        if (!(e instanceof ValidationError)) throw e;
         result.error = true;
-        result.errorMessage = 'No JSON instance found';
-        console.log(ret);
+        result.diagnostics = e.diagnostics;
+        result.errorMessage = e.message;
     }
     return result;
 }
@@ -99,7 +81,7 @@ export function makePrompt<TSchema>(
     return prompt;
 }
 
-export async function completeAndValidate<TSchema>(
+export async function completeAndValidate<TSchema extends object>(
     promptContext: IPromptContext<TSchema>,
     prompt: string,
     userPrompt?: string
@@ -127,7 +109,7 @@ export function printJSON<TSchema>(result: TSchema) {
     console.log(JSON.stringify(result, null, 2));
 }
 
-export async function runTest<TSchema>(
+export async function runTest<TSchema extends object>(
     promptContext: IPromptContext<TSchema>,
     prompt: string,
     showPrompt = false,
@@ -175,7 +157,7 @@ export async function runTest<TSchema>(
     return result;
 }
 
-export async function runTests<TSchema>(
+export async function runTests<TSchema extends object>(
     testPrompts: string[],
     promptContext: IPromptContext<TSchema>,
     delay = 0
@@ -208,7 +190,7 @@ function interactivePrompt(
     lineReader.prompt();
 }
 
-export function runTestsInteractive<TSchema>(
+export function runTestsInteractive<TSchema extends object>(
     promptContext: IPromptContext<TSchema>,
     linePrompt = '>'
 ) {

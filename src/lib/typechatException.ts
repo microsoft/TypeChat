@@ -1,5 +1,3 @@
-import { Exception } from './core';
-
 export enum TypechatErrorCode {
     Unknown = 1,
     ConfigMissingOpenAISettings,
@@ -13,8 +11,10 @@ export enum TypechatErrorCode {
     MissingEmbedding,
 }
 
-export class TypechatException extends Exception<TypechatErrorCode> {
+export class TypechatException extends Error {
+    readonly errorCode: TypechatErrorCode;
     constructor(errorCode: TypechatErrorCode, message?: string) {
-        super(errorCode, message);
+        super(`Typechat error ${errorCode}${message ? `: ${message}` : `.`}`);
+        this.errorCode = errorCode;
     }
 }

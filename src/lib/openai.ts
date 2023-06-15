@@ -4,7 +4,7 @@
 // Two separate oai libraries here. Nearly the same though
 import * as aoai from 'azure-openai';
 import * as oai from 'openai'
-import { Exception, Validator, strEqInsensitive } from './core';
+import { Validator, strEqInsensitive } from './core';
 import * as retry from './retry';
 import { TypechatErrorCode, TypechatException } from './typechatException';
 
@@ -84,9 +84,11 @@ export function getKnownModel(name: string): ModelInfo | undefined {
     return Models.find((m) => strEqInsensitive(m.name, name));
 }
 
-export class OpenAIException extends Exception<number> {
+export class OpenAIException extends Error {
+    readonly statusCode: number;
     constructor(statusCode: number, message?: string) {
-        super(statusCode, message);
+        super(`OpenAI error ${statusCode}${message ? `: ${message}` : `.`}`);
+        this.statusCode = statusCode;
     }
 }
 
@@ -149,10 +151,7 @@ export class OpenAIModels {
     public resolveModel(name: string): ModelSettings {
         const modelSettings = this.getByName(name);
         if (modelSettings === undefined) {
-            throw new TypechatException(
-                TypechatErrorCode.ModelNotFound,
-                name
-            );
+            throw new TypechatException(TypechatErrorCode.ModelNotFound, `Model "${name}" not found`);
         }
         return modelSettings;
     }
@@ -247,10 +246,7 @@ export class OpenAIClient {
         } else if (model.type === ModelType.Chat) {
             completions = await this._client.getTextCompletionFromChat(request);
         } else {
-            throw new TypechatException(
-                TypechatErrorCode.ModelDoesNotSupportCompletion,
-                model.modelName
-            );
+            throw new TypechatException(TypechatErrorCode.ModelDoesNotSupportCompletion, `Model "${model.modelName}" does not support completion`);
         }
         return this.firstCompletion(completions);
     }
@@ -260,10 +256,7 @@ export class OpenAIClient {
 
         const model = this.resolveModel(modelName);
         if (model.type !== ModelType.Embedding) {
-            throw new TypechatException(
-                TypechatErrorCode.ModelDoesNotSupportEmbeddings,
-                modelName
-            );
+            throw new TypechatException(TypechatErrorCode.ModelDoesNotSupportEmbeddings, `Model "${modelName}" does not support embeddings`);
         }
         return this._client.createTextEmbedding(text, modelName);
     }
@@ -293,10 +286,7 @@ export class OpenAIClient {
     private resolveModel(modelName: string): ModelSettings {
         const azureModel = this._models.getByName(modelName);
         if (azureModel === undefined) {
-            throw new TypechatException(
-                TypechatErrorCode.ModelNotFound,
-                modelName
-            );
+            throw new TypechatException(TypechatErrorCode.ModelNotFound, `Model "${modelName} not found`);
         }
         return azureModel;
     }
@@ -396,7 +386,7 @@ abstract class OpenAIRestClient {
         }
         if (e instanceof OpenAIException) {
             return retry.isTransientHttpError(
-                (e as OpenAIException).errorCode
+                (e as OpenAIException).statusCode
             );
         }
         return false;

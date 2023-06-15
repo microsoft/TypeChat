@@ -1,8 +1,7 @@
 import fs from "fs";
 import path from "path";
 import readline from "readline/promises";
-import { llmComplete } from "../../lib";
-import { parseAndValidateJsonText } from "./validate";
+import { llmComplete, ValidationError, parseAndValidateJsonText } from "../../lib";
 import { Cart } from "./coffeeShopSchema";
 
 const schema = fs.readFileSync(path.join(__dirname, "coffeeShopSchema.ts"), "utf8");
@@ -65,6 +64,9 @@ processRequests(`${coffeeCup}> `, process.argv[2], async (request) => {
     catch (e) {
         if (e instanceof Error) {
             console.log(e.message);
+            if (e instanceof ValidationError && e.diagnostics) {
+                console.log(e.diagnostics.join("\n"));
+            }
         }
     }
 });

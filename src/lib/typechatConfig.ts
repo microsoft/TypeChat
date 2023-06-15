@@ -33,9 +33,7 @@ export function validate(config: TypechatConfig): void {
         hasOpenAISettings = true;
     }
     if (!hasOpenAISettings) {
-        throw new TypechatException(
-            TypechatErrorCode.ConfigMissingOpenAISettings
-        );
+        throw new TypechatException(TypechatErrorCode.ConfigMissingOpenAISettings, "Configuration missing OpenAI settings");
     }
 }
 /**
