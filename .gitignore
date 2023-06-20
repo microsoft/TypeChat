@@ -1,16 +1,7 @@
 build/
-dist/
 node_modules/
 .env
 *.map
 *.out.txt
 *.bat
 package-lock.json
-
-# VSCode
-**/.vscode/launch.json
-
-#Config
-AppConfig.json
-**/AppConfig.json
-
