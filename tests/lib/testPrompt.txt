@@ -1,8 +1,0 @@
-This is a conversation between ${userName} and you. Your Name: ${botName}.
-ONLY SPEAK FOR ${botName}. *NEVER* SAY ANYTHING AS ${userName}`;
-${userName}
-I have a question. Can you help?
-${botName}
-Of course. Go on!
-${input}
-${botName}

@@ -48,15 +48,24 @@ npm run build
 This will build the library module and the apps.
 
 ## Environment Variables
-Currently, the experiments are only running on Azure OpenAI endpoints.  To configure environment for this set the following variables:
+Currently, the experiments are running on OpenAI or Azure OpenAI endpoints. To use an OpenAI endpoint, include the following environment variables:
+
 | Variable | Value |
 |----------|-------|
-`OPENAI_API_KEY` | your API key
-`OPENAI_API_BASE`| the base URL for your openai endpoint
-`DEPLOYMENT_NAME`| the name of your Azure deployment
+| `OPENAI_MODEL`| The OpenAI model name (e.g. gpt-3.5-turbo or gpt-4) |
+| `OPENAI_API_KEY` | Your OpenAI API key |
 
-## Interactive Prompts
-To run an example interactively, type `node [exampleName].js -i` in the example's directory and then enter a multi-line prompt. Enter a blank line to send the prompt and enter 'exit' on a line to end the session.
+To use an Azure OpenAI endpoint, include the following environment variables:
+
+| Variable | Value |
+|----------|-------|
+| `AZURE_ENDPOINT` | The full URL of the Azure OpenAI REST API (e.g. https://YOUR_RESOURCE_NAME.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT_NAME/chat/completions?api-version=2023-05-15) |
+| `AZURE_API_KEY` | Your Azure API key |
+
+Environment variables can optionally be set by creating a `.env` file in the root directory of the project.
+
+## Running the examples
+The examples are found in `src/samples` and are built into `build/examples`. To run an example interactively, type `node <example-name>` in the example's build directory and enter requests when prompted. Type 'quit' or 'exit' to end the session. To run an example with an input file, type `node <example-name> <input-filename>`.
 
 ## Contributing
 

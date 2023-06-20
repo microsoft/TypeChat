@@ -1,8 +1,0 @@
-This is a conversation between ${settings.userName} and you. Your Name: ${settings.botName}.
-ONLY SPEAK FOR ${settings.botName}. *NEVER* SAY ANYTHING AS ${settings.userName}`;
-${settings.userName}
-I have a question. Can you help?
-${settings.botName}
-Of course. Go on!
-${input}
-${settings.botName}
