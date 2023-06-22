@@ -17,18 +17,13 @@ function processOrder(cart: Cart) {
 
 // Process requests interactively or from the input file specified on the command line
 processRequests(`${coffeeCup}> `, process.argv[2], async (request) => {
-    const completion = await typeChat.complete(request);
-    if (!completion.success) {
-        console.log(completion.message);
+    const response = await typeChat.completeAndValidate(request);
+    if (!response.success) {
+        console.log(response.message);
         return;
     }
-    console.log(completion.data);
-    const validation = typeChat.validate(completion.data);
-    if (!validation.success) {
-        console.log(validation.message);
-        return;
-    }
-    const cart = validation.data;
+    const cart = response.data;
+    console.log(JSON.stringify(cart, undefined, 2));
     if (cart.items.some(item => item.type === "unknown")) {
         console.log("I didn't understand the following:");
         for (const item of cart.items) {
