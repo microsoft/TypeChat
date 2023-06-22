@@ -24,8 +24,8 @@
     "build": "tsc -p src",
     "prepare": "npm run build"
   },
-  "main": "./build/index.js",
-  "types": "./build/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "dependencies": {
     "@types/node": "^20.3.1",
     "axios": "^1.4.0",

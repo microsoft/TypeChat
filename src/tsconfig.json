@@ -3,7 +3,7 @@
     "target": "esnext",
     "module": "commonjs",
     "esModuleInterop": true,
-    "outDir": "../build",
+    "outDir": "../dist",
     "skipLibCheck": true,
     "strict": true,
     "exactOptionalPropertyTypes": true,
