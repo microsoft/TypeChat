@@ -8,6 +8,6 @@ package-lock.json
 
 # Local development and debugging
 **/.vscode/*
-tsconfig.debug.json
+**/tsconfig.debug.json
 
 

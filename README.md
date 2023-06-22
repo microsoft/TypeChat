@@ -59,7 +59,7 @@ To use an Azure OpenAI endpoint, include the following environment variables:
 
 | Variable | Value |
 |----------|-------|
-| `AZURE_ENDPOINT` | The full URL of the Azure OpenAI REST API (e.g. https://YOUR_RESOURCE_NAME.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT_NAME/chat/completions?api-version=2023-05-15) |
+| `AZURE_OPENAI_ENDPOINT` | The full URL of the Azure OpenAI REST API (e.g. https://YOUR_RESOURCE_NAME.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT_NAME/chat/completions?api-version=2023-05-15) |
 | `AZURE_API_KEY` | Your Azure API key |
 
 Environment variables can optionally be set by creating a `.env` file in the root directory of the project.
