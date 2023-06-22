@@ -1,5 +1,5 @@
 import * as ts from 'typescript';
-import { Response, success, error } from './response';
+import { Result, success, error } from './result';
 
 const libText = `interface Array<T> { length: number, [n: number]: T }
 interface Object { valueOf(): Object }
@@ -11,12 +11,42 @@ interface Boolean { valueOf(): boolean }
 interface Number { valueOf(): number }
 interface RegExp { exec(string: string): unknown }`;
 
+/**
+ * Represents an object that can validate JSON strings according to a given TypeScript schema.
+ */
 export interface TypeChatJsonValidator<T extends object> {
-    get schema(): string;
-    get typeName(): string;
-    validate(jsonText: string): Response<T>;
+    /**
+     * A string containing TypeScript source code for the validation schema.
+     */
+    schema: string;
+    /**
+     * A string containing the JSON object target type name in the schema.
+     */
+    typeName: string;
+    /**
+     * A boolean indicating whether to delete properties with null values from JSON objects. Some language
+     * models (e.g. gpt-3.5-turbo) have a tendency to assign null values to optional properties instead of omitting
+     * them. The default for this property is `false`, but an application can set the property to `true` for schemas
+     * that don't permit null values.
+     */
+    stripNulls:  boolean;
+    /**
+     * Parses and validates the given JSON string according to the associated TypeScript schema. Returns a
+     * `Success<T>` object containing the parsed JSON object if valudation was successful. Otherwise, returns
+     * an `Error` object with a `message` property that contains the TypeScript compiler diagnostics.
+     * @param jsonText The JSON string to validate.
+     * @returns The parsed JSON object or the TypeScript compiler diagnostic messages.
+     */
+    validate(jsonText: string): Result<T>;
 }
 
+/**
+ * Returns a JSON validator for a given TypeScript schema. Validation is performed by an in-memory instance of
+ * the TypeScript compiler. The specified type argument `T` must be the same type as `typeName` in the given `schema`.
+ * @param schema A string containing the TypeScript source code for the JSON schema.
+ * @param typeName The name of the JSON target type in the schema.
+ * @returns A `TypeChatJsonValidator<T>` instance.
+ */
 export function createJsonValidator<T extends object = object>(schema: string, typeName: string): TypeChatJsonValidator<T> {
     const options = {
         ...ts.getDefaultCompilerOptions(),
@@ -26,11 +56,13 @@ export function createJsonValidator<T extends object = object>(schema: string, t
         types: []
     };
     const rootProgram = createProgramFromJsonText("{}");
-    return {
-        get schema() { return schema },
-        get typeName() { return typeName },
+    const validator: TypeChatJsonValidator<T> = {
+        schema,
+        typeName,
+        stripNulls: false,
         validate
     };
+    return validator;
 
     function validate(jsonText: string) {
         let jsonObject;
@@ -39,6 +71,10 @@ export function createJsonValidator<T extends object = object>(schema: string, t
         }
         catch (e) {
             return error(e instanceof SyntaxError ? e.message : "JSON parse error");
+        }
+        if (validator.stripNulls) {
+            stripNulls(jsonObject);
+            jsonText = JSON.stringify(jsonObject, undefined, 2);
         }
         const program = createProgramFromJsonText(jsonText, rootProgram);
         const syntacticDiagnostics = program.getSyntacticDiagnostics();
@@ -72,5 +108,35 @@ export function createJsonValidator<T extends object = object>(schema: string, t
 
     function createFileMapEntry(filePath: string, fileText: string): [string, ts.SourceFile] {
         return [filePath, ts.createSourceFile(filePath, fileText, ts.ScriptTarget.Latest)];
+    }
+}
+
+/**
+ * Recursively delete properties with null values from the given object. This function assumes there are no
+ * circular references in the object.
+ * @param obj The object in which to strip null valued properties.
+ */
+function stripNulls(obj: any) {
+    let keysToDelete: string[] | undefined;
+    for (const k in obj) {
+        const value = obj[k];
+        if (value === null) {
+            (keysToDelete ??= []).push(k);
+        }
+        else {
+            if (Array.isArray(value)) {
+                if (value.some(x => x === null)) {
+                    obj[k] = value.filter(x => x !== null);
+                }
+            }
+            if (typeof value === "object") {
+                stripNulls(value);
+            }
+        }
+    }
+    if (keysToDelete) {
+        for (const k of keysToDelete) {
+            delete obj[k];
+        }
     }
 }
