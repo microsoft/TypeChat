@@ -21,6 +21,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "buildDebug": "tsc -p tsconfig.debug.json",
     "postbuild": "copyfiles -u 1 src/**/*Schema.ts src/**/*.txt src/**/callback.html build",
     "prepare": "npm run build"
   },

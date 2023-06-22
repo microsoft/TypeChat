@@ -5,3 +5,9 @@ node_modules/
 *.out.txt
 *.bat
 package-lock.json
+
+# Local development and debugging
+**/.vscode/*
+tsconfig.debug.json
+
+
