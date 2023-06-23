@@ -1,4 +1,6 @@
 build/
+dist/
+out/
 node_modules/
 .env
 *.map

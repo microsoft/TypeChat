@@ -5,9 +5,10 @@ import {
   createLanguageModel,
   createTypeChat,
   processRequests,
-} from "../../typechat";
+} from "typechat";
 import { Order } from "./foodOrderViewSchema";
 
+// TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
 const pizza = "🍕";
@@ -17,8 +18,6 @@ const viewSchema = fs.readFileSync(
   "utf8"
 );
 const typeChat = createTypeChat<Order>(model, viewSchema, "Order");
-
-const beerKind = ["Mack and Jacks", "Sierra Nevada Pale Ale"];
 
 const saladIngredients = [
   "lettuce",
@@ -65,9 +64,6 @@ const namedPizzas = new Map([
   ["Pig In a Forest", ["mushrooms", "basil", "Canadian bacon", "arugula"]],
   ["Cherry Bomb", ["pepperoni", "sausage", "Mama Lil's Peppers"]],
 ]);
-
-const typeInterp = "the list of items in a restaurant order";
-const frame = "a person is ordering  from a pizza restaurant by texting a bot";
 
 function printOrder(order: Order) {
   if (order.items && order.items.length > 0) {
