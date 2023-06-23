@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
-    "target": "esnext",
-    "module": "commonjs",
+    "target": "es2021",
+    "lib": ["es2021"],
+    "module": "node16",
+    "types": ["node"],
     "esModuleInterop": true,
     "outDir": "../dist",
     "skipLibCheck": true,
