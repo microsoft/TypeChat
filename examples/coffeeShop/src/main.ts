@@ -9,7 +9,7 @@ dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
 const coffeeCup = "\u{2615}";
 const model = createLanguageModel();
-const schema = fs.readFileSync(path.join(__dirname, "coffeeShopSchema.ts"), "utf8");
+const schema = fs.readFileSync(path.join(__dirname, "../src/coffeeShopSchema.ts"), "utf8");
 const typeChat = createTypeChat<Cart>(model, schema, "Cart");
 
 function processOrder(cart: Cart) {

@@ -9,7 +9,7 @@ dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
 const happyFace = "\u{1F600}";
 const model = createLanguageModel();
-const schema = fs.readFileSync(path.join(__dirname, "sentimentSchema.ts"), "utf8");
+const schema = fs.readFileSync(path.join(__dirname, "../src/sentimentSchema.ts"), "utf8");
 const typeChat = createTypeChat<SentimentResponse>(model, schema, "SentimentResponse");
 
 // Process requests interactively or from the input file specified on the command line

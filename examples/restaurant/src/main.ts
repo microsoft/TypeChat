@@ -14,7 +14,7 @@ dotenv.config({ path: path.join(__dirname, "../../../.env") });
 const pizza = "🍕";
 const model = createLanguageModel();
 const viewSchema = fs.readFileSync(
-  path.join(__dirname, "foodOrderViewSchema.ts"),
+  path.join(__dirname, "../src/foodOrderViewSchema.ts"),
   "utf8"
 );
 const typeChat = createTypeChat<Order>(model, viewSchema, "Order");

@@ -9,7 +9,7 @@ dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
 const calendarChar = "\u{1F4C5}";
 const model = createLanguageModel();
-const schema = fs.readFileSync(path.join(__dirname, "calendarActionsSchema.ts"), "utf8");
+const schema = fs.readFileSync(path.join(__dirname, "../src/calendarActionsSchema.ts"), "utf8");
 const typeChat = createTypeChat<CalendarActions>(model, schema, "CalendarActions");
 typeChat.validator.stripNulls = true;
 
