@@ -1,0 +1,2 @@
+open all files with the extension ".ts"
+open all files in the project and prepend the string "Copyright (C) Microsoft" if it is missing
