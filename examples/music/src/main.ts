@@ -83,7 +83,7 @@ function createApi(): Api {
             console.log(`unknownAction(${JSON.stringify(text, undefined, 2)})`);
         },
         nonMusicQuestion(text) {
-            console.log(`unknownAction(${JSON.stringify(text, undefined, 2)})`);
+            console.log(`nonMusicQuestion(${JSON.stringify(text, undefined, 2)})`);
         },
         finalResult(result) {
             console.log(`finalResult(${JSON.stringify(result, undefined, 2)})`);

@@ -28,10 +28,10 @@ processRequests(`${clipboard}> `, process.argv[2], async (request) => {
         console.log(response.message);
         return;
     }
-    const text = response.data.endsWith("\n") ? response.data.slice(0, response.data.length - 1) : response.data;
-    console.log(`(api) => {\n${text}`);
-    const endIndex = text.lastIndexOf("\n}");
+    const text = response.data;
+    const endIndex = text.lastIndexOf("}");
     const functionBodyText = text.slice(0, endIndex);
+    console.log(`(api) => {\n${functionBodyText}}`);
     const validation = validator.validate(functionBodyText);
     if (!validation.success) {
         console.log(validation.message);
