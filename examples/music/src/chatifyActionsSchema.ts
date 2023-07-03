@@ -1,5 +1,6 @@
 // This is a schema for writing programs that control a Spotify music player
 
+// A track list is simply an array of strings
 export type TrackList = string[];
 
 export type FavoritesTerm =
@@ -52,10 +53,6 @@ export type FilterTracksArgs = {
     negate?: boolean;
 }
 
-export type FilterTracksResult = {
-    trackList: TrackList;
-}
-
 export type SortTracksArgs = {
     // List of tracks to sort
     trackList: TrackList;
@@ -89,7 +86,7 @@ export type Api = {
     // Use this function to print all or parts of a track list
     printTracks(args: PrintTracksArgs): void;
     // apply a filter to match tracks; result is the tracks that match the filter
-    filterTracks(args: FilterTracksArgs): FilterTracksResult;
+    filterTracks(args: FilterTracksArgs): TrackList;
     // sort tracks; default is sort by track name ascending
     sortTracks(args: SortTracksArgs): TrackList;
     // create a Spotify playlist from a list of tracks
@@ -102,4 +99,4 @@ export type Api = {
     finalResult(result: any): void;
 }
 
-export declare const api: Api;
+export type RequestHandler = (api: Api) => void;
