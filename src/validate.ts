@@ -128,7 +128,7 @@ export function createJsonValidator<T extends object = object>(schema: string, t
             getCurrentDirectory: () => "/",
             getCanonicalFileName: fileName => fileName,
             useCaseSensitiveFileNames: () => true,
-            getNewLine: () => "\r",
+            getNewLine: () => "\n",
             fileExists: fileName => fileMap.has(fileName),
             readFile: fileName => "",
         };
@@ -247,7 +247,7 @@ export function createFunctionValidator<T extends Function>(schema: string, type
             getCurrentDirectory: () => "/",
             getCanonicalFileName: fileName => fileName,
             useCaseSensitiveFileNames: () => true,
-            getNewLine: () => "\r",
+            getNewLine: () => "\n",
             fileExists: fileName => fileMap.has(fileName),
             readFile: fileName => "",
         };
