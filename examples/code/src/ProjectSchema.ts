@@ -24,4 +24,4 @@ export type Api = {
     unknownAction(text: string): void;
 }
 
-export type RequestHandler = (api: Api) => void;
+export type RequestHandler = (api: Api) => any;
