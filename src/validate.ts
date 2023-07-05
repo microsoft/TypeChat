@@ -173,9 +173,13 @@ export interface TypeChatFunctionValidator<T extends Function> {
  */
 export interface TypeChatFunction<T extends Function> {
     /**
-     * The parsed and validated JavaScript function body.
+     * The function body.
      */
-    syntaxTree: ts.ArrowFunction;
+    functionBodyText: string;
+    /**
+     * The parsed and validated statements of the function body.
+     */
+    statements: readonly ts.Statement[];
     /**
      * Returns a callable function created from the validated function body.
      */
@@ -209,8 +213,10 @@ export function createFunctionValidator<T extends Function>(schema: string, type
     function validate(functionBodyText: string) {
         const program = createProgramFromText(functionBodyText, rootProgram);
         const arrowFunction = (program.getSourceFile("/program.ts")!.statements[1] as ts.VariableStatement).declarationList.declarations[0].initializer as ts.ArrowFunction;
-        if (!isPermittedFunction(arrowFunction)) {
-            return error("Program cannot be successfully verified");
+        const statements = (arrowFunction.body as ts.Block).statements;
+        const validationResult = validateStatements(statements);
+        if (!validationResult.success) {
+            return validationResult;
         }
         const syntacticDiagnostics = program.getSyntacticDiagnostics();
         const programDiagnostics = syntacticDiagnostics.length ? syntacticDiagnostics : program.getSemanticDiagnostics();
@@ -219,7 +225,8 @@ export function createFunctionValidator<T extends Function>(schema: string, type
             return error(diagnostics);
         }
         const typeChatProgram: TypeChatFunction<T> = {
-            syntaxTree: arrowFunction,
+            functionBodyText,
+            statements,
             getFunction() {
                 return Function(...parameterNames, functionBodyText) as T;
             }
@@ -252,8 +259,16 @@ export function createFunctionValidator<T extends Function>(schema: string, type
     }
 }
 
-function isPermittedFunction(arrowFunction: ts.ArrowFunction) {
-    return isPermittedBlock(arrowFunction.body as ts.Block);
+function validateStatements(statements: readonly ts.Statement[]): Result<true> {
+    let errorMessage: string | undefined;
+    return statements.every(isPermittedStatement) ?
+        success(true) :
+        error(errorMessage ?? "Function contains an unsupported statement or declaration");
+
+    function invalid(message: string) {
+        errorMessage = message;
+        return false;
+    }
 
     function isPermittedStatement(node: ts.Node): boolean {
         switch (node.kind) {
@@ -269,6 +284,20 @@ function isPermittedFunction(arrowFunction: ts.ArrowFunction) {
                 return isPermittedReturnStatement(node as ts.ReturnStatement);
             case ts.SyntaxKind.EmptyStatement:
                 return true;
+            case ts.SyntaxKind.ForStatement:
+            case ts.SyntaxKind.ForInStatement:
+            case ts.SyntaxKind.ForOfStatement:
+            case ts.SyntaxKind.WhileStatement:
+            case ts.SyntaxKind.DoStatement:
+                return invalid("'for', 'while' and 'do' statements are not permitted");
+            case ts.SyntaxKind.SwitchStatement:
+                return invalid("'switch' statements are not permitted");
+            case ts.SyntaxKind.TryStatement:
+            case ts.SyntaxKind.ThrowStatement:
+                return invalid("'try' and 'throw' statements are not permitted");
+            case ts.SyntaxKind.FunctionDeclaration:
+            case ts.SyntaxKind.ClassDeclaration:
+                return invalid("'function' and 'class' declarations are not permitted");
         }
         return false;
     }
@@ -278,13 +307,23 @@ function isPermittedFunction(arrowFunction: ts.ArrowFunction) {
     }
 
     function isPermittedVariableStatement(node: ts.VariableStatement) {
-        return !node.modifiers && !!(node.declarationList.flags & ts.NodeFlags.Const) &&
-            node.declarationList.declarations.every(isPermittedVariableDeclaration);
+        if (!(node.declarationList.flags & (ts.NodeFlags.Let | ts.NodeFlags.Const))) {
+            return invalid("'var' statements are not permitted")
+        }
+        if (node.modifiers) {
+            return invalid("Modifiers are not permitted on variable declarations");
+        }
+        return node.declarationList.declarations.every(isPermittedVariableDeclaration);
     }
 
     function isPermittedVariableDeclaration(node: ts.VariableDeclaration) {
-        return node.name.kind === ts.SyntaxKind.Identifier && !node.exclamationToken && !node.type &&
-            node.initializer && isPermittedExpression(node.initializer);
+        if (node.exclamationToken || node.type) {
+            return invalid("Type annotations are not permitted");
+        }
+        if (node.name.kind !== ts.SyntaxKind.Identifier) {
+            return invalid("Binding patterns are not permitted");
+        }
+        return !node.initializer || isPermittedExpression(node.initializer);
     }
 
     function isPermittedIfStatement(node: ts.IfStatement) {
@@ -301,15 +340,13 @@ function isPermittedFunction(arrowFunction: ts.ArrowFunction) {
                 return isPermittedExpression((node as ts.ConditionalExpression).condition) &&
                     isPermittedExpression((node as ts.ConditionalExpression).whenTrue) &&
                     isPermittedExpression((node as ts.ConditionalExpression).whenFalse);
-            case ts.SyntaxKind.ArrowFunction:
-                return isPermittedArrowFunction(node as ts.ArrowFunction);
             case ts.SyntaxKind.BinaryExpression:
-                return isPermittedBinaryOperator((node as ts.BinaryExpression).operatorToken.kind) &&
-                    isPermittedExpression((node as ts.BinaryExpression).left) &&
+                return isPermittedExpression((node as ts.BinaryExpression).left) &&
                     isPermittedExpression((node as ts.BinaryExpression).right);
             case ts.SyntaxKind.PrefixUnaryExpression:
-                return isPermittedUnaryOperator((node as ts.PrefixUnaryExpression).operator) &&
-                    isPermittedExpression((node as ts.PrefixUnaryExpression).operand);
+                return isPermittedExpression((node as ts.PrefixUnaryExpression).operand);
+            case ts.SyntaxKind.PostfixUnaryExpression:
+                return isPermittedExpression((node as ts.PostfixUnaryExpression).operand);
             case ts.SyntaxKind.TemplateExpression:
                 return (node as ts.TemplateExpression).templateSpans.every(span => isPermittedExpression(span.expression));
             case ts.SyntaxKind.PropertyAccessExpression:
@@ -336,19 +373,38 @@ function isPermittedFunction(arrowFunction: ts.ArrowFunction) {
             case ts.SyntaxKind.TrueKeyword:
             case ts.SyntaxKind.OmittedExpression:
                 return true;
+            case ts.SyntaxKind.ArrowFunction:
+                return invalid("Arrow functions are only permitted as call arguments");
+            case ts.SyntaxKind.FunctionExpression:
+            case ts.SyntaxKind.ClassExpression:
+                return invalid("'function' and 'class' expressions are not permitted");
+            case ts.SyntaxKind.NewExpression:
+                return invalid("'new' operator is not permitted");
+            case ts.SyntaxKind.AwaitExpression:
+                return invalid("'await' operator is not permitted");
         }
         return false;
     }
 
-    function isPermittedArrowFunction(node: ts.ArrowFunction) {
-        return !node.modifiers && !node.asteriskToken && !node.questionToken && !node.exclamationToken && node.body &&
-            (node.body.kind === ts.SyntaxKind.Block && isPermittedBlock(node.body as ts.Block) || isPermittedExpression(node.body));
+    function isPermittedCallExpression(node: ts.CallExpression) {
+        if (node.expression.kind !== ts.SyntaxKind.PropertyAccessExpression) {
+            return invalid("Only calls to methods of objects are permitted");
+        }
+        if (node.typeArguments) {
+            return invalid("Type arguments are not permitted");
+        }
+        return isPermittedExpression((node.expression as ts.PropertyAccessExpression).expression) && node.arguments.every(isPermittedArgument);
     }
 
-    function isPermittedCallExpression(node: ts.CallExpression) {
-        return node.expression.kind === ts.SyntaxKind.PropertyAccessExpression &&
-            isPermittedExpression((node.expression as ts.PropertyAccessExpression).expression) &&
-            !node.typeArguments && node.arguments.every(isPermittedExpression);
+    function isPermittedArgument(node: ts.Expression) {
+        return node.kind === ts.SyntaxKind.ArrowFunction && isPermittedArrowFunction(node as ts.ArrowFunction) || isPermittedExpression(node);
+    }
+
+    function isPermittedArrowFunction(node: ts.ArrowFunction) {
+        if (node.modifiers || node.asteriskToken || node.questionToken) {
+            return invalid("Arrow function modifiers are not permitted");
+        }
+        return node.body && (node.body.kind === ts.SyntaxKind.Block && isPermittedBlock(node.body as ts.Block) || isPermittedExpression(node.body));
     }
 
     function isPermittedProperty(node: ts.ObjectLiteralElementLike) {
@@ -360,48 +416,7 @@ function isPermittedFunction(arrowFunction: ts.ArrowFunction) {
             case ts.SyntaxKind.SpreadAssignment:
                 return isPermittedExpression(node.expression);
         }
-        return false;
-    }
-
-    function isPermittedBinaryOperator(operator: ts.SyntaxKind) {
-        switch (operator) {
-            case ts.SyntaxKind.QuestionQuestionToken:
-            case ts.SyntaxKind.AmpersandAmpersandToken:
-            case ts.SyntaxKind.BarBarToken:
-            case ts.SyntaxKind.AmpersandToken:
-            case ts.SyntaxKind.BarToken:
-            case ts.SyntaxKind.CaretToken:
-            case ts.SyntaxKind.EqualsEqualsToken:
-            case ts.SyntaxKind.EqualsEqualsEqualsToken:
-            case ts.SyntaxKind.ExclamationEqualsEqualsToken:
-            case ts.SyntaxKind.ExclamationEqualsToken:
-            case ts.SyntaxKind.LessThanToken:
-            case ts.SyntaxKind.LessThanEqualsToken:
-            case ts.SyntaxKind.GreaterThanToken:
-            case ts.SyntaxKind.GreaterThanEqualsToken:
-            case ts.SyntaxKind.LessThanLessThanToken:
-            case ts.SyntaxKind.GreaterThanGreaterThanToken:
-            case ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken:
-            case ts.SyntaxKind.PlusToken:
-            case ts.SyntaxKind.MinusToken:
-            case ts.SyntaxKind.AsteriskToken:
-            case ts.SyntaxKind.SlashToken:
-            case ts.SyntaxKind.PercentToken:
-            case ts.SyntaxKind.AsteriskAsteriskToken:
-                return true;
-        }
-        return false;
-    }
-
-    function isPermittedUnaryOperator(operator: ts.SyntaxKind) {
-        switch (operator) {
-            case ts.SyntaxKind.PlusToken:
-            case ts.SyntaxKind.MinusToken:
-            case ts.SyntaxKind.TildeToken:
-            case ts.SyntaxKind.ExclamationToken:
-                return true;
-        }
-        return false;
+        return invalid("Method and property accessor declarations are not permitted");
     }
 }
 
