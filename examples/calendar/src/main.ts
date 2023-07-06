@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
-import { createLanguageModel, createTypeChat, processRequests } from "typechat";
+import { createLanguageModel, createJsonTranslator, processRequests } from "typechat";
 import { CalendarActions } from './calendarActionsSchema';
 
 // TODO: use local .env file.
@@ -10,12 +10,12 @@ dotenv.config({ path: path.join(__dirname, "../../../.env") });
 const calendarChar = "\u{1F4C5}";
 const model = createLanguageModel();
 const schema = fs.readFileSync(path.join(__dirname, "calendarActionsSchema.ts"), "utf8");
-const typeChat = createTypeChat<CalendarActions>(model, schema, "CalendarActions");
-typeChat.validator.stripNulls = true;
+const translator = createJsonTranslator<CalendarActions>(model, schema, "CalendarActions");
+translator.validator.stripNulls = true;
 
 // Process requests interactively or from the input file specified on the command line
 processRequests(`${calendarChar}> `, process.argv[2], async (request) => {
-    const response = await typeChat.completeAndValidate(request);
+    const response = await translator.translate(request);
     if (!response.success) {
         console.log(response.message);
         return;
