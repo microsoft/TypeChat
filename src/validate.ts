@@ -32,13 +32,13 @@ interface String {
     includes(searchString: string, position?: number): boolean;
     repeat(count: number): string;
 }
-interface Object { valueOf(): Object }
-interface Function { toString(): string, prototype: any }
+interface Object { toString(): string }
+interface Function { prototype: unknown }
 interface CallableFunction extends Function {}
 interface NewableFunction extends Function {}
 interface Boolean { valueOf(): boolean }
 interface Number { valueOf(): number }
-interface RegExp { exec(string: string): unknown }`;
+interface RegExp { test(string: string): boolean }`;
 
 /**
  * Represents an object that can validate JSON strings according to a given TypeScript schema.
