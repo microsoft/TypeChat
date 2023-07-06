@@ -5,7 +5,7 @@ import { TypeChatFunction, TypeChatFunctionValidator, TypeChatJsonValidator, cre
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
  */
-export interface TypeChat<T extends object> {
+export interface TypeChatJsonTranslator<T extends object> {
     /**
      * The associated `TypeChatLanguageModel`.
      */
@@ -50,7 +50,7 @@ export interface TypeChat<T extends object> {
      * @param request The natural language request.
      * @returns A promise for the resulting object.
      */
-    completeAndValidate(request: string): Promise<Result<T>>;
+    translate(request: string): Promise<Result<T>>;
 }
 
 /**
@@ -62,16 +62,16 @@ export interface TypeChat<T extends object> {
  * @param typeName The name of the JSON target type in the schema.
  * @returns A `TypeChat<T>` instance.
  */
-export function createTypeChat<T extends object>(model: TypeChatLanguageModel, schema: string, typeName: string): TypeChat<T> {
+export function createJsonTranslator<T extends object>(model: TypeChatLanguageModel, schema: string, typeName: string): TypeChatJsonTranslator<T> {
     const validator = createJsonValidator<T>(schema, typeName);
-    const typeChat: TypeChat<T> = {
+    const typeChat: TypeChatJsonTranslator<T> = {
         model,
         validator,
         attemptRepair: true,
         stripNulls: false,
         createRequestPrompt,
         createRepairPrompt,
-        completeAndValidate
+        translate
     };
     return typeChat;
 
@@ -89,7 +89,7 @@ export function createTypeChat<T extends object>(model: TypeChatLanguageModel, s
             `The following is a revised JSON object:\n`;
     }
 
-    async function completeAndValidate(request: string) {
+    async function translate(request: string) {
         let prompt = typeChat.createRequestPrompt(request);
         let attemptRepair = typeChat.attemptRepair;
         while (true) {
