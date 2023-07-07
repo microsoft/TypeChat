@@ -1,7 +1,6 @@
 import { Result, error } from "./result";
 import { TypeChatLanguageModel } from "./model";
 import { TypeChatFunction, TypeChatFunctionValidator, TypeChatJsonValidator, createFunctionValidator, createJsonValidator } from "./validate";
-import { json } from "stream/consumers";
 
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
