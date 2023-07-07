@@ -257,13 +257,13 @@ export function createFunctionValidator<T extends Function>(schema: string, type
     }
 
     function getIsolatedFunction(functionBodyText: string) {
-        const unscopables = {};
+        const unscopables = Object.create(null);
         const trap = new Proxy(Object.create(null), {
-            has(target, property) {
-                // We proxy everyhing but the parameters of the function.
+            has(_target, property) {
+                // We proxy everything but the parameters of the function.
                 return !(typeof property === "string" && parameterNames.includes(property));
             },
-            get(target, property) {
+            get(_target, property) {
                 // The `with` statement looks up unscopables, so we allow that. Otherwise,
                 // the only global we recognize is `undefined`.
                 switch (property) {
@@ -272,7 +272,7 @@ export function createFunctionValidator<T extends Function>(schema: string, type
                 }
                 throw new Error(`Accessing global '${String(property)}' is not permitted`);
             },
-            set(target, property, value) {
+            set(_target, property, _value) {
                 throw new Error(`Accessing global '${String(property)}' is not permitted`);
             }
         });
