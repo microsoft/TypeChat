@@ -1,6 +1,7 @@
 import { Result, error } from "./result";
 import { TypeChatLanguageModel } from "./model";
 import { TypeChatFunction, TypeChatFunctionValidator, TypeChatJsonValidator, createFunctionValidator, createJsonValidator } from "./validate";
+import { json } from "stream/consumers";
 
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
@@ -80,13 +81,15 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             `###\n${validator.schema}###\n` +
             `The following is a user request:\n` +
             `"""\n${request}\n"""\n` +
-            `The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:\n`;
+            `The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:\n` +
+            `\`\`\`json\n`;
     }
 
     function createRepairPrompt(validationError: string) {
         return `The JSON object is invalid for the following reason:\n` +
             `${validationError}\n` +
-            `The following is a revised JSON object:\n`;
+            `The following is a revised JSON object:\n` +
+            `\`\`\`json\n`;
     }
 
     async function translate(request: string) {
@@ -97,12 +100,15 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             if (!response.success) {
                 return response;
             }
-            const validation = validator.validate(response.data);
+            const responseText = response.data;
+            const endIndex = responseText.lastIndexOf("}");
+            const jsonText = responseText.slice(0, endIndex + 1);
+            const validation = validator.validate(jsonText);
             if (validation.success) {
                 return validation;
             }
             if (!attemptRepair) {
-                return error(`JSON object validation failed:\n${response.data}\n${validation.message}`);
+                return error(`JSON validation failed: ${validation.message}\n${jsonText}`);
             }
             prompt += `${response.data}\n${typeChat.createRepairPrompt(validation.message)}`;
             attemptRepair = false;
