@@ -227,9 +227,7 @@ export function createFunctionValidator<T extends Function>(schema: string, type
         const typeChatProgram: TypeChatFunction<T> = {
             functionBodyText,
             statements,
-            getFunction() {
-                return Function(...parameterNames, functionBodyText) as T;
-            }
+            getFunction: () => getIsolatedFunction(functionBodyText)
         }
         return success(typeChatProgram);
     }
@@ -256,6 +254,33 @@ export function createFunctionValidator<T extends Function>(schema: string, type
 
     function createFileMapEntry(filePath: string, fileText: string): [string, ts.SourceFile] {
         return [filePath, ts.createSourceFile(filePath, fileText, ts.ScriptTarget.Latest)];
+    }
+
+    function getIsolatedFunction(functionBodyText: string) {
+        const unscopables = Object.create(null);
+        const trap = new Proxy(Object.create(null), {
+            has(_target, property) {
+                // We proxy everything but the parameters of the function.
+                return !(typeof property === "string" && parameterNames.includes(property));
+            },
+            get(_target, property) {
+                // The `with` statement looks up unscopables, so we allow that. Otherwise,
+                // the only global we recognize is `undefined`.
+                switch (property) {
+                    case "undefined": return void 0;
+                    case Symbol.unscopables: return unscopables;
+                }
+                throw new Error(`Accessing global '${String(property)}' is not permitted`);
+            },
+            set(_target, property, _value) {
+                throw new Error(`Accessing global '${String(property)}' is not permitted`);
+            }
+        });
+        const func = Function(...parameterNames, `with (this) {
+"use strict";
+${functionBodyText}
+}`);
+        return func.bind(trap) as T;
     }
 }
 
