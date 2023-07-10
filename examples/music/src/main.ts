@@ -7,13 +7,12 @@ import { RequestHandler, Api } from "./chatifyActionsSchema";
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const musicalNote = "\u{1F3B5}";
 const model = createLanguageModel();
 const schema = fs.readFileSync(path.join(__dirname, "chatifyActionsSchema.ts"), "utf8");
 const translator = createFunctionTranslator<RequestHandler>(model, schema, "RequestHandler", ["api"]);
 
 // Process requests interactively or from the input file specified on the command line
-processRequests(`${musicalNote}> `, process.argv[2], async (request) => {
+processRequests("🎵> ", process.argv[2], async (request) => {
     const response = await translator.translate(request);
     if (!response.success) {
         console.log(response.message);

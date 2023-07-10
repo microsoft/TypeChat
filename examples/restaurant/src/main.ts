@@ -11,7 +11,6 @@ import { Order } from "./foodOrderViewSchema";
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const pizza = "🍕";
 const model = createLanguageModel();
 const viewSchema = fs.readFileSync(
   path.join(__dirname, "foodOrderViewSchema.ts"),
@@ -173,7 +172,7 @@ function printOrder(order: Order) {
 }
 
 // Process requests interactively or from the input file specified on the command line
-processRequests(`${pizza}> `, process.argv[2], async (request) => {
+processRequests("🍕> ", process.argv[2], async (request) => {
   const response = await translator.translate(request);
   if (!response.success) {
     console.log(response.message);
