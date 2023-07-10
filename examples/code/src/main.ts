@@ -7,13 +7,12 @@ import { RequestHandler, Api, SourceFile } from "./ProjectSchema";
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const clipboard = "\u{1F4CB}";
 const model = createLanguageModel();
 const schema = fs.readFileSync(path.join(__dirname, "ProjectSchema.ts"), "utf8");
 const translator = createFunctionTranslator<RequestHandler>(model, schema, "RequestHandler", ["api"]);
 
 // Process requests interactively or from the input file specified on the command line
-processRequests(`${clipboard}> `, process.argv[2], async (request) => {
+processRequests("📋> ", process.argv[2], async (request) => {
     const response = await translator.translate(request);
     if (!response.success) {
         console.log(response.message);
