@@ -26,16 +26,32 @@ export interface TypeChatLanguageModel {
 
 /**
  * Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
- * chosen by environment variables. If an `OPENAI_API_KEY` environment variable exists, the
- * `createOpenAILanguageModel` function is used to create the instance. If an `AZURE_API_KEY` environment
- * variable exists, the `createAzureOpenAILanguageModel` function is used to create the instance.
- * Otherwise, an exception is thrown.
+ * chosen by environment variables.
+ * 
+ * If an `OPENAI_API_KEY` environment variable exists, the `createOpenAILanguageModel` function
+ * is used to create the instance. The `OPENAI_ENDPOINT` and `OPENAI_MODEL` environment variables
+ * must also be defined or an exception will be thrown.
+ * 
+ * If an `AZURE_API_KEY` environment variable exists, the `createAzureOpenAILanguageModel` function
+ * is used to create the instance. The `AZURE_OPENAI_ENDPOINT` environment variable must also be defined
+ * or an exception will be thrown.
+ *
+ * If none of these key variables are defined, an exception is thrown.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createLanguageModel(): TypeChatLanguageModel {
-    return process.env.OPENAI_API_KEY ? createOpenAILanguageModel() :
-        process.env.AZURE_API_KEY ? createAzureOpenAILanguageModel() :
-        missingEnvironmentVariable("OPENAI_API_KEY or AZURE_API_KEY");
+export function createLanguageModel(env: Record<string, string | undefined>): TypeChatLanguageModel {
+    if (env.OPENAI_API_KEY) {
+        const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
+        const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
+        const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
+        createOpenAILanguageModel(endPoint, apiKey, model);
+    }
+    if (env.AZURE_API_KEY) {
+        const apiKey = env.AZURE_API_KEY ?? missingEnvironmentVariable("AZURE_API_KEY");
+        const endPoint = env.AZURE_OPENAI_ENDPOINT ?? missingEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
+        createAzureOpenAILanguageModel(apiKey, endPoint);
+    }
+    missingEnvironmentVariable("OPENAI_API_KEY or AZURE_API_KEY");
 }
 
 /**
@@ -47,27 +63,21 @@ export function createLanguageModel(): TypeChatLanguageModel {
  *   variable if it exists, or otherwise an exception is thrown.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(endPoint?: string, model?: string, apiKey?: string): TypeChatLanguageModel {
-    const effectiveApiKey = apiKey ?? process.env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
-    const effectiveEndPoint = endPoint ?? process.env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
-    const effectiveModel = model ?? process.env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
-    return createAxiosLanguageModel(effectiveEndPoint, { headers: { Authorization: `Bearer ${effectiveApiKey}` } }, { model: effectiveModel });
+export function createOpenAILanguageModel(endPoint = "https://api.openai.com/v1/chat/completions", model: string, apiKey: string): TypeChatLanguageModel {
+    return createAxiosLanguageModel(endPoint, { headers: { Authorization: `Bearer ${apiKey}` } }, { model });
 }
 
 /**
  * Creates a language model encapsulation of an Azure OpenAI REST API endpoint.
- * @param endPoint The URL of the OpenAI REST API endpoint. If not specified, the URL is obtained from the
- *   `AZURE_ENDPOINT` environment variable if it exists, or otherwise an exception is thrown. The URL must be in the format
+ * @param endPoint The URL of the OpenAI REST API endpoint. The URL must be in the format
  *   "https://{your-resource-name}.openai.azure.com/openai/deployments/{your-deployment-name}/chat/completions?api-version={API-version}".
  *   Example deployment names are "gpt-35-turbo" and "gpt-4". An example API versions is "2023-05-15".
  * @param apiKey The Azure API key. If not specified, the API key is obtained from the `AZURE_API_KEY` environment
  *   variable if it exists, or otherwise an exception is thrown.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createAzureOpenAILanguageModel(endPoint?: string, apiKey?: string): TypeChatLanguageModel {
-    const effectiveApiKey = apiKey ?? process.env.AZURE_API_KEY ?? missingEnvironmentVariable("AZURE_API_KEY");
-    const effectiveEndPoint = endPoint ?? process.env.AZURE_OPENAI_ENDPOINT ?? missingEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
-    return createAxiosLanguageModel(effectiveEndPoint, { headers: { "api-key": effectiveApiKey } }, {});
+export function createAzureOpenAILanguageModel(endPoint: string, apiKey: string): TypeChatLanguageModel {
+    return createAxiosLanguageModel(endPoint, { headers: { "api-key": apiKey } }, {});
 }
 
 /**

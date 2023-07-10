@@ -7,7 +7,7 @@ import { RequestHandler, Api, SourceFile } from "./ProjectSchema";
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const model = createLanguageModel();
+const model = createLanguageModel(process.env);
 const schema = fs.readFileSync(path.join(__dirname, "ProjectSchema.ts"), "utf8");
 const translator = createFunctionTranslator<RequestHandler>(model, schema, "RequestHandler", ["api"]);
 
