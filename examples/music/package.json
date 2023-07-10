@@ -6,15 +6,21 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc -p src",
-    "postbuild": "copyfiles -u 1 src/**/*Schema.ts src/**/*.txt dist"
+    "postbuild": "copyfiles -u 1 src/**/*Schema.ts src/**/*.txt src/**/*.html dist"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "dotenv": "^16.3.1"
+    "chalk": "^2.3.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "open": "^7.0.4"
   },
   "devDependencies": {
+    "@types/express": "^4.17.17",
     "@types/node": "^20.3.1",
+    "@types/open": "^6.2.1",
+    "@types/spotify-api": "^0.0.22",
     "copyfiles": "^2.4.1",
     "typescript": "^5.1.3"
   }
