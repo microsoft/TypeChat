@@ -1,4 +1,3 @@
-import process from "process";
 import axios from "axios";
 import { Result, success, error } from "./result";
 
