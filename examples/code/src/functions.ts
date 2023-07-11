@@ -1,6 +1,6 @@
 /**
  * This is an experiment of using the TypeChat pattern to generate, validate, and execute simple JavaScript
- * functions based on combining user requests and TypeScript schema. The permitted JavaScript subset is restricted to:
+ * functions based on combining user requests and a TypeScript schema. The permitted JavaScript subset is restricted to:
  * 
  * - No global variables or functions are accessible. The function can only access the parameters that were passed to it.
  * - Strings and arrays have a limited set of methods available (none of which mutate the object).
@@ -18,8 +18,8 @@
  * regarding code injection, spoofing, and so forth. Caveat emptor.
  */
 
-import * as ts from 'typescript';
-import { TypeChatLanguageModel, Result, success, error } from 'typechat';
+import * as ts from "typescript";
+import { TypeChatLanguageModel, Result, success, error } from "typechat";
 
 const libText = `interface Array<T> {
     length: number;
