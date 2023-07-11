@@ -1,7 +1,8 @@
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
-import { createLanguageModel, createFunctionTranslator, processRequests } from "typechat";
+import { createLanguageModel, processRequests } from "typechat";
+import { createFunctionTranslator } from "./functions";
 import { RequestHandler, Api, SourceFile } from "./ProjectSchema";
 
 // TODO: use local .env file.
@@ -18,7 +19,7 @@ processRequests("📋> ", process.argv[2], async (request) => {
         console.log(response.message);
     }
     else {
-        console.log(`(api) => {\n${response.data.functionBodyText}}`);
+        console.log(`(api) => ${response.data.functionBodyText}`);
         console.log("Running program:");
         const result = response.data.getFunction()(createApi());
         console.log(`Result: ${JSON.stringify(result, undefined, 2)}`);
