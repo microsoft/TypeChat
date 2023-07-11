@@ -1,48 +1,80 @@
-// This is a schema for writing programs that control a Spotify music player
-
-// A track list is simply an array of strings
-export type TrackList = string[];
+export interface ActionWithInput {
+    // use results from action indexed by inputFromAction; default use results from previous action
+    inputFromAction?: number;
+}
 
 export type FavoritesTerm =
     | 'short_term' // last 4 weeks
     | 'medium_term' // last 6 months
     | 'long_term'; // several years
 
-export type GetRecentlyPlayedArgs = {
+// output: Track List
+// get the tracks played most recently
+export interface GetRecentlyPlayedAction {
+    type: 'getRecentlyPlayed';
     // if favoritesTerm is specified, get the user's top tracks over the specified time range
-    favoritesTerm?: FavoritesTerm | string;
+    favoritesTerm?: FavoritesTerm;
     // get count tracks; default is 50
     count?: number;
-};
+}
 
-export type SetVolumeArgs = {
+export interface PauseAction {
+    type: 'pause';
+}
+
+export interface PlayAction {
+    type: 'play';
+}
+
+// Delete a named playlist
+export interface DeletePlaylistAction {
+    type: 'deletePlaylist';
+    // the name of the playlist to delete
+    playlistName: string;
+}
+export interface VolumeAction {
+    type: 'setVolume';
     // 0 is silent 100 is the loudest
     newVolumeLevel?: number;
     // volumeChangeAmount can be positive or negative; example: -5 makes the volume 5% more quiet
     volumeChangeAmount?: number;
-};
+}
 
-export type PlayTracksArgs = {
-    // List of tracks to play from
-    trackList: TrackList;
+// output: Track List
+export interface SearchTracksAction {
+    type: 'searchTracks';
+    // a Spotify search expression such as 'Rock Lobster' or 'te kanawa queen of night'
+    // the structure of the search expression is keywords separated by spaces; all keywords must match
+    query: string;
+}
+
+// input: Track List
+// play some or all items from the input list
+export interface PlayInputAction extends ActionWithInput {
+    type: 'playInput';
     // number of tracks to play; default 1
     count?: number;
     // index of first track to play; default 0
     offset?: number;
+    // play all of the tracks; default false and ignored if count or offset present
+    all?: boolean;
 }
 
-export type PrintTracksArgs = {
-    // List of tracks to play from
-    trackList: TrackList;
+// input: Track List
+// print out some or all items from the input list
+export interface ListInputAction extends ActionWithInput {
+    type: 'listInput';
     // number of tracks to print out; default input.length
     count?: number;
     // index of first track to list; default 0
     offset?: number;
+    // list all of the tracks; default true but overridden by presence of count or offset
+    all?: boolean;
 }
-
-export type FilterTracksArgs = {
-    // List of tracks to filter
-    trackList: TrackList;
+// input: Track List; output: Track List
+// apply a filter to match tracks; result is the tracks that match the filter
+export interface FilterTracksAction extends ActionWithInput {
+    type: 'filterTracks';
     // a filter string, which has the following structure (written as a grammar)
     // filter -> (constraint combiner?)+
     // constraint -> artist:string | genre:string | year:year-range | description:string
@@ -53,50 +85,55 @@ export type FilterTracksArgs = {
     negate?: boolean;
 }
 
-export type SortTracksArgs = {
-    // List of tracks to sort
-    trackList: TrackList;
-    // sort criteria
-    description?: string;
+// input: Track List; output: Track List
+// sort the tracks; default is sort by track name ascending
+export interface SortTracksAction extends ActionWithInput {
+    type: 'sortTracks';
     // default: false
     descending?: boolean;
 }
 
-export type CreatePlaylistArgs = {
-    // List of tracks in playlist
-    trackList: TrackList;
-    // Name for playlist
+// input: Track List
+// create a Spotify playlist from a list of tracks
+export interface CreatePlaylistAction extends ActionWithInput {
+    type: 'createPlaylist';
     name: string;
 }
 
-export type Api = {
-    // Get the tracks played most recently
-    getRecentlyPlayed(args: GetRecentlyPlayedArgs): TrackList;
-    // Pause playing
-    pause(): void;
-    // Start playing
-    play(): void;
-    // Set volume
-    setVolume(args: SetVolumeArgs): void;
-    // query argument is a Spotify search expression such as 'Rock Lobster' or 'te kanawa queen of night'
-    // the structure of the search expression is keywords separated by spaces; all keywords must match
-    searchTracks(query: string): TrackList;
-    // play some or all items from the input list
-    playTracks(args: PlayTracksArgs): void;
-    // Use this function to print all or parts of a track list
-    printTracks(args: PrintTracksArgs): void;
-    // apply a filter to match tracks; result is the tracks that match the filter
-    filterTracks(args: FilterTracksArgs): TrackList;
-    // sort tracks; default is sort by track name ascending
-    sortTracks(args: SortTracksArgs): TrackList;
-    // create a Spotify playlist from a list of tracks
-    createPlaylist(args: CreatePlaylistArgs): void;
-    // Call this function for requests that weren't understood
-    unknownAction(text: string): void;
-    // Call this function if the user asks a non-music question, it is captured with this action; non-music, non-questions use UnknownAction
-    nonMusicQuestion(text: string): void;
-    // Call this function with the final result of the user request, if any
-    finalResult(result: any): void;
+export interface ListPlaylistsAction {
+    type: 'listPlaylists';
 }
 
-export type RequestHandler = (api: Api) => void;
+// if the user types text that is not understood, this action is used
+export interface UnknownAction {
+    type: 'unknown';
+    // text typed by the user that the system did not understand
+    text: string;
+}
+
+// if the user asks a non-music question, it is captured with this action; non-music, non-questions use UnknownAction
+export interface NonMusicQuestionAction {
+    type: 'nonMusicQuestion';
+    // text of the question
+    text: string;
+}
+
+export type SpotifyAction =
+    | PlayAction
+    | PlayInputAction
+    | ListInputAction
+    | SearchTracksAction
+    | PauseAction
+    | VolumeAction
+    | GetRecentlyPlayedAction
+    | FilterTracksAction
+    | SortTracksAction
+    | CreatePlaylistAction
+    | DeletePlaylistAction
+    | ListPlaylistsAction
+    | NonMusicQuestionAction
+    | UnknownAction;
+
+export type SpotifyActions = {
+    actions: SpotifyAction[];
+};
