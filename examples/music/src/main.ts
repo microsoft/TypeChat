@@ -36,7 +36,7 @@ import { SpotifyService, User } from "./service";
 
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 const schemaFilename = "chatifyActionsSchema.ts";
-const model = createLanguageModel();
+const model = createLanguageModel(process.env);
 
 // open schema file containing ts definitions
 const schemaText = fs.readFileSync(

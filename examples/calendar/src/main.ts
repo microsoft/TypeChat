@@ -7,7 +7,7 @@ import { CalendarActions } from './calendarActionsSchema';
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const model = createLanguageModel();
+const model = createLanguageModel(process.env);
 const schema = fs.readFileSync(path.join(__dirname, "calendarActionsSchema.ts"), "utf8");
 const translator = createJsonTranslator<CalendarActions>(model, schema, "CalendarActions");
 translator.validator.stripNulls = true;

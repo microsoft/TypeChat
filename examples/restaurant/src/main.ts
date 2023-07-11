@@ -11,7 +11,7 @@ import { Order } from "./foodOrderViewSchema";
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const model = createLanguageModel();
+const model = createLanguageModel(process.env);
 const viewSchema = fs.readFileSync(
   path.join(__dirname, "foodOrderViewSchema.ts"),
   "utf8"
