@@ -1,5 +1,5 @@
 # TypeChat
-In this repo, we provide examples of and a library for an approach, called TypeChat, to creating NL interfaces. We originally developed TypeChat to increase the safety of NL interfaces to applications that make permanent changes. TypeChat increases safety by incorporating the following steps into each interaction with a language model:
+In this repo, we provide examples of and a library for an approach, called TypeChat, to creating NL interfaces. We originally developed TypeChat to increase the safety of NL interfaces for applications that make permanent changes. TypeChat increases safety by incorporating the following steps into each interaction with a language model:
 
 1. Constrain language model output using a formal schema over the possible user requests.
 2. Validate that model output conforms to the schema.  Repair non-conforming output through further language model interaction.
@@ -9,7 +9,7 @@ Having followed these three steps, an application can make permanent changes kno
 
 In addition to its safety benefit, we have found in practice that TypeChat also helps with the reliability and accuracy of NL interfaces.  This happens because TypeChat replaces "prompt engineering" with "schema engineering" and arbitrary text output with a formal representation.  These changes enable compositional properties not readily available with prompt engineering approaches that accrete into a prompt islands of NL text that may have varying goals.  
 
-For example, to add additional intents to a schema, a developer can add the additional intents using type composition, such as adding additional types into a discriminated union.  To make schemas hierarchicial, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.  It is less clear how to compose and organize sets of user intents using arbitrary NL text.
+For example, to add additional intents to a schema, a developer can add the additional intents using type composition, such as adding additional types into a discriminated union.  To make schemas hierarchicial, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
 
 This repo uses TypeScript as the schema language. This choice works well in practice because
 
