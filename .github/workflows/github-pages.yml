@@ -1,0 +1,34 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches:
+      - main
+      
+permissions:
+  id-token: write
+  pages: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+    - name: Install mdBook
+      run: cargo install mdbook
+    - name: Build book
+      run: |
+        cd site
+        echo "Building the book"
+        mdbook build
+    - name : Upload artifact
+      uses: actions/upload-pages-artifact@v2
+      with:
+        name: github-pages
+        path: site/book
+    - name: Deploy to GitHub Pages from artifacts
+      uses: actions/deploy-pages@v2 
