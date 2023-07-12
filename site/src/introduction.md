@@ -37,6 +37,7 @@ One way to add some structure and make parsing easier might be to ask for a list
 Maybe a bulleted list is enough to go off of, but how would we break this data up?
 Strip the leading bullet points and split on `": "` to separate the venue from its description?
 What if a venue has a `": "` in its name?
+How would we ensure that the text within each bullet aligned to a consistent format each prompt?
 It turns out that we're still left with problems parsing out natural language.
 
 Now what if we asked the model for a much more structured format like JSON?
@@ -70,10 +71,11 @@ As a matter of fact, many language models are great at generating JSON!
 > ]
 > ```
 
-Here we asked a model to respond directly with JSON code and provided a sort of "template" or example response to guide its answer.
+Here we asked a model to respond directly with JSON code and provided a "template" or example response to guide its answer.
 As you can see, it worked pretty well!
 
 Examples responses are great, but we wondered if there was another approach.
+
 In our case, we asked whether we could simply guide a model with TypeScript types.
 
 > **User:**
@@ -106,10 +108,25 @@ In our case, we asked whether we could simply guide a model with TypeScript type
 > ```
 
 This works fairly well!
+
 And despite being conceptually simple, it's a very powerful way to bridge the gap between natural language and something our applications can work with.
-But we wanted to make it as easy as possible to use this pattern, and brush away some of the sharp edges of language model responses.
+
+We wanted to make it as easy as possible to apply this pattern, and brush away some of the sharp edges of language model responses.
 
 This is the key idea behind TypeChat.
+
 By just giving a model with a schema (some types) and a request, we can integrate natural language into an application and work through well-typed structured data.
 
-TODO
+
+# Introducing TypeChat
+TypeChat is a library for getting structured data from large language models using TypeScript types. 
+
+There are three key ideas in TypeChat:
+
+1. *Types*: Define your intelligent application's domain using TypeScript types.
+2. *Structured Prompt Templates & Responses*: TypeChat constructs a prompt to the large language model that includes the natural language user input and your defined TypeScript types. The large language model converts the TypeScript type to JSON schema, maps user input to that JSON schema, and returns a reply to the prompt using JSON.
+3. *Response Validation*: To ensure the JSON response from the large language model is valid, TypeChat converts the JSON back to TypeScript types and runs an in-memory instance of the TypeScript compiler to validate the large language model's response. If the validation fails, TypeChat sends a self-repairing prompt back to the large language model.
+
+Now that you know what TypeChat is, start your journey with [installing TypeChat](/gettingstarted) an
+
+be sure to check out the [Get started](/examples.md) or [Examples](/examples.md) to build your first app using TypeChat.
