@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { SpotifyService } from './service';
-import { serializeQuery } from './util';
 
 export const limitMax = 50;
 
@@ -14,11 +13,9 @@ export async function search(
         },
     };
 
+    const searchUrl = getUrlWithParams("https://api.spotify.com/v1/search", query);
     try {
-        const spotifyResult = await axios.get(
-            `https://api.spotify.com/v1/search${serializeQuery(query)}`,
-            config
-        );
+        const spotifyResult = await axios.get(searchUrl, config);
         return spotifyResult.data as SpotifyApi.SearchResponse;
     } catch (e) {
         if (e instanceof axios.AxiosError) {
@@ -41,15 +38,9 @@ export async function getTop(
         },
     };
 
-    let params = `limit=${limit}`;
-    if (offset !== 0) {
-        params += `&offset=${offset}`;
-    }
+    const tracksUrl = getUrlWithParams("https://api.spotify.com/v1/me/tracks", { limit, offset });
     try {
-        const spotifyResult = await axios.get(
-            `https://api.spotify.com/v1/me/tracks?${params}`,
-            config
-        );
+        const spotifyResult = await axios.get(tracksUrl, config);
 
         return spotifyResult.data as SpotifyApi.PagingObject<SpotifyApi.PlaylistTrackObject>;
     } catch (e) {
@@ -95,12 +86,9 @@ export async function getArtist(service: SpotifyService, id: string) {
         },
     };
 
-    const url = `https://api.spotify.com/v1/artists?ids=${encodeURIComponent(
-        id
-    )}`;
-
+    const artistsUrl = getUrlWithParams("https://api.spotify.com/v1/artists", { ids: id });
     try {
-        const spotifyResult = await axios.get(url, config);
+        const spotifyResult = await axios.get(artistsUrl, config);
 
         return spotifyResult.data as SpotifyApi.MultipleArtistsResponse;
     } catch (e) {
@@ -124,16 +112,15 @@ export async function getHistory(
         },
     };
 
-    let params = `limit=${limit}`;
-    if (offset > 0) {
-        params += `&offset=${offset}`;
-    }
-    const url = `https://api.spotify.com/v1/me/player/recently-played?${params}`;
-    console.log(url);
+    const recentlyPlayedUrl = getUrlWithParams("https://api.spotify.com/v1/me/player/recently-played", {
+        limit,
+        offset
+    });
+    console.log(recentlyPlayedUrl);
     // params += `&after=${Date.parse('2023-01-01T00:00:00.000Z')}`;
     // params += `&before=${Date.now()}`;
     try {
-        const spotifyResult = await axios.get(url, config);
+        const spotifyResult = await axios.get(recentlyPlayedUrl, config);
 
         return spotifyResult.data as SpotifyApi.UsersRecentlyPlayedTracksResponse;
     } catch (e) {
@@ -233,9 +220,10 @@ export async function play(
     if (uris) {
         smallTrack.uris = uris;
     }
+    const playUrl = getUrlWithParams("https://api.spotify.com/v1/me/player/play", { device_id: deviceId });
     try {
         const spotifyResult = await axios.put(
-            `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`,
+            playUrl,
             smallTrack,
             config
         );
@@ -282,9 +270,10 @@ export async function pause(service: SpotifyService, deviceId: string) {
         },
     };
 
+    const pauseUrl = getUrlWithParams("https://api.spotify.com/v1/me/player/pause", { device_id: deviceId });
     try {
         const spotifyResult = await axios.put(
-            `https://api.spotify.com/v1/me/player/pause?device_id=${deviceId}`,
+            pauseUrl,
             {},
             config
         );
@@ -391,9 +380,12 @@ export async function setVolume(service: SpotifyService, amt = limitMax) {
         },
     };
 
+    const volumeUrl = getUrlWithParams("https://api.spotify.com/v1/me/player/volume?volume_percent", {
+        volume_percent: amt
+    });
     try {
         const spotifyResult = await axios.put(
-            `https://api.spotify.com/v1/me/player/volume?volume_percent=${amt}`,
+            volumeUrl,
             {},
             config
         );
@@ -406,4 +398,11 @@ export async function setVolume(service: SpotifyService, amt = limitMax) {
             throw e;
         }
     }
+}
+
+function getUrlWithParams(urlString: string, queryParams: Record<string, any>) {
+    const params = new URLSearchParams(queryParams);
+    const url = new URL(urlString);
+    url.search = params.toString();
+    return url.toString();
 }
