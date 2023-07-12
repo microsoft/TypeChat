@@ -8,9 +8,9 @@ export type FavoritesTerm =
     | 'medium_term' // last 6 months
     | 'long_term'; // several years
 
-export type GetRecentlyPlayedArgs = {
+export type GetRecentlyPlayedOptions = {
     // if favoritesTerm is specified, get the user's top tracks over the specified time range
-    favoritesTerm?: FavoritesTerm | string;
+    favoritesTerm?: FavoritesTerm;
     // get count tracks; default is 50
     count?: number;
 };
@@ -22,18 +22,14 @@ export type SetVolumeArgs = {
     volumeChangeAmount?: number;
 };
 
-export type PlayTracksArgs = {
-    // List of tracks to play from
-    trackList: TrackList;
+export type PlayTracksOptions = {
     // number of tracks to play; default 1
     count?: number;
     // index of first track to play; default 0
     offset?: number;
 }
 
-export type PrintTracksArgs = {
-    // List of tracks to play from
-    trackList: TrackList;
+export type PrintTracksOptions = {
     // number of tracks to print out; default input.length
     count?: number;
     // index of first track to list; default 0
@@ -62,16 +58,9 @@ export type SortTracksArgs = {
     descending?: boolean;
 }
 
-export type CreatePlaylistArgs = {
-    // List of tracks in playlist
-    trackList: TrackList;
-    // Name for playlist
-    name: string;
-}
-
-type Api = {
+type API = {
     // Get the tracks played most recently
-    getRecentlyPlayed(args: GetRecentlyPlayedArgs): TrackList;
+    getRecentlyPlayed(options?: GetRecentlyPlayedOptions): TrackList;
     // Pause playing
     pause(): void;
     // Start playing
@@ -82,15 +71,15 @@ type Api = {
     // the structure of the search expression is keywords separated by spaces; all keywords must match
     searchTracks(query: string): TrackList;
     // play some or all items from the input list
-    playTracks(args: PlayTracksArgs): void;
-    // Use this function to print all or parts of a track list
-    printTracks(args: PrintTracksArgs): void;
+    playTracks(trackList: TrackList, options?: PlayTracksOptions): void;
     // apply a filter to match tracks; result is the tracks that match the filter
     filterTracks(args: FilterTracksArgs): TrackList;
     // sort tracks; default is sort by track name ascending
     sortTracks(args: SortTracksArgs): TrackList;
     // create a Spotify playlist from a list of tracks
-    createPlaylist(args: CreatePlaylistArgs): void;
+    createPlaylist(trackList: TrackList, name: string): void;
+    // merge multiple track lists
+    mergeTrackLists(...lists: TrackList[]): TrackList;
     // Call this function for requests that weren't understood
     unknownAction(text: string): void;
     // Call this function if the user asks a non-music question, it is captured with this action; non-music, non-questions use UnknownAction
@@ -99,18 +88,21 @@ type Api = {
     finalResult(result: any): void;
 }
 
-// Statement represents a single program statement
+// A statement represents a call to one of the API functions.
 export type Statement = {
-    function: keyof Api;  // Name of the Api function called by this statement
-    input: unknown;  // Argument for the function. Properties can use { @index: n } to reference previous results.
+    // Name of the API function called by this statement.
+    func: keyof API;
+    // Arguments for the function. Use `{ "@index": n }` to reference results of previous statements.
+    args: unknown[];
 };
 
-// Reference to result of previous statement. May be used for property values in an argument object.
+// Reference to the result of previous statement.
 export type ResultReference = {
-    "@index": number;  // Index of the previous statement in statements array
+    // Index of the previous statement in statements array
+    "@index": number;
 };
 
-// A program is a sequence of statements
+// A program consists of a sequence of statements that are executed in order.
 export type Program = {
     statements: Statement[];
 }
