@@ -1,19 +1,29 @@
-# Typechat
-In this repo, we're exploring an approach to developer tools for generative ai prompt engineering.  The tools support a prompt flow pattern which converts each LLM output into a TypeScript or Python object, validated against a concise formal schema. The program can then work with this object by verfiying that it captures user intent, by matching the object to plug-in or library interfaces for further processing, and by converting the object into another LLM prompt.
+# TypeChat
+In this repo, we provide examples of and a library for an approach, called TypeChat, to creating NL interfaces. We originally developed TypeChat to increase the safety of NL interfaces to applications that make permanent changes. TypeChat increases safety by incorporating the following steps into each interaction with a language model:
 
-In our experiences so far with building systems around LLMs, we have observed that:
-1. LLMs can be constrained to avoid unexpected output formats if we specify the output form using a formal description such as a schema.
-2. LLMs produce more consistent output if the prompt contains unambiguous, formal description of the possible outputs.
-3. The approach of using formal schemas works best when the LLM has trained on many tokens from the given formal language.
-4. For specifying schemas, some schema languages such as JSON Schema are more verbose (4-5X) than programming languages like TypeScript or simple schema languages like YAML schema  
-5. Developers have requested a way to bridge between the approximate world of natural language chat and the precise world of software that takes actions on systems of record. Of course, the need for this bridge depends on the type of LLM application under development. For applications like search and draft generation, the system can remain in the approximate world because the human is in the loop selecting search results and reviewing draft edits.  For applications like updating a database, the bridge is an important step toward updating systems of record. Even for applications like search, the use of a schema increases reliability and simplifies processing.
-6. Many developers will already have an informal or formal schema describing a program they would like to use to work with a chat output. For those with only an informal schema, we are working on a tool that uses LLM interaction to help the developer to craft a formal schema. Early versions of this tool are promising. In the restaurant and calendar app directories there are schemas that have the suffix ".gen.ts" and were created using LLMs.  These schemas are not the default but if used they will deliver high accuracy.
+1. Constrain language model output using a formal schema over the possible user requests.
+2. Validate that model output conforms to the schema.  Repair non-conforming output through further language model interaction.
+3. Once outut is a valid schema instance, succinctly summarize (without use of language model) the instance and confirm that it aligns with user intent.
 
-This repo supplies a method for implementing the first part the bridge: validating that the LLM output conforms to a schema that describes the instances that the system can work with.  Once the validity of an instance is established, the system using typechat must finish crossing the bridge by verifying that the valid instance corresponds to the end-user's actual intent. An application will choose a method for verifying intent that balances efficiency of execution with the potential harm of an incorrect change. 
+Having followed these three steps, an application can make permanent changes knowing that intent is both confirmed and valid for processing. 
 
-To support validation, the developer creates a schema using a TypeScript type, a Relax NG compact schema or a YAML schema. The developer selects a root type from the schema that corresponds to the XML or JSON output requested of the LLM.  The developer describes in natural language the meaning of the root type (for example, a set of calendar update actions) and also the overall framing of the application (for example, a person is working with a bot to update a calendar).  
+In addition to its safety benefit, we have found in practice that TypeChat also helps with the reliability and accuracy of NL interfaces.  This happens because TypeChat replaces "prompt engineering" with "schema engineering" and arbitrary text output with a formal representation.  These changes enable compositional properties not readily available with prompt engineering approaches that accrete into a prompt islands of NL text that may have varying goals.  
 
-The developer can combine these inputs with end-user input to create a prompt that will result in the LLM generating a JSON or YAML instance. The typechat library validates the instance against the schema provided by the developer, simplifying the task of verifying that the captured end-user intent can be successfully processed by the system. The system can convert both JSON and YAML instances into objects native to the host programming language (TypeScript/JavaScript or python), simplifying post-processing.
+For example, to add additional intents to a schema, a developer can add the additional intents using type composition, such as adding additional types into a discriminated union.  To make schemas hierarchicial, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.  It is less clear how to compose and organize sets of user intents using arbitrary NL text.
+
+This repo uses TypeScript as the schema language. This choice works well in practice because
+
+1. TypeScript is a common training input for large language models.
+2. We can use the TypeScript compiler to validate JSON output and to provide high-quality diagnostic messages for JSON repair.
+3. TypeScript is concise: about 5X smaller than JSON Schema for a typical user intent schema.
+
+## Structure
+The repo consists of the TypeChat library and a set of examples that use the library.  Each example has a different purpose.
+
+* CoffeeShop.  A basic example illustrating how to capture user intent as a set of nouns, in this case the items in a coffee order.
+* Restaurant.  Another set of nouns example but with more complex linguistic input, illustrating the line between simpler and more advanced language models in handling compound sentences, distrations and corrections. This example also shows how we can use TypeScript typing to simplify the creation of a user intent summary.
+* Calendar.  A basic example that shows how to capture user intent as a sequence of actions.
+* Music.  A more involved example of capturing intent as actions, this time using a JSON output form that corresponds to a simple dataflow program over a set of actions.
 
 ## Alternative 1: Use GitHub CodeSpaces
 In your web browser, navigate to the [repo on GitHub](https://github.com/microsoft/typechat/). Click the green button, labelled `<> Code` and then choose the `Codespaces` tab.
