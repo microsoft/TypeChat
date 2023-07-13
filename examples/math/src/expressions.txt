@@ -1,0 +1,5 @@
+1 + 2
+1 + 2 * 3
+2 * 3 + 4 * 5
+2 3 * 4 5 * +
+compute 2 times 3, then 4 times 5, then add the results

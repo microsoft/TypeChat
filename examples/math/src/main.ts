@@ -2,18 +2,18 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { createLanguageModel, createJsonTranslator, processRequests } from "typechat";
-import { Program } from "./chatifyActionsSchema";
+import { Program } from "./mathSchema";
 
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const musicalNote = "\u{1F3B5}";
+const equalsSign = "\u{1F7F0}";
 const model = createLanguageModel(process.env);
-const schema = fs.readFileSync(path.join(__dirname, "chatifyActionsSchema.ts"), "utf8");
+const schema = fs.readFileSync(path.join(__dirname, "mathSchema.ts"), "utf8");
 const translator = createJsonTranslator<Program>(model, schema, "Program");
 
 // Process requests interactively or from the input file specified on the command line
-processRequests(`${musicalNote}> `, process.argv[2], async (request) => {
+processRequests(`${equalsSign}> `, process.argv[2], async (request) => {
     const response = await translator.translate(request);
     if (!response.success) {
         console.log(response.message);
@@ -28,19 +28,19 @@ processRequests(`${musicalNote}> `, process.argv[2], async (request) => {
     }
 });
 
-async function handleCall(func: string, args: unknown[]): Promise<unknown> {
+async function handleCall(func: string, args: any[]): Promise<unknown> {
     console.log(`${func}(${args.map(arg => JSON.stringify(arg, undefined, 2)).join(", ")})`);
     switch (func) {
-        case "getRecentlyPlayed":
-            return ["Track one", "Track two", "Track three"];
-        case "searchTracks":
-            return ["Search one", "Search two", "Search three"];
-        case "filterTracks":
-            return ["Filter one", "Filter two", "Filter three"];
-        case "sortTracks":
-            return ["Sort one", "Sort two", "Sort three"];
-        case "mergeTrackLists":
-            return ["Merge one", "Merge two", "Merge three"];
+        case "add":
+            return args[0] + args[1];
+        case "sub":
+            return args[0] - args[1];
+        case "mul":
+            return args[0] * args[1];
+        case "div":
+            return args[0] / args[1];
+        case "neg":
+            return -args[0];
     }
 }
 
