@@ -11,9 +11,12 @@ import {
 import dotenv from "dotenv";
 
 import {
-  SpotifyActions,
-  SpotifyAction,
-  ActionWithInput,
+  FilterTracksArgs,
+  GetRecentlyPlayedOptions,
+  PlayTracksOptions,
+  Program,
+  SetVolumeArgs,
+  SortTracksArgs,
 } from "./chatifyActionsSchema";
 import {
   play,
@@ -92,7 +95,7 @@ async function llmFilter(
   return ret;
 }
 
-function chalkPlan(plan: SpotifyActions) {
+function chalkPlan(plan: Program) {
   console.log(chalk.green("Plan Validated:"));
   const lines = JSON.stringify(plan, null, 4).split("\n");
   for (let i = 0; i < lines.length; i++) {
@@ -117,9 +120,10 @@ function localParser(userPrompt: string) {
   if (userPrompt === "play" || userPrompt === "pause") {
     console.log(chalk.green("Instance parsed locally:"));
     return JSON.stringify({
-      actions: [
+      expressions: [
         {
-          type: userPrompt,
+          "@func": userPrompt,
+          "@args": [],
         },
       ],
     });
@@ -269,218 +273,6 @@ async function applyFilterExpr(
   return tracks;
 }
 
-async function implementMusicAction(
-  action: SpotifyAction,
-  clientContext: IClientContext,
-  input?: SpotifyApi.TrackObjectFull[]
-): Promise<SpotifyApi.TrackObjectFull[]> {
-  let result = [] as SpotifyApi.TrackObjectFull[];
-  switch (action.type) {
-    case "play": {
-      if (clientContext.deviceId) {
-        await play(clientContext.service, clientContext.deviceId);
-      }
-      break;
-    }
-    case "playInput": {
-      if (input) {
-        const count = action.count ? action.count : 1;
-        const offset = action.offset ? action.offset : 0;
-        const tracks = input.slice(offset, offset + count);
-        const uris = tracks.map((track) => track.uri);
-        const names = tracks.map((track) => track.name);
-        console.log(chalk.cyanBright("Playing..."));
-        for (const name of names) {
-          console.log(chalk.cyanBright(name));
-        }
-        if (clientContext.deviceId) {
-          await play(clientContext.service, clientContext.deviceId, uris);
-        }
-      }
-      break;
-    }
-    case "listInput": {
-      if (input) {
-        const count = action.count ? action.count : input.length;
-        const offset = action.offset ? action.offset : 0;
-        printTrackNames(input.slice(offset, offset + count));
-      }
-      break;
-    }
-    case "searchTracks": {
-      const query: SpotifyApi.SearchForItemParameterObject = {
-        q: action.query,
-        type: "track",
-        limit: 50,
-        offset: 0,
-      };
-      const data = await search(query, clientContext.service);
-      if (data && data.tracks) {
-        result = data.tracks.items;
-      }
-      break;
-    }
-    case "pause": {
-      if (clientContext.deviceId) {
-        await pause(clientContext.service, clientContext.deviceId);
-      }
-      break;
-    }
-    case "getRecentlyPlayed": {
-      const count = action.count ? action.count : limitMax;
-      if (action.favoritesTerm) {
-        const tops = await getTopK(clientContext.service, count);
-        if (tops) {
-          result = tops.map((pto) => pto.track!);
-        }
-      } else {
-        const wrappedTracks = await getKRecent(clientContext.service, count);
-        if (wrappedTracks) {
-          result = wrappedTracks.map((obj) => obj.track);
-        }
-      }
-      break;
-    }
-    case "filterTracks": {
-      // TODO: add filter validation to overall instance validation
-      const parseResult = Filter.parseFilter(action.filter);
-      if (parseResult.ast) {
-        if (input) {
-          result = await applyFilterExpr(
-            clientContext,
-            parseResult.ast,
-            input,
-            action.negate
-          );
-        }
-      } else {
-        console.log(parseResult.diagnostics);
-      }
-      break;
-    }
-    case "sortTracks": {
-      if (input) {
-        if (action.descending) {
-          result = input.slice().sort((a, b) => b.name.localeCompare(a.name));
-        } else {
-          result = input.slice().sort((a, b) => a.name.localeCompare(b.name));
-        }
-      }
-      break;
-    }
-    case "listPlaylists": {
-      const playlists = await getPlaylists(clientContext.service);
-      if (playlists) {
-        for (const playlist of playlists.items) {
-          console.log(chalk.magentaBright(`${playlist.name}`));
-        }
-      }
-      break;
-    }
-    case "deletePlaylist": {
-      const playlists = await getPlaylists(clientContext.service);
-      if (playlists) {
-        for (const playlist of playlists.items) {
-          if (playlist.name === action.playlistName) {
-            await deletePlaylist(clientContext.service, playlist.id);
-            console.log(
-              chalk.magentaBright(`playlist ${action.playlistName} deleted`)
-            );
-            break;
-          }
-        }
-      }
-      break;
-    }
-    case "createPlaylist": {
-      if (input && input.length > 0) {
-        const uris = input.map((track) => (track ? track.uri : ""));
-        await createPlaylist(
-          clientContext.service,
-          action.name,
-          clientContext.service.retrieveUser().id!,
-          uris,
-          action.name
-        );
-        console.log(`playlist ${action.name} created with tracks:`);
-        printTrackNames(input);
-      } else {
-        console.log(chalk.red("filter did not find any tracks"));
-      }
-      break;
-    }
-    case "setVolume": {
-      if (action.newVolumeLevel) {
-        if (action.newVolumeLevel > 50) {
-          action.newVolumeLevel = 50;
-        }
-        console.log(
-          chalk.yellowBright(`setting volume to ${action.newVolumeLevel} ...`)
-        );
-        await setVolume(clientContext.service, action.newVolumeLevel);
-      } else if (action.volumeChangeAmount) {
-        const playback = await getPlaybackState(clientContext.service);
-        if (playback && playback.device) {
-          const volpct = playback.device.volume_percent || 50;
-          let nv = Math.floor(
-            (1.0 + action.volumeChangeAmount / 100.0) * volpct
-          );
-          if (nv > 80) {
-            nv = 80;
-          }
-          console.log(chalk.yellowBright(`setting volume to ${nv} ...`));
-          await setVolume(clientContext.service, nv);
-        }
-      }
-      break;
-    }
-    case "nonMusicQuestion": {
-      const ret = await model.complete(action.text);
-      if (ret.success) {
-        console.log(ret.data);
-      }
-      break;
-    }
-    case "unknown": {
-      console.log(`Text not understood in this context: ${action.text}`);
-      break;
-    }
-  }
-  return result;
-}
-
-async function implementMusicActions(
-  plan: SpotifyActions,
-  clientContext: IClientContext | undefined
-) {
-  chalkPlan(plan);
-  if (!clientContext) {
-    return;
-  }
-  let results = [] as SpotifyApi.TrackObjectFull[][];
-  for (let i = 0; i < plan.actions.length; i++) {
-    const action = plan.actions[i];
-    results[i] = [];
-    let input = i > 0 ? results[i - 1] : [];
-    if (action.hasOwnProperty("inputFromAction")) {
-      const actionWithInput = action as ActionWithInput;
-      if (
-        actionWithInput.inputFromAction !== undefined &&
-        actionWithInput.inputFromAction !== i - 1
-      ) {
-        input = results[actionWithInput.inputFromAction];
-      }
-    }
-    results[i] = await implementMusicAction(action, clientContext, input);
-    if (i === plan.actions.length - 1 && action.type != "listInput") {
-      if (results[i].length > 0) {
-        printTrackNames(results[i]);
-      }
-    }
-  }
-}
-
-
 async function getClientContext(token: string) {
   const clientData = {
     clientId: keys.clientId ? keys.clientId : "",
@@ -515,11 +307,220 @@ async function getClientContext(token: string) {
 }
 
 const musicalNote = "\u{1F3B5}";
-const translator = createJsonTranslator<SpotifyActions>(
-  model,
-  schemaText,
-  "SpotifyActions"
-);
+const translator = createJsonTranslator<Program>(model, schemaText, "Program");
+
+async function handleCall(
+  func: string,
+  args: unknown[],
+  clientContext: IClientContext
+): Promise<unknown> {
+  let result: SpotifyApi.TrackObjectFull[] | undefined = undefined;
+  switch (func) {
+    case "play": {
+      if (clientContext.deviceId) {
+        await play(clientContext.service, clientContext.deviceId);
+      }
+      break;
+    }
+    case "pause": {
+      if (clientContext.deviceId) {
+        await pause(clientContext.service, clientContext.deviceId);
+      }
+      break;
+    }
+    case "playTracks": {
+      const input = args[0] as SpotifyApi.TrackObjectFull[];
+      if (input) {
+        let count = 1;
+        let offset = 0;
+        let options = args[1] as PlayTracksOptions;
+        if (options) {
+          if (options.count !== undefined) {
+            count = options.count;
+          }
+          if (options.offset !== undefined) {
+            offset = options.offset;
+          }
+        }
+        const tracks = input.slice(offset, offset + count);
+        const uris = tracks.map((track) => track.uri);
+        const names = tracks.map((track) => track.name);
+        console.log(chalk.cyanBright("Playing..."));
+        for (const name of names) {
+          console.log(chalk.cyanBright(name));
+        }
+        if (clientContext.deviceId) {
+          await play(clientContext.service, clientContext.deviceId, uris);
+        }
+      }
+      break;
+    }
+    case "finalResult": {
+      const input = args[0] as SpotifyApi.TrackObjectFull[];
+      if (input) {
+        printTrackNames(input);
+      }
+      break;
+    }
+    case "searchTracks": {
+      const queryString = args[0] as string;
+      const query: SpotifyApi.SearchForItemParameterObject = {
+        q: queryString,
+        type: "track",
+        limit: 50,
+        offset: 0,
+      };
+      const data = await search(query, clientContext.service);
+      if (data && data.tracks) {
+        result = data.tracks.items;
+1      }
+      break;
+    }
+    case "getRecentlyPlayed": {
+      const options = args[0] as GetRecentlyPlayedOptions;
+      let count = limitMax;
+      if (options && options.count !== undefined) {
+        count = options.count;
+      }
+      // TODO: use favorites term
+      if (options && options.favoritesTerm !== undefined) {
+        const tops = await getTopK(clientContext.service, count);
+        if (tops) {
+          result = tops.map((pto) => pto.track!);
+        }
+      } else {
+        const wrappedTracks = await getKRecent(clientContext.service, count);
+        if (wrappedTracks) {
+          result = wrappedTracks.map((obj) => obj.track);
+        }
+      }
+      break;
+    }
+    case "mergeTrackLists": {
+      const trackLists = args as SpotifyApi.TrackObjectFull[][];
+      result = trackLists.flat();
+      break;
+    }
+    case "filterTracks": {
+      const trackList = args[0] as SpotifyApi.TrackObjectFull[];
+      const filterArgs = args[1] as FilterTracksArgs;
+      // TODO: add filter validation to overall instance validation
+      const parseResult = Filter.parseFilter(filterArgs.filter);
+      if (parseResult.ast) {
+        if (trackList) {
+          result = await applyFilterExpr(
+            clientContext,
+            parseResult.ast,
+            trackList as SpotifyApi.TrackObjectFull[],
+            filterArgs.negate
+          );
+        }
+      } else {
+        console.log(parseResult.diagnostics);
+      }
+      break;
+    }
+    case "sortTracks": {
+      const sortArgs = args[0] as SortTracksArgs;
+      if (sortArgs.trackList) {
+        const input = sortArgs.trackList as SpotifyApi.TrackObjectFull[];
+        if (sortArgs.descending) {
+          result = input.slice().sort((a, b) => b.name.localeCompare(a.name));
+        } else {
+          result = input.slice().sort((a, b) => a.name.localeCompare(b.name));
+        }
+      }
+      break;
+    }
+    case "mergeTrackLists":
+    case "listPlaylists": {
+      const playlists = await getPlaylists(clientContext.service);
+      if (playlists) {
+        for (const playlist of playlists.items) {
+          console.log(chalk.magentaBright(`${playlist.name}`));
+        }
+      }
+      break;
+    }
+    case "deletePlaylist": {
+      const playlistName = args[0] as string;
+      const playlists = await getPlaylists(clientContext.service);
+      if (playlists) {
+        for (const playlist of playlists.items) {
+          if (playlist.name === playlistName) {
+            await deletePlaylist(clientContext.service, playlist.id);
+            console.log(
+              chalk.magentaBright(`playlist ${playlistName} deleted`)
+            );
+            break;
+          }
+        }
+      }
+      break;
+    }
+    case "createPlaylist": {
+      const input = args[0] as SpotifyApi.TrackObjectFull[];
+      const name = args[1] as string;
+      if (input && input.length > 0) {
+        const uris = input.map((track) => (track ? track.uri : ""));
+        await createPlaylist(
+          clientContext.service,
+          name,
+          clientContext.service.retrieveUser().id!,
+          uris,
+          name
+        );
+        console.log(`playlist ${name} created with tracks:`);
+        printTrackNames(input);
+      } else {
+        console.log(chalk.red("filter did not find any tracks"));
+      }
+      break;
+    }
+    case "setVolume": {
+      const setVolArgs = args[0] as SetVolumeArgs;
+      if (setVolArgs.newVolumeLevel) {
+        if (setVolArgs.newVolumeLevel > 50) {
+          setVolArgs.newVolumeLevel = 50;
+        }
+        console.log(
+          chalk.yellowBright(
+            `setting volume to ${setVolArgs.newVolumeLevel} ...`
+          )
+        );
+        await setVolume(clientContext.service, setVolArgs.newVolumeLevel);
+      } else if (setVolArgs.volumeChangeAmount) {
+        const playback = await getPlaybackState(clientContext.service);
+        if (playback && playback.device) {
+          const volpct = playback.device.volume_percent || 50;
+          let nv = Math.floor(
+            (1.0 + setVolArgs.volumeChangeAmount / 100.0) * volpct
+          );
+          if (nv > 80) {
+            nv = 80;
+          }
+          console.log(chalk.yellowBright(`setting volume to ${nv} ...`));
+          await setVolume(clientContext.service, nv);
+        }
+      }
+      break;
+    }
+    case "nonMusicQuestion": {
+      const text = args[0] as string;
+      const ret = await model.complete(text);
+      if (ret.success) {
+        console.log(ret.data);
+      }
+      break;
+    }
+    case "unknownAction": {
+      const text = args[0] as string;
+      console.log(`Text not understood in this context: ${text}`);
+      break;
+    }
+  }
+  return result;
+}
 
 // Process requests interactively or from the input file specified on the command line
 async function musicApp() {
@@ -537,22 +538,109 @@ async function musicApp() {
     }
     processRequests(`${musicalNote}> `, process.argv[2], async (request) => {
       const localResult = localParser(request);
+      let program: Program | undefined = undefined;
       if (localResult) {
-        await implementMusicActions(
-          JSON.parse(localResult) as SpotifyActions,
-          context
-        );
-      } else {
+         program = JSON.parse(localResult) as Program;
+      } 
+      else {
         const response = await translator.translate(request);
         if (!response.success) {
           console.log(response.message);
           return;
         }
-        const actions = response.data;
-        await implementMusicActions(actions, context);
+        program = response.data;
+      }
+      if (program !== undefined) {
+        chalkPlan(program);
+        console.log(programToText(program));
+        if (context !== undefined) {
+          await runProgram(program, async (func, args) => {
+            return await handleCall(func, args, context!);
+          });
+        }
       }
     });
   });
+}
+
+function programToText(program: Program) {
+  return program.expressions
+    .map((expr, i) => `const step${i + 1} = ${exprToString(expr)};`)
+    .join("\n");
+
+  function exprToString(expr: unknown): string {
+    return typeof expr === "object" && expr !== null
+      ? objectToString(expr as Record<string, unknown>)
+      : JSON.stringify(expr);
+  }
+
+  function objectToString(obj: Record<string, unknown>) {
+    if (obj.hasOwnProperty("@ref")) {
+      const index = obj["@ref"];
+      if (typeof index === "number") {
+        return `step${index + 1}`;
+      }
+    }
+    if (obj.hasOwnProperty("@func") && obj.hasOwnProperty("@args")) {
+      const func = obj["@func"];
+      const args = obj["@args"];
+      if (typeof func === "string" && Array.isArray(args)) {
+        return `${func}(${arrayToString(args)})`;
+      }
+    }
+    if (Array.isArray(obj)) {
+      return `[${arrayToString(obj)}]`;
+    }
+    return `{ ${Object.keys(obj)
+      .map((key) => `${JSON.stringify(key)}: ${exprToString(obj[key])}`)
+      .join(", ")} }`;
+  }
+
+  function arrayToString(array: unknown[]) {
+    return array.map(exprToString).join(", ");
+  }
+}
+
+async function runProgram(
+  program: Program,
+  onCall: (func: string, args: unknown[]) => Promise<unknown>
+) {
+  const results: unknown[] = [];
+  for (const expr of program.expressions) {
+    results.push(await evaluate(expr));
+  }
+  return results.length > 0 ? results[results.length - 1] : undefined;
+
+  async function evaluate(expr: unknown): Promise<unknown> {
+    return typeof expr === "object" && expr !== null
+      ? await evaluateObject(expr as Record<string, unknown>)
+      : expr;
+  }
+
+  async function evaluateObject(obj: Record<string, unknown>) {
+    if (obj.hasOwnProperty("@ref")) {
+      const index = obj["@ref"];
+      if (typeof index === "number" && index < results.length) {
+        return results[index];
+      }
+    }
+    if (obj.hasOwnProperty("@func") && obj.hasOwnProperty("@args")) {
+      const func = obj["@func"];
+      const args = obj["@args"];
+      if (typeof func === "string" && Array.isArray(args)) {
+        return await onCall(func, await evaluateArray(args));
+      }
+    }
+    if (Array.isArray(obj)) {
+      return evaluateArray(obj);
+    }
+    const values = await Promise.all(Object.values(obj).map(evaluate));
+    return Object.fromEntries(Object.keys(obj).map((k, i) => [k, values[i]]));
+  }
+
+  function evaluateArray(array: unknown[]) {
+    return Promise.all(array.map(evaluate));
+  }
 }
 
 musicApp();
