@@ -2,41 +2,31 @@ import { Result, error, success } from "./result";
 import { TypeChatLanguageModel } from "./model";
 import { TypeChatJsonTranslator, createJsonTranslator } from "./typechat";
 
-const programSchemaText = `/**
-* A program consists of a sequence of expressions that are evaluated in order.
-*/
+const programSchemaText = `// A program consists of a sequence of expressions that are evaluated in order.
 export type Program = {
-   "@steps": Expression[];
+    "@steps": Expression[];
 }
 
-/**
-* An expression is a JSON value, a function call, or a reference to the result of a preceding expression.
-*/
+// An expression is a JSON value, a function call, or a reference to the result of a preceding expression.
 export type Expression = JsonValue | FunctionCall | ResultReference;
 
-/**
-* A JSON value is a string, a number, a boolean, null, an object, or an array. Function calls and result
-* references can be nested in objects and arrays.
-*/
+// A JSON value is a string, a number, a boolean, null, an object, or an array. Function calls and result
+// references can be nested in objects and arrays.
 export type JsonValue = string | number | boolean | null | { [x: string]: Expression } | Expression[];
 
-/**
-* A function call specifices a function name an a list of argument expressions. Arguments may contain
-* nested function calls and result references.
-*/
+// A function call specifices a function name and a list of argument expressions. Arguments may contain
+// nested function calls and result references.
 export type FunctionCall = {
-   // Name of the function
-   "@func": string;
-   // Arguments for the function
-   "@args": Expression[];
+    // Name of the function
+    "@func": string;
+    // Arguments for the function
+    "@args": Expression[];
 };
 
-/**
-* A result reference represents the value of an expression from a preceding step.
-*/
+// A result reference represents the value of an expression from a preceding step.
 export type ResultReference = {
-   // Index of the previous expression in the "@steps" array
-   "@ref": number;
+    // Index of the previous expression in the "@steps" array
+    "@ref": number;
 };
 `;
 
@@ -206,10 +196,10 @@ export function createProgramTranslator(model: TypeChatLanguageModel, schema: st
     return translator;
 
     function createRequestPrompt(request: string) {
-        return `You are a service that translates user requests into programs that use the API defined in the following TypeScript definitions:\n` +
-            `\`\`\`\n${translator.validator.schema}\`\`\`\n` +
-            `Programs are represented as JSON objects using the following TypeScript definitions:\n` +
+        return `You are a service that translates user requests into programs represented as JSON using the following TypeScript definitions:\n` +
             `\`\`\`\n${programSchemaText}\`\`\`\n` +
+            `The programs can call functions from the API defined in the following TypeScript definitions:\n` +
+            `\`\`\`\n${translator.validator.schema}\`\`\`\n` +
             `The following is a user request:\n` +
             `"""\n${request}\n"""\n` +
             `The following is the user request translated into a JSON program object with 2 spaces of indentation and no properties with the value undefined:\n`;
