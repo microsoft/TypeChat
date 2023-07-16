@@ -1,80 +1,42 @@
-export interface ActionWithInput {
-    // use results from action indexed by inputFromAction; default use results from previous action
-    inputFromAction?: number;
-}
+// This is a schema for writing programs that control a Spotify music player
+
+export type Track = { name: string }
+export type TrackList = Track[];
 
 export type FavoritesTerm =
     | 'short_term' // last 4 weeks
     | 'medium_term' // last 6 months
     | 'long_term'; // several years
 
-// output: Track List
-// get the tracks played most recently
-export interface GetRecentlyPlayedAction {
-    type: 'getRecentlyPlayed';
+export type GetRecentlyPlayedOptions = {
     // if favoritesTerm is specified, get the user's top tracks over the specified time range
     favoritesTerm?: FavoritesTerm;
     // get count tracks; default is 50
     count?: number;
-}
+};
 
-export interface PauseAction {
-    type: 'pause';
-}
-
-export interface PlayAction {
-    type: 'play';
-}
-
-// Delete a named playlist
-export interface DeletePlaylistAction {
-    type: 'deletePlaylist';
-    // the name of the playlist to delete
-    playlistName: string;
-}
-export interface VolumeAction {
-    type: 'setVolume';
+export type SetVolumeArgs = {
     // 0 is silent 100 is the loudest
     newVolumeLevel?: number;
     // volumeChangeAmount can be positive or negative; example: -5 makes the volume 5% more quiet
     volumeChangeAmount?: number;
-}
+};
 
-// output: Track List
-export interface SearchTracksAction {
-    type: 'searchTracks';
-    // a Spotify search expression such as 'Rock Lobster' or 'te kanawa queen of night'
-    // the structure of the search expression is keywords separated by spaces; all keywords must match
-    query: string;
-}
-
-// input: Track List
-// play some or all items from the input list
-export interface PlayInputAction extends ActionWithInput {
-    type: 'playInput';
+export type PlayTracksOptions = {
     // number of tracks to play; default 1
     count?: number;
     // index of first track to play; default 0
     offset?: number;
-    // play all of the tracks; default false and ignored if count or offset present
-    all?: boolean;
 }
 
-// input: Track List
-// print out some or all items from the input list
-export interface ListInputAction extends ActionWithInput {
-    type: 'listInput';
+export type PrintTracksOptions = {
     // number of tracks to print out; default input.length
     count?: number;
     // index of first track to list; default 0
     offset?: number;
-    // list all of the tracks; default true but overridden by presence of count or offset
-    all?: boolean;
 }
-// input: Track List; output: Track List
-// apply a filter to match tracks; result is the tracks that match the filter
-export interface FilterTracksAction extends ActionWithInput {
-    type: 'filterTracks';
+
+export type FilterTracksArgs = {
     // a filter string, which has the following structure (written as a grammar)
     // filter -> (constraint combiner?)+
     // constraint -> artist:string | genre:string | year:year-range | description:string
@@ -85,55 +47,71 @@ export interface FilterTracksAction extends ActionWithInput {
     negate?: boolean;
 }
 
-// input: Track List; output: Track List
-// sort the tracks; default is sort by track name ascending
-export interface SortTracksAction extends ActionWithInput {
-    type: 'sortTracks';
+export type SortTracksArgs = {
+    // List of tracks to sort
+    trackList: TrackList;
+    // sort criteria
+    description?: string;
     // default: false
     descending?: boolean;
 }
 
-// input: Track List
-// create a Spotify playlist from a list of tracks
-export interface CreatePlaylistAction extends ActionWithInput {
-    type: 'createPlaylist';
-    name: string;
+type API = {
+    // Get the tracks played most recently
+    getRecentlyPlayed(options?: GetRecentlyPlayedOptions): TrackList;
+    // Pause playing
+    pause(): void;
+    // Start playing
+    play(): void;
+    // List all playlists
+    listPlaylists(): void;
+    // Delete playlist 'name'
+    deletePlaylist(name: string): void;
+    // Set volume
+    setVolume(args: SetVolumeArgs): void;
+    // query argument is a Spotify search expression such as 'Rock Lobster' or 'te kanawa queen of night'
+    // the structure of the search expression is keywords separated by spaces; all keywords must match
+    searchTracks(query: string): TrackList;
+    // play some or all items from the input list
+    playTracks(trackList: TrackList, options?: PlayTracksOptions): void;
+    // apply a filter to match tracks; result is the tracks that match the filter
+    filterTracks(trackList: TrackList, args: FilterTracksArgs): TrackList;
+    // sort tracks; default is sort by track name ascending
+    sortTracks(args: SortTracksArgs): TrackList;
+    // create a Spotify playlist from a list of tracks
+    createPlaylist(trackList: TrackList, name: string): void;
+    // merge multiple track lists
+    mergeTrackLists(...lists: TrackList[]): TrackList;
+    // Call this function for requests that weren't understood
+    unknownAction(text: string): void;
+    // Call this function if the user asks a non-music question, it is captured with this action; non-music, non-questions use UnknownAction
+    nonMusicQuestion(text: string): void;
+    // Call this function with the final result of the user request, if any
+    finalResult(result: any): void;
 }
 
-export interface ListPlaylistsAction {
-    type: 'listPlaylists';
+// A program consists of a sequence of expressions that are executed in order.
+export type Program = {
+    expressions: Expression[];
 }
 
-// if the user types text that is not understood, this action is used
-export interface UnknownAction {
-    type: 'unknown';
-    // text typed by the user that the system did not understand
-    text: string;
-}
+// An expression is a JSON value, a function call, or a reference to the result of a preceding expression.
+// Function calls and result references may occur at any level of nesting.
+export type Expression = JSONValue | FunctionCall | ResultReference;
 
-// if the user asks a non-music question, it is captured with this action; non-music, non-questions use UnknownAction
-export interface NonMusicQuestionAction {
-    type: 'nonMusicQuestion';
-    // text of the question
-    text: string;
-}
+// Represents a JSON value.
+export type JSONValue = string | number | boolean | null | { [x: string]: Expression } | Expression[];
 
-export type SpotifyAction =
-    | PlayAction
-    | PlayInputAction
-    | ListInputAction
-    | SearchTracksAction
-    | PauseAction
-    | VolumeAction
-    | GetRecentlyPlayedAction
-    | FilterTracksAction
-    | SortTracksAction
-    | CreatePlaylistAction
-    | DeletePlaylistAction
-    | ListPlaylistsAction
-    | NonMusicQuestionAction
-    | UnknownAction;
+// Represents a call to one of the API functions. Function calls may be nested in JSON objects.
+export type FunctionCall = {
+    // Name of the API function called by this expression
+    "@func": keyof API;
+    // Arguments for the function
+    "@args": Expression[];
+};
 
-export type SpotifyActions = {
-    actions: SpotifyAction[];
+// Represents a reference to the result of a preceding expression. Result references may be nested in JSON objects.
+export type ResultReference = {
+    // Index of the previous expression in the expressions array
+    "@ref": number;
 };
