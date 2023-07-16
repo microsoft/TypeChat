@@ -1,5 +1,5 @@
 import * as ts from 'typescript';
-import { Result, success, error } from './result';
+import { Result, success, error, Success } from './result';
 
 const libText = `interface Array<T> { length: number, [n: number]: T }
 interface Object { toString(): string }
@@ -31,6 +31,13 @@ export interface TypeChatJsonValidator<T extends object> {
      */
     stripNulls:  boolean;
     /**
+     * Transform JSON into TypeScript code for validation. Returns a `Success<string>` object if the conversion is
+     * successful, or an `Error` object if the JSON can't be transformed. The returned TypeScript source code is
+     * expected to be an ECMAScript module that imports one or more types from `"./schema"` and combines those
+     * types and a representation of the JSON object in a manner suitable for type-checking by the TypeScript compiler.
+     */
+    createModuleTextFromJson(jsonObject: object): Result<string>;
+    /**
      * Parses and validates the given JSON string according to the associated TypeScript schema. Returns a
      * `Success<T>` object containing the parsed JSON object if valudation was successful. Otherwise, returns
      * an `Error` object with a `message` property that contains the TypeScript compiler diagnostics.
@@ -55,11 +62,12 @@ export function createJsonValidator<T extends object = object>(schema: string, t
         noLib: true,
         types: []
     };
-    const rootProgram = createProgramFromJsonText("{}");
+    const rootProgram = createProgramFromModuleText("");
     const validator: TypeChatJsonValidator<T> = {
         schema,
         typeName,
         stripNulls: false,
+        createModuleTextFromJson,
         validate
     };
     return validator;
@@ -67,16 +75,19 @@ export function createJsonValidator<T extends object = object>(schema: string, t
     function validate(jsonText: string) {
         let jsonObject;
         try {
-            jsonObject = JSON.parse(jsonText);
+            jsonObject = JSON.parse(jsonText) as object;
         }
         catch (e) {
             return error(e instanceof SyntaxError ? e.message : "JSON parse error");
         }
         if (validator.stripNulls) {
             stripNulls(jsonObject);
-            jsonText = JSON.stringify(jsonObject, undefined, 2);
         }
-        const program = createProgramFromJsonText(jsonText, rootProgram);
+        const moduleResult = validator.createModuleTextFromJson(jsonObject);
+        if (!moduleResult.success) {
+            return moduleResult;
+        }
+        const program = createProgramFromModuleText(moduleResult.data, rootProgram);
         const syntacticDiagnostics = program.getSyntacticDiagnostics();
         const programDiagnostics = syntacticDiagnostics.length ? syntacticDiagnostics : program.getSemanticDiagnostics();
         if (programDiagnostics.length) {
@@ -86,11 +97,15 @@ export function createJsonValidator<T extends object = object>(schema: string, t
         return success(jsonObject as T);
     }
 
-    function createProgramFromJsonText(jsonText: string, oldProgram?: ts.Program) {
+    function createModuleTextFromJson(jsonObject: object) {
+        return success(`import { ${typeName} } from './schema';\nconst json: ${typeName} = ${JSON.stringify(jsonObject, undefined, 2)};\n`);
+    }
+
+    function createProgramFromModuleText(moduleText: string, oldProgram?: ts.Program) {
         const fileMap = new Map([
             createFileMapEntry("/lib.d.ts", libText),
             createFileMapEntry("/schema.ts", schema),
-            createFileMapEntry("/json.ts", `import { ${typeName} } from './schema';\nconst json: ${typeName} = ${jsonText};\n`)
+            createFileMapEntry("/json.ts", moduleText)
         ]);
         const host: ts.CompilerHost = {
             getSourceFile: fileName => fileMap.get(fileName),
@@ -110,6 +125,7 @@ export function createJsonValidator<T extends object = object>(schema: string, t
         return [filePath, ts.createSourceFile(filePath, fileText, ts.ScriptTarget.Latest)];
     }
 }
+
 /**
  * Recursively delete properties with null values from the given object. This function assumes there are no
  * circular references in the object.
