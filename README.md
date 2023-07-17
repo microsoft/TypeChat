@@ -1,5 +1,5 @@
 # TypeChat
-In this repo, we provide examples of and a library for an approach, called TypeChat, to creating NL interfaces. We originally developed TypeChat to increase the safety of NL interfaces for applications that make permanent changes. TypeChat increases safety by incorporating the following steps into each interaction with a language model:
+TypeChat is a design pattern and a library for creating natural language (NL) interfaces. We originally developed TypeChat to increase the safety of NL interfaces for applications that make permanent changes. TypeChat increases safety by incorporating the following steps into each interaction with a language model:
 
 1. Constrain language model output using a formal schema over the possible user requests.
 2. Validate that model output conforms to the schema.  Repair non-conforming output through further language model interaction.
@@ -20,10 +20,10 @@ This repo uses TypeScript as the schema language. This choice works well in prac
 ## Structure
 The repo consists of the TypeChat library and a set of examples that use the library.  Each example has a different purpose.
 
-* CoffeeShop.  A basic example illustrating how to capture user intent as a set of nouns, in this case the items in a coffee order.
-* Restaurant.  Another set of nouns example but with more complex linguistic input, illustrating the line between simpler and more advanced language models in handling compound sentences, distrations and corrections. This example also shows how we can use TypeScript typing to simplify the creation of a user intent summary.
-* Calendar.  A basic example that shows how to capture user intent as a sequence of actions.
-* Music.  A more involved example of capturing intent as actions, this time using a JSON output form that corresponds to a simple dataflow program over a set of actions.
+- _CoffeeShop_:  A basic example illustrating how to capture user intent as a set of nouns, in this case the items in a coffee order.
+- _Restaurant_:  Another set of nouns example but with more complex linguistic input, illustrating the line between simpler and more advanced language models in handling compound sentences, distrations and corrections. This example also shows how we can use TypeScript typing to simplify the creation of a user intent summary.
+- _Calendar_:  A basic example that shows how to capture user intent as a sequence of actions.
+- _Music_:  A more involved example of capturing intent as actions, this time using a JSON output form that corresponds to a simple dataflow program over a set of actions.
 
 ## Alternative 1: Use GitHub CodeSpaces
 In your web browser, navigate to the [repo on GitHub](https://github.com/microsoft/typechat/). Click the green button, labelled `<> Code` and then choose the `Codespaces` tab.
