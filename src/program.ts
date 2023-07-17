@@ -107,14 +107,15 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
     function objectToString(obj: Record<string, unknown>) {
         if (obj.hasOwnProperty("@ref")) {
             const index = obj["@ref"];
-            if (typeof index === "number" && index < currentStep) {
+            if (typeof index === "number" && index < currentStep && Object.keys(obj).length === 1) {
                 return `step${index + 1}`;
             }
         }
-        else if (obj.hasOwnProperty("@func") && obj.hasOwnProperty("@args")) {
+        else if (obj.hasOwnProperty("@func")) {
             const func = obj["@func"];
-            const args = obj["@args"];
-            if (typeof func === "string" && Array.isArray(args)) {
+            const hasArgs = obj.hasOwnProperty("@args");
+            const args = hasArgs ? obj["@args"] : [];
+            if (typeof func === "string" && (Array.isArray(args)) && Object.keys(obj).length === (hasArgs ? 2 : 1)) {
                 return `api.${func}(${arrayToString(args)})`;
             }
         }
@@ -162,18 +163,20 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
                 return results[index];
             }
         }
-        if (obj.hasOwnProperty("@func") && obj.hasOwnProperty("@args")) {
+        else if (obj.hasOwnProperty("@func")) {
             const func = obj["@func"];
-            const args = obj["@args"];
+            const args = obj.hasOwnProperty("@args") ? obj["@args"] : [];
             if (typeof func === "string" && Array.isArray(args)) {
                 return await onCall(func, await evaluateArray(args));
             }
         }
-        if (Array.isArray(obj)) {
+        else if (Array.isArray(obj)) {
             return evaluateArray(obj);
         }
-        const values = await Promise.all(Object.values(obj).map(evaluate));
-        return Object.fromEntries(Object.keys(obj).map((k, i) => [k, values[i]]));
+        else {
+            const values = await Promise.all(Object.values(obj).map(evaluate));
+            return Object.fromEntries(Object.keys(obj).map((k, i) => [k, values[i]]));
+        }
     }
 
     function evaluateArray(array: unknown[]) {
