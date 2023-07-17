@@ -21,12 +21,11 @@ jobs:
       with:
         node-version: 18.x
         cache: 'npm'
-    - run: npm ci
-    - run: npm run build
     - name: Build site
       run: |
         cd site
         echo "Building the site"
+        npm ci
         npm run build
     - name : Upload artifact
       uses: actions/upload-pages-artifact@v2
