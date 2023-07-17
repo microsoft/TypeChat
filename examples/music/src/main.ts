@@ -355,7 +355,7 @@ async function handleCall(
       }
       break;
     }
-    case "finalResult": {
+    case "printTracks": {
       const input = args[0] as SpotifyApi.TrackObjectFull[];
       if (input) {
         printTrackNames(input);

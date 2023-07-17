@@ -78,6 +78,8 @@ type API = {
     filterTracks(trackList: TrackList, args: FilterTracksArgs): TrackList;
     // sort tracks; default is sort by track name ascending
     sortTracks(args: SortTracksArgs): TrackList;
+    // print a list of tracks 
+    printTracks(trackList: TrackList): void;
     // create a Spotify playlist from a list of tracks
     createPlaylist(trackList: TrackList, name: string): void;
     // merge multiple track lists
@@ -86,8 +88,6 @@ type API = {
     unknownAction(text: string): void;
     // Call this function if the user asks a non-music question, it is captured with this action; non-music, non-questions use UnknownAction
     nonMusicQuestion(text: string): void;
-    // Call this function with the final result of the user request, if any
-    finalResult(result: any): void;
 }
 
 // A program consists of a sequence of expressions that are executed in order.
