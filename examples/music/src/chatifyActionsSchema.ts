@@ -29,13 +29,6 @@ export type PlayTracksOptions = {
     offset?: number;
 }
 
-export type PrintTracksOptions = {
-    // number of tracks to print out; default input.length
-    count?: number;
-    // index of first track to list; default 0
-    offset?: number;
-}
-
 export type FilterTracksArgs = {
     // a filter string, which has the following structure (written as a grammar)
     // filter -> (constraint combiner?)+
