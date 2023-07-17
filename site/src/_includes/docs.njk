@@ -1,0 +1,30 @@
+---
+layout: base.njk
+title: Docs
+---
+<main class="container d-flex flex-nowrap with-sidebar">
+<aside class="flex-shrink-0 p-3">
+    <a href="/docs" class="d-flex align-items-center pb-3 mb-3 link-body-emphasis text-decoration-none border-bottom">
+        <span class="fs-5 fw-semibold">Docs</span>
+    </a>
+    <ul class="list-unstyled ps-0">
+    {% for docsGroup in docsTOC %}
+        <li class="mb-2">
+            <div class="mb-2">{{docsGroup.groupName}}</div>
+            <ul class="btn-toggle-nav list-unstyled fw-normal pb-1 ms-2 small">
+                {% for docPage in docsGroup.pages %}
+                {%- if navItem.dest == page.url -%}
+                <li><a href="{{docPage.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded active">{{docPage.title}}</a></li>
+                {% else %}
+                <li><a href="{{docPage.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded">{{docPage.title}}</a></li>
+                {% endif %}
+                {% endfor %}
+            </ul>
+        </li>
+    {% endfor %}
+    </ul>
+</aside>
+<article class="container">
+{{ content | safe }}
+</article>
+</main>

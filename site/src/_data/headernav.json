@@ -1,0 +1,19 @@
+[
+    {
+        "title": "Home",
+        "dest": "/"
+    },
+    {
+        "title": "Docs",
+        "dest": "/docs/"
+    },
+    {
+        "title": "Blog",
+        "dest": "/blog/"
+    },
+    {
+        "title": "GitHub",
+        "dest": "https://github.com/microsoft/TypeChat",
+        "isExternal": true
+    }
+]
