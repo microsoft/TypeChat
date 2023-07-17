@@ -60,7 +60,7 @@ export interface TypeChatJsonTranslator<T extends object> {
  * @param model The language model to use for translating requests into JSON.
  * @param schema A string containing the TypeScript source code for the JSON schema.
  * @param typeName The name of the JSON target type in the schema.
- * @returns A `TypeChat<T>` instance.
+ * @returns A `TypeChatJsonTranslator<T>` instance.
  */
 export function createJsonTranslator<T extends object>(model: TypeChatLanguageModel, schema: string, typeName: string): TypeChatJsonTranslator<T> {
     const validator = createJsonValidator<T>(schema, typeName);
@@ -85,7 +85,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
 
     function createRepairPrompt(validationError: string) {
         return `The JSON object is invalid for the following reason:\n` +
-            `${validationError}\n` +
+            `"""\n${validationError}\n"""\n` +
             `The following is a revised JSON object:\n`;
     }
 

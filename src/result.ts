@@ -30,3 +30,16 @@ export function success<T>(data: T): Success<T> {
 export function error(message: string): Error {
     return { success: false, message };
 }
+
+/**
+ * Obtains the value associated with a successful `Result<T>` or throws an exception if
+ * the result is an error.
+ * @param result The `Result<T>` from which to obtain the `data` property.
+ * @returns The value of the `data` property.
+ */
+export function getData<T>(result: Result<T>) {
+    if (result.success) {
+        return result.data;
+    }
+    throw new Error(result.message);
+}
