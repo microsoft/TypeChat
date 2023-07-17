@@ -136,7 +136,8 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
 /**
  * Evaluates a JSON program using a simple interpreter. Function calls in the program are passed to the `onCall`
  * callback function for validation and dispatch. Thus, unlike JavaScript's `eval`, access to external functionality
- * and resources is entirely controlled by the host application.
+ * and resources is entirely controlled by the host application. Note that `onCall` is expected to return a `Promise`
+ * such that function dispatch can be implemented asynchronously if desired.
  * @param program The JSON program to evaluate.
  * @param onCall A callback function for handling function calls in the program.
  * @returns A `Promise` with the value of the last expression in the program.
