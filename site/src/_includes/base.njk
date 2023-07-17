@@ -43,7 +43,7 @@
             {%- if navItem.dest == page.url -%}
                 <li class="nav-item"><a href="{{navItem.dest}}" class="nav-link active" aria-current="page">{{navItem.title}}</a></li>
             {% elif navItem.isExternal %}
-                <li class="nav-item"><a href="{{navItem.dest}}" target="_blank" class="nav-link">{{navItem.title}}</a></li>
+                <li class="nav-item"><a href="{{navItem.dest}}" target="_blank" rel="noopener" class="nav-link">{{navItem.title}}</a></li>
             {% else %}
                 <li class="nav-item"><a href="{{navItem.dest}}" class="nav-link">{{navItem.title}}</a></li>
             {% endif %}
