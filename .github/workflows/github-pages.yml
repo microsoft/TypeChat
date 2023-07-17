@@ -16,20 +16,22 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: actions-rs/toolchain@v1
+    - name: Use Node.js
+      uses: actions/setup-node@v3
       with:
-        toolchain: stable
-    - name: Install mdBook
-      run: cargo install mdbook
-    - name: Build book
+        node-version: 18.x
+        cache: 'npm'
+    - run: npm ci
+    - run: npm run build
+    - name: Build site
       run: |
         cd site
-        echo "Building the book"
-        mdbook build
+        echo "Building the site"
+        npm run build
     - name : Upload artifact
       uses: actions/upload-pages-artifact@v2
       with:
         name: github-pages
-        path: site/book
+        path: site/_site
     - name: Deploy to GitHub Pages from artifacts
       uses: actions/deploy-pages@v2 
