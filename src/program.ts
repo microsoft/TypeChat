@@ -12,8 +12,8 @@ export type Program = {
 export type FunctionCall = {
     // Name of the function
     "@func": string;
-    // Arguments for the function
-    "@args": Expression[];
+    // Arguments for the function, if any
+    "@args"?: Expression[];
 };
 
 // An expression is a JSON value, a function call, or a reference to the result of a preceding expression.
@@ -44,8 +44,8 @@ export type Program = {
 export type FunctionCall = {
     // Name of the function
     "@func": string;
-    // Arguments for the function
-    "@args": Expression[];
+    // Arguments for the function, if any
+    "@args"?: Expression[];
 };
 
 /**
