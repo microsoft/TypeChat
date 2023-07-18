@@ -2,10 +2,19 @@ import { Result, error, success } from "./result";
 import { TypeChatLanguageModel } from "./model";
 import { TypeChatJsonTranslator, createJsonTranslator } from "./typechat";
 
-const programSchemaText = `// A program consists of a sequence of expressions that are evaluated in order.
+const programSchemaText = `// A program consists of a sequence of function calls that are evaluated in order.
 export type Program = {
-    "@steps": Expression[];
+    "@steps": FunctionCall[];
 }
+
+// A function call specifices a function name and a list of argument expressions. Arguments may contain
+// nested function calls and result references.
+export type FunctionCall = {
+    // Name of the function
+    "@func": string;
+    // Arguments for the function, if any
+    "@args"?: Expression[];
+};
 
 // An expression is a JSON value, a function call, or a reference to the result of a preceding expression.
 export type Expression = JsonValue | FunctionCall | ResultReference;
@@ -13,15 +22,6 @@ export type Expression = JsonValue | FunctionCall | ResultReference;
 // A JSON value is a string, a number, a boolean, null, an object, or an array. Function calls and result
 // references can be nested in objects and arrays.
 export type JsonValue = string | number | boolean | null | { [x: string]: Expression } | Expression[];
-
-// A function call specifices a function name and a list of argument expressions. Arguments may contain
-// nested function calls and result references.
-export type FunctionCall = {
-    // Name of the function
-    "@func": string;
-    // Arguments for the function
-    "@args": Expression[];
-};
 
 // A result reference represents the value of an expression from a preceding step.
 export type ResultReference = {
@@ -31,11 +31,22 @@ export type ResultReference = {
 `;
 
 /**
- * A program consists of a sequence of expressions that are evaluated in order.
+ * A program consists of a sequence of function calls that are evaluated in order.
  */
 export type Program = {
-    "@steps": Expression[];
+    "@steps": FunctionCall[];
 }
+
+/**
+ * A function call specifices a function name and a list of argument expressions. Arguments may contain
+ * nested function calls and result references.
+ */
+export type FunctionCall = {
+    // Name of the function
+    "@func": string;
+    // Arguments for the function, if any
+    "@args"?: Expression[];
+};
 
 /**
  * An expression is a JSON value, a function call, or a reference to the result of a preceding expression.
@@ -47,17 +58,6 @@ export type Expression = JsonValue | FunctionCall | ResultReference;
  * references can be nested in objects and arrays.
  */
 export type JsonValue = string | number | boolean | null | { [x: string]: Expression } | Expression[];
-
-/**
- * A function call specifices a function name and a list of argument expressions. Arguments may contain
- * nested function calls and result references.
- */
-export type FunctionCall = {
-    // Name of the function
-    "@func": string;
-    // Arguments for the function
-    "@args": Expression[];
-};
 
 /**
  * A result reference represents the value of an expression from a preceding step.
@@ -83,10 +83,10 @@ export type ResultReference = {
  * couldn't be transformed.
  */
 export function createModuleTextFromProgram(jsonObject: object): Result<string> {
-    if (!jsonObject.hasOwnProperty("@steps")) {
+    const steps = (jsonObject as Program)["@steps"];
+    if (!(Array.isArray(steps) && steps.every(step => typeof step === "object" && step !== null && step.hasOwnProperty("@func")))) {
         return error("JSON object is not a valid program");
     }
-    const steps = (jsonObject as Program)["@steps"];
     let hasError = false;
     let functionBody = "";
     let currentStep = 0;
