@@ -35,3 +35,7 @@
 .typechat-prose-content pre {
     box-shadow: 0px 2px 5px #666;
 }
+
+.typechat-prose-content blockquote > *:last-child {
+    margin-bottom: 0;
+}

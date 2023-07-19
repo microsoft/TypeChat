@@ -8,7 +8,7 @@ export type FavoritesTerm =
     | 'medium_term' // last 6 months
     | 'long_term'; // several years
 
-export type GetRecentlyPlayedOptions = {
+export type GetFavoritesOptions = {
     // if favoritesTerm is specified, get the user's top tracks over the specified time range
     favoritesTerm?: FavoritesTerm;
     // get count tracks; default is 50
@@ -40,22 +40,16 @@ export type FilterTracksArgs = {
     negate?: boolean;
 }
 
-export type SortTracksArgs = {
-    // List of tracks to sort
-    trackList: TrackList;
-    // sort criteria
-    description?: string;
-    // default: false
-    descending?: boolean;
-}
 
 export type API = {
-    // Get the tracks played most recently
-    getRecentlyPlayed(options?: GetRecentlyPlayedOptions): TrackList;
+    // show now playing and device list
+    status(): void;
+    // Return a list of the tracks in a playlist
+    getPlaylistTracks(name: string): TrackList;
+    // Return a list of the user's favorite tracks
+    getFavorites(options?: GetFavoritesOptions): TrackList;
     // Pause playing
     pause(): void;
-    // Start playing
-    play(): void;
     // List all playlists
     listPlaylists(): void;
     // Delete playlist 'name'
@@ -65,20 +59,18 @@ export type API = {
     // query argument is a Spotify search expression such as 'Rock Lobster' or 'te kanawa queen of night'
     // the structure of the search expression is keywords separated by spaces; all keywords must match
     searchTracks(query: string): TrackList;
+    // Return the last track list shown to the user
+    getLastTrackList(): TrackList;
     // play some or all items from the input list
-    playTracks(trackList: TrackList, options?: PlayTracksOptions): void;
+    play(trackList: TrackList, options?: PlayTracksOptions): void;
     // apply a filter to match tracks; result is the tracks that match the filter
     filterTracks(trackList: TrackList, args: FilterTracksArgs): TrackList;
-    // sort tracks; default is sort by track name ascending
-    sortTracks(args: SortTracksArgs): TrackList;
+    // print a list of tracks 
+    printTracks(trackList: TrackList): void;
     // create a Spotify playlist from a list of tracks
     createPlaylist(trackList: TrackList, name: string): void;
-    // merge multiple track lists
-    mergeTrackLists(...lists: TrackList[]): TrackList;
     // Call this function for requests that weren't understood
     unknownAction(text: string): void;
     // Call this function if the user asks a non-music question, it is captured with this action; non-music, non-questions use UnknownAction
     nonMusicQuestion(text: string): void;
-    // Call this function with the final result of the user request, if any
-    finalResult(result: any): void;
 }
