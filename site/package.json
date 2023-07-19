@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/microsoft/TypeChat#readme",
   "devDependencies": {
-    "@11ty/eleventy": "^2.0.1"
+    "@11ty/eleventy": "^2.0.1",
+    "shiki": "^0.14.3"
   }
 }
