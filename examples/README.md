@@ -5,10 +5,11 @@ To see TypeChat in action, check out the examples found in this directory. Each 
 | Name | Description | Features |
 | ---- | ----------- | -------- |
 | [Sentiment](https://github.com/microsoft/TypeChat/tree/main/examples/sentiment) | Categorize the sentiment of user input as negative, neutral, or positive. | Match user intent to a set of nouns. | 
-| [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/examples/coffeeShop) | Intelligent agent for a coffee shop. | Capturing user intent as a set of nouns, in this case the items in a coffee order. |
+| [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/examples/coffeeShop) | Intelligent agent for a coffee shop. | Capturing user intent as a set of nouns, in this case, the items in a coffee order. |
 | [Calendar](https://github.com/microsoft/TypeChat/tree/main/examples/calendar) | Natural language calendar modification. | Capture user intent as a sequence of actions. | 
-| [Restaraunt](https://github.com/microsoft/TypeChat/tree/main/examples/restaurant) | Intelligent agent for a generic restaraunt. | Captures user intent as a set of nouns, but with more complex linguistic input, illustrating the line between simpler and more advanced language models in handling compound sentences, distractions, and corrections. This example also shows how we can use TypeScript to simplify creation of a user intent summary. |
-| [Music](https://github.com/microsoft/TypeChat/tree/main/examples/music) | Natural language app for playing music, creating playlists, etc. using Spotify. | Captures user intent as actions using a JSON output form that corresponds to a simple dataflow program over an API provided in the intent schema. |
+| [Restaurant](https://github.com/microsoft/TypeChat/tree/main/examples/restaurant) | Intelligent agent for a generic restaurant. | Captures user intent as a set of nouns, but with more complex linguistic input, illustrating the line between simpler and more advanced language models in handling compound sentences, distractions, and corrections. This example also shows how we can use TypeScript to simplify creation of a user intent summary. |
+| [Math](https://github.com/microsoft/TypeChat/tree/main/examples/math) | Translate simple calculations into a simple program given an API that can perform the 4 basic mathematical operators | Program generation based on an API schema. |
+| [Music](https://github.com/microsoft/TypeChat/tree/main/examples/music) | Natural language app for playing music, creating playlists, etc. using Spotify. | Captures user intent as actions in JSON which correspond to a simple dataflow program over an API provided in the intent schema. |
 
 ## Step 1: Configure your development environment
 
@@ -58,7 +59,6 @@ To use an OpenAI endpoint, include the following environment variables:
 |----------|-------|
 | `OPENAI_MODEL`| The OpenAI model name (e.g. `gpt-3.5-turbo` or `gpt-4`) |
 | `OPENAI_API_KEY` | Your OpenAI API key |
-| `OPENAI_ENDPOINT` | The OpenAI endpoint (optional and defaults to `https://api.openai.com/v1/chat/completions`)
 
 To use an Azure OpenAI endpoint, include the following environment variables:
 
@@ -87,5 +87,10 @@ Type `quit` or `exit` to end the session.
 
 Note that there are various sample `.txt` input files provided in each `src` directory that can give a sense of what commands you can run.
 To run an example with an input file, run `node ./dist/main.js <input-file-path>`.
+For example, in the coffee shop directory, you can run:
+
+```
+node ./dist/main.js ./dist/orders.txt
+```
 
 <!-- TODO: Discuss ts-node etc. -->
