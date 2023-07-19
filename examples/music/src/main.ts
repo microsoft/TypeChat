@@ -529,7 +529,7 @@ async function handleCall(
         clientContext.service,
         playlist.id
       );
-      result = playlistResponse?.items.map(item => item.track);
+      result = playlistResponse?.items.map(item => item.track!);
       break;
     }
     case "deletePlaylist": {
