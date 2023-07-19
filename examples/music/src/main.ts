@@ -369,13 +369,8 @@ function chalkStatus(status: SpotifyApi.CurrentPlaybackResponse) {
     let symbol = status.is_playing ? playSymbol : pauseSymbol;
     console.log(`${symbol}  ${timePart}  ${chalk.cyanBright(status.item.name)}`);
     if (status.item.type === "track") {
-      let artists = "   Artists: ";
-      status.item.artists.forEach((artist, index) => {
-        if (index > 0) {
-          artists += ", ";
-        }
-        artists += chalk.green(artist.name);
-      });
+      const artists = "   Artists: " +
+        status.item.artists.map(artist => chalk.green(artist.name)).join(", ");
       console.log(artists);
     }
   }
