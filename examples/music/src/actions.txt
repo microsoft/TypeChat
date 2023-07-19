@@ -3,6 +3,5 @@ make a playlist of my tracks from the past week that have animals in their names
 get my top ten tracks since January
 get my favorite 50 tracks from last year and make the non-classical ones into a playlist
 get my favorite 100 tracks from the last two months and show only the ones by Bach
-get my favorite 200 tracks from the last five years and sort them in reverse alpha order
 make it loud
 get my favorite 80 tracks from the last 8 months and create one playlist named class8 containing the classical tracks and another playlist containing the blues tracks

@@ -309,6 +309,32 @@ export async function getPlaylists(service: SpotifyService) {
     return undefined;
 }
 
+export async function getPlaylistTracks(
+    service: SpotifyService,
+    playlistId: string
+) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    try {
+        const getUri = `https://api.spotify.com/v1/playlists/${encodeURIComponent(
+            playlistId
+        )}/tracks`;
+        const spotifyResult = await axios.get(getUri, config);
+
+        return spotifyResult.data as SpotifyApi.PlaylistTrackResponse;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
 export async function deletePlaylist(
     service: SpotifyService,
     playlistId: string
