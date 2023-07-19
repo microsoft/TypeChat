@@ -1,0 +1,28 @@
+---
+layout: base.njk
+---
+
+<main class="container d-flex flex-nowrap with-sidebar">
+<aside class="flex-shrink-0 p-3">
+<a href="/blogs/" class="d-flex align-items-center pb-3 mb-3 link-body-emphasis text-decoration-none border-bottom">
+    <span class="fs-5 fw-semibold">Blog Posts</span>
+</a>
+<ul class="list-unstyled ps-0">
+{% for post in collections.post %}
+    <li class="mb-2">
+        <div class="mb-2">{{docsGroup.groupName}}</div>
+        <ul class="btn-toggle-nav list-unstyled fw-normal pb-1 ms-2 small">
+            {%- if post.url == page.url -%}
+            <li><a href="{{post.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded active">{{post.data.title}}</a></li>
+            {% else %}
+            <li><a href="{{post.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded">{{post.data.title}}</a></li>
+            {% endif %}
+        </ul>
+    </li>
+{% endfor %}
+</ul>
+</aside>
+<article class="typechat-prose-content">
+{{ content | safe }}
+</article>
+</main>
