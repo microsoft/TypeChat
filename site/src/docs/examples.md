@@ -15,7 +15,7 @@ We recommend reading each example in the following order.
 | [Restaraunt](https://github.com/microsoft/TypeChat/tree/main/examples/restaurant) | Intelligent agent for a generic restaraunt. | Captures user intent as a set of nouns, but with more complex linguistic input, illustrating the line between simpler and more advanced language models in handling compound sentences, distractions, and corrections. This example also shows how we can use TypeScript to simplify creation of a user intent summary. |
 | [Music](https://github.com/microsoft/TypeChat/tree/main/examples/music) | Natural language app for playing music, creating playlists, etc. using Spotify. | Captures user intent as actions using a JSON output form that corresponds to a simple dataflow program over an API provided in the intent schema. |
 
-## Step 1: Configure development environment.
+## Step 1: Configure development environment
 
 ### Option 1: Local Machine
 
@@ -47,7 +47,7 @@ Remember that you are running in the cloud, so all changes you make to the sourc
 For more information, see the [GitHub Codespaces Overview](https://docs.github.com/en/codespaces/overview)
 </details>
 
-## Step 2: Build TypeChat.
+## Step 2: Build TypeChat
 
 Build TypeChat within the repository root.
 
@@ -55,7 +55,7 @@ Build TypeChat within the repository root.
 npm run build
 ```
 
-## Step 3: Configure environment variables.
+## Step 3: Configure environment variables
 
 Currently, the examples are running on OpenAI or Azure OpenAI endpoints.
 To use an OpenAI endpoint, include the following environment variables:
@@ -85,5 +85,13 @@ AZURE_OPENAI_ENDPOINT=...
 AZURE_API_KEY=...
 ```
 
-## Step 4: Run the examples.
-Examples can be found in `build/examples`. To run an example interactively, type `node <example-name>` in the example's build directory and enter requests when prompted. Type 'quit' or 'exit' to end the session. To run an example with an input file, type `node <example-name> <input-filename>`.
+## Step 4: Run the examples
+
+Examples can be found in this `examples` directory.
+To run an example interactively, type `node ./dist/main.js` from the example's directory and enter requests when prompted.
+Type `quit` or `exit` to end the session.
+
+Note that there are various sample input files provided in each `src` directory that can give a sense of what commands you can run.
+To run an example with an input file, run `node ./dist/main.js <input-file-path>`.
+
+<!-- TODO: Discuss ts-node etc. -->

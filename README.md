@@ -26,9 +26,9 @@ Install TypeChat:
 You can also build TypeChat from source:
 `npm run build`
 
-To see TypeChat in action, we recommend exploring the [TypeChat samples](typechat.github.io/examples). You can try them on your local machine or in a GitHub Codespace.
+To see TypeChat in action, we recommend exploring the [TypeChat samples](./examples). You can try them on your local machine or in a GitHub Codespace.
 
-To learn more about TypeChat, visit the [documentation](typechat.github.io) which includes more information on TypeChat and how to get started.
+To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
 
 ## Contributing
 
