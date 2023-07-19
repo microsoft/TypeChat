@@ -1,3 +1,7 @@
+---
+layout: doc-page
+title: Introduction
+---
 
 Large language models (or LLMs) can give us surprisingly rich answers to requests.
 Maybe you've tried chatting with a language model and been delighted at how effective it is to brainstorm with it.
@@ -14,6 +18,8 @@ Maybe you've tried chatting with a language model and been delighted at how effe
 
 These models are great chat assistants on their own, but can they be used to add natural language interfaces to an application?
 The answer as many of us have seen is "yes - sort of", and it really depends on how we ask the model.
+
+## Adding Structure
 
 Remember, by default these models respond in *natural language* which is how we read and write today;
 but traditional programs are kind of bad at working with these answers.

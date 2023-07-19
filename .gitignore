@@ -6,7 +6,6 @@ node_modules/
 *.map
 *.out.txt
 *.bat
-package-lock.json
 
 # Local development and debugging
 **/.vscode/*

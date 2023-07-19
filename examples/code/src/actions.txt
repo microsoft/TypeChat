@@ -1,3 +1,0 @@
-open all ".ts" files
-open all ".ts" files and prepend the comment "// This is an example" on a new line if it is missing
-open all ".ts" files and concatenate them into a new file "allfiles.ts"

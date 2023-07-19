@@ -22,13 +22,11 @@ processRequests(`${equalsSign}> `, process.argv[2], async (request) => {
     console.log(getData(translator.validator.createModuleTextFromJson(program)));
     console.log("Running program:");
     const result = await evaluateJsonProgram(program, handleCall);
-    if (result !== undefined) {
-        console.log(`Result: ${JSON.stringify(result, undefined, 2)}`)
-    }
+    console.log(`Result: ${typeof result === "number" ? result : "Error"}`);
 });
 
 async function handleCall(func: string, args: any[]): Promise<unknown> {
-    console.log(`${func}(${args.map(arg => JSON.stringify(arg, undefined, 2)).join(", ")})`);
+    console.log(`${func}(${args.map(arg => typeof arg === "number" ? arg : JSON.stringify(arg, undefined, 2)).join(", ")})`);
     switch (func) {
         case "add":
             return args[0] + args[1];
@@ -40,5 +38,8 @@ async function handleCall(func: string, args: any[]): Promise<unknown> {
             return args[0] / args[1];
         case "neg":
             return -args[0];
+        case "id":
+            return args[0];
     }
+    return NaN;
 }

@@ -1,0 +1,37 @@
+.with-sidebar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+}
+
+.with-sidebar > :first-child {
+    flex-basis: 140px;
+    flex-grow: 1;
+}
+
+.with-sidebar > :last-child {
+    flex-basis: 0;
+    flex-grow: 999;
+    min-inline-size: 50%;
+}
+
+.typechat-prose-content pre {
+    padding: 1rem;
+    border-radius: 0.5rem;
+}
+
+.typechat-prose-content blockquote {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background-color: #f5f8fa;
+    box-shadow: 0px 2px 5px #666;
+}
+
+.typechat-prose-content code {
+    font-family: Consolas, Menlo, Monaco, Roboto, monospace;
+    font-size: 16px;
+}
+
+.typechat-prose-content pre {
+    box-shadow: 0px 2px 5px #666;
+}
