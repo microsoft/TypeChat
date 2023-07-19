@@ -95,7 +95,7 @@ Because we're typically working with JSON — *JavaScript* Object Notation — a
 > type Item = {
 >     name: string;
 >     quantity: number;
->     size?: number;
+>     size?: string;
 >     notes?: string;
 > }
 > ```
@@ -154,7 +154,6 @@ export interface SentimentResponse {
 import * as fs from "fs";
 import * as path from "path";
 import dotenv from "dotenv";
-
 import * as typechat from "typechat";
 import { SentimentResponse } from "./sentimentSchema";
 
