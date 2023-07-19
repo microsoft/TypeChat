@@ -529,20 +529,12 @@ async function handleCall(
     case "getPlaylistTracks": {
       const playlistName = args[0] as string;
       const playlists = await getPlaylists(clientContext.service);
-      if (playlists) {
-        for (const playlist of playlists.items) {
-          if (playlist.name === playlistName) {
-            const playlistResponse = await getPlaylistTracks(
-              clientContext.service,
-              playlist.id
-            );
-            if (playlistResponse) {
-              result = playlistResponse.items.map((item) => item.track!);
-            }
-            break;
-          }
-        }
-      }
+      const playlist = playlists?.items.find(playlist => playlist.name === playlistName);
+      const playlistResponse = playlist && await getPlaylistTracks(
+        clientContext.service,
+        playlist.id
+      );
+      result = playlistResponse?.items.map(item => item.track);
       break;
     }
     case "deletePlaylist": {
