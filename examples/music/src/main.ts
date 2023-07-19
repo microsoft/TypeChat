@@ -64,19 +64,19 @@ interface IClientContext {
 
 function printTrackNames(
   tracks: SpotifyApi.TrackObjectFull[],
-  context: IClientContext
+  context?: IClientContext
 ) {
-  const map = new Map<string, string>();
-  for (const track of tracks) {
-    map.set(track.name, track.name);
-  }
   let count = 0;
-  for (const name of map.keys()) {
-    console.log(chalk.cyanBright(`T${count}: ${name}`));
+  for (const track of tracks) {
+    let prefix = "";
+    if (context) {
+      prefix = `T${count}: `;
+    }
+    console.log(chalk.cyanBright(`${prefix}${track.name}`));
     count++;
   }
   if (context) {
-    context.lastTrackList = tracks;
+    context.lastTrackList = tracks.slice();
   }
 }
 
@@ -202,38 +202,30 @@ async function applyFilterExpr(
           break;
         }
         case Filter.FilterConstraintType.Artist: {
-          process.stdout.write(`fetching artist for ${tracks.length} tracks`);
           const results = [] as SpotifyApi.TrackObjectFull[];
           for (const track of tracks) {
-            process.stdout.write(".");
-            const wrapper = await getArtist(
-              clientContext.service,
-              track.album.artists[0].id
-            );
-            if (wrapper) {
-              let hit = false;
-              for (const artist of wrapper.artists) {
-                if (filterDiag) {
-                  console.log(
-                    `${artist.name.toLowerCase()} vs ${filterExpr.constraintValue.toLowerCase()}`
-                  );
-                }
-                if (
-                  artist.name
-                    .toLowerCase()
-                    .includes(filterExpr.constraintValue.toLowerCase())
-                ) {
-                  hit = true;
-                }
-                if (negate) {
-                  hit = !hit;
-                }
-                if (hit) {
-                  results.push(track);
-                }
-                if (hit) {
-                  break;
-                }
+            let hit = false;
+            for (const artist of track.artists) {
+              if (filterDiag) {
+                console.log(
+                  `${artist.name.toLowerCase()} vs ${filterExpr.constraintValue.toLowerCase()}`
+                );
+              }
+              if (
+                artist.name
+                  .toLowerCase()
+                  .includes(filterExpr.constraintValue.toLowerCase())
+              ) {
+                hit = true;
+              }
+              if (negate) {
+                hit = !hit;
+              }
+              if (hit) {
+                results.push(track);
+              }
+              if (hit) {
+                break;
               }
             }
           }
@@ -322,7 +314,8 @@ async function getClientContext(token: string) {
   const devices = await getDevices(service);
   let deviceId;
   if (devices && devices.devices.length > 0) {
-    const activeDevice = devices.devices.find(device => device.is_active) ?? devices.devices[0];
+    const activeDevice =
+      devices.devices.find((device) => device.is_active) ?? devices.devices[0];
     deviceId = activeDevice.id;
   }
 
@@ -357,8 +350,8 @@ function msToElapsedMinSec(ms: number) {
   }
 }
 
-const pauseSymbol = "\u{23F8}";
-const playSymbol = "\u{25B6}";
+const pauseSymbol = "⏸️";
+const playSymbol = "▶️";
 
 function chalkStatus(status: SpotifyApi.CurrentPlaybackResponse) {
   if (status.item) {
@@ -367,10 +360,15 @@ function chalkStatus(status: SpotifyApi.CurrentPlaybackResponse) {
       timePart = `${msToElapsedMinSec(status.progress_ms)}/${timePart}`;
     }
     let symbol = status.is_playing ? playSymbol : pauseSymbol;
-    console.log(`${symbol}  ${timePart}  ${chalk.cyanBright(status.item.name)}`);
+    console.log(
+      `${symbol}  ${timePart}  ${chalk.cyanBright(status.item.name)}`
+    );
     if (status.item.type === "track") {
-      const artists = "   Artists: " +
-        status.item.artists.map(artist => chalk.green(artist.name)).join(", ");
+      const artists =
+        "   Artists: " +
+        status.item.artists
+          .map((artist) => chalk.green(artist.name))
+          .join(", ");
       console.log(artists);
     }
   }
@@ -415,7 +413,11 @@ async function handleCall(
         const tracks = input.slice(offset, offset + count);
         const uris = tracks.map((track) => track.uri);
         console.log(chalk.cyanBright("Playing..."));
-        printTrackNames(tracks, clientContext);
+        if (tracks.length > 1) {
+          printTrackNames(tracks, clientContext);
+        } else {
+          printTrackNames(tracks);
+        }
         if (clientContext.deviceId) {
           await play(clientContext.service, clientContext.deviceId, uris);
         }
@@ -524,12 +526,13 @@ async function handleCall(
     case "getPlaylistTracks": {
       const playlistName = args[0] as string;
       const playlists = await getPlaylists(clientContext.service);
-      const playlist = playlists?.items.find(playlist => playlist.name === playlistName);
-      const playlistResponse = playlist && await getPlaylistTracks(
-        clientContext.service,
-        playlist.id
+      const playlist = playlists?.items.find(
+        (playlist) => playlist.name === playlistName
       );
-      result = playlistResponse?.items.map(item => item.track!);
+      const playlistResponse =
+        playlist &&
+        (await getPlaylistTracks(clientContext.service, playlist.id));
+      result = playlistResponse?.items.map((item) => item.track!);
       break;
     }
     case "deletePlaylist": {
