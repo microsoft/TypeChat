@@ -42,12 +42,15 @@ Remember that you are running in the cloud, so all changes you make to the sourc
 For more information, see the [GitHub Codespaces Overview](https://docs.github.com/en/codespaces/overview)
 </details>
 
-## Step 2: Build TypeChat
+## Step 2: Build TypeChat Samples
 
 Build TypeChat within the repository root.
 
 ```
-npm run build
+# rebuild typechat itself if necessary
+# npm run build
+
+npm run build-samples
 ```
 
 ## Step 3: Configure environment variables
