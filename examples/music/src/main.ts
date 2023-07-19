@@ -322,7 +322,8 @@ async function getClientContext(token: string) {
   const devices = await getDevices(service);
   let deviceId;
   if (devices && devices.devices.length > 0) {
-    deviceId = devices.devices[0].id;
+    const activeDevice = devices.find(device => device.is_active) ?? devices.devices[0];
+    deviceId = activeDevice.id;
   }
 
   return {
