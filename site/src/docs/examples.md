@@ -4,7 +4,9 @@ title: Examples
 ---
 
 To see TypeChat in action, check out the examples found in [`/examples`](https://github.com/microsoft/TypeChat/tree/main/examples).
+
 Each example shows how TypeChat handles natural language input, and maps to validated JSON as output.
+
 We recommend reading each example in the following order.
 
 | Name | Description | Features |

@@ -1,5 +1,9 @@
 
-To see TypeChat in action, check out the examples found in this directory. Each example shows how TypeChat handles natural language input and maps to validated TypeScript or Python types as output.
+To see TypeChat in action, check out the examples found in this directory. 
+
+Each example shows how TypeChat handles natural language input, and maps to validated JSON as output.
+
+We recommend reading each example in the following order.
 
 
 | Name | Description | Features |
