@@ -5,18 +5,20 @@ title: Examples
 
 To see TypeChat in action, check out the examples found in [`/examples`](https://github.com/microsoft/TypeChat/tree/main/examples).
 
-Each example shows how TypeChat handles natural language input, and maps to validated JSON as output.
+Each example shows how TypeChat handles natural language input, and maps to validated JSON as output. Most example inputs run on both GPT 3.5 and GPT 4.
+We are working to reproduce outputs with other models.
+Generally, models trained on both code and natural language text have high accuracy.
 
 We recommend reading each example in the following order.
 
-| Name | Description | Features |
-| ---- | ----------- | -------- |
-| [Sentiment](https://github.com/microsoft/TypeChat/tree/main/examples/sentiment) | Categorize the sentiment of user input as negative, neutral, or positive. | Match user intent to a set of nouns. | 
-| [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/examples/coffeeShop) | Intelligent agent for a coffee shop. | Capturing user intent as a set of nouns, in this case the items in a coffee order. |
-| [Calendar](https://github.com/microsoft/TypeChat/tree/main/examples/calendar) | Natural language calendar modification. | Capture user intent as a sequence of actions. | 
-| [Restaurant](https://github.com/microsoft/TypeChat/tree/main/examples/restaurant) | Intelligent agent for a generic restaurant. | Captures user intent as a set of nouns, but with more complex linguistic input, illustrating the line between simpler and more advanced language models in handling compound sentences, distractions, and corrections. This example also shows how we can use TypeScript to simplify creation of a user intent summary. |
-| [Math](https://github.com/microsoft/TypeChat/tree/main/examples/math) | Translate calculations into simple programs given an API that can perform the 4 basic mathematical operators | Program generation based on an API schema. |
-| [Music](https://github.com/microsoft/TypeChat/tree/main/examples/music) | Natural language app for playing music, creating playlists, etc. using Spotify. | Captures user intent as actions in JSON which correspond to a simple dataflow program over an API provided in the intent schema. |
+| Name | Description |
+| ---- | ----------- |
+| [Sentiment](https://github.com/microsoft/TypeChat/tree/main/examples/sentiment) | A sentiment classifier which categorizes user input as negative, neutral, or positive. This is TypeChat's "hello world!" |
+| [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/examples/coffeeShop) | An intelligent agent for a coffee shop. This sample translates user intent is translated to a list of coffee order items.
+| [Calendar](https://github.com/microsoft/TypeChat/tree/main/examples/calendar) | An intelligent scheduler. This sample translates user intent into a sequence of actions to modify a calendar. |
+| [Restaurant](https://github.com/microsoft/TypeChat/tree/main/examples/restaurant) | An intelligent agent for taking orders at a restaurant. Similar to the coffee shop example, but uses a more complex schema to model more complex linguistic input. The prose files illustrate the line between simpler and more advanced language models in handling compound sentences, distractions, and corrections. This example also shows how we can use TypeScript to provide a user intent summary. |
+| [Math](https://github.com/microsoft/TypeChat/tree/main/examples/math) | Translate calculations into simple programs given an API that can perform the 4 basic mathematical operators. This example highlights TypeChat's program generation capabilities. |
+| [Music](https://github.com/microsoft/TypeChat/tree/main/examples/music) | An app for playing music, creating playlists, etc. on Spotify through natural language. Each user intent is translated into a series of actions in JSON which correspond to a simple dataflow program, where each step can consume data produced from previous step. |
 
 ## Step 1: Configure development environment
 
@@ -41,7 +43,6 @@ On the TypeChat repository page:
 1. Click the green button labeled `<> Code`
 2. Select the `Codespaces` tab.
 3. Click the green `Create codespace` button.
-
 
 <details>
 <summary>If this is your first time creating a codespace, read this.</summary>
@@ -93,15 +94,14 @@ AZURE_OPENAI_API_KEY=...
 
 ## Step 4: Run the examples
 
-Examples can be found in this `examples` directory.
-To run an example interactively, type `node ./dist/main.js` from the example's directory and enter requests when prompted.
-Type `quit` or `exit` to end the session.
+Examples can be found in the `examples` directory.
 
+To run an example interactively, type `node ./dist/main.js` from the example's directory and enter requests when prompted. Type `quit` or `exit` to end the session.
 
-Note that there are various sample `input.txt` files provided in each `src` directory that can give a sense of what commands you can run.
+Note that there are various sample "prose" files (e.g. `input.txt`) provided in each `src` directory that can give a sense of what you can run.
 
-To run an example with an input file, run `node ./dist/main.js <input-file-path>`.
-For example, in the coffee shop directory, you can run:
+To run an example with one of these input files, run `node ./dist/main.js <input-file-path>`.
+For example, in the `coffeeShop` directory, you can run:
 
 ```
 node ./dist/main.js ./dist/input.txt
