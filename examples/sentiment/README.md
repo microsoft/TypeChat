@@ -6,7 +6,7 @@ The Sentiment example shows how to match user intent to a set of nouns, in this 
 To run the Sentiment example, follow the instructions in the [examples README](../README.md#step-1-configure-your-development-environment).
 
 # Usage
-Example prompts can be found at [`src/input.txt`](./src/input.txt).
+Example prompts can be found in [`src/input.txt`](./src/input.txt).
 
 For example, given the following input statement:
 
