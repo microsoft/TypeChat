@@ -6,18 +6,21 @@
 
     /** @type {HTMLButtonElement | null} */
     const copyButton = document.querySelector(".typechat-code-copy button");
-    copyButton?.addEventListener("click", async (event) => {
+    copyButton?.addEventListener("click", async () => {
         clearTimeout(lastTimeout);
         try {
-            await navigator.clipboard?.writeText("npm install typescript");
+            await navigator.clipboard?.writeText("npm install typechat");
             copyButton.textContent = "✅";
+            copyButton.title = copyButton.ariaLabel = "Command copied."
         }
         catch {
             copyButton.textContent = "❌";
+            copyButton.title = copyButton.ariaLabel = "Error copying."
         }
         lastTimeout = setTimeout(() => {
             copyButton.textContent = "📋";
-        }, 2000);
+            copyButton.title = copyButton.ariaLabel = "Copy 'npm install' command."
+        }, 1500);
     });
 }
 
