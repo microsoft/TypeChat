@@ -615,10 +615,12 @@ async function handleCall(
   return result;
 }
 
+const spotifyConnect = true;
+
 // Process requests interactively or from the input file specified on the command line
 async function musicApp() {
   const authz = new Authzor();
-  authz.authorize(async (token) => {
+  authz.authorize(spotifyConnect, async (token) => {
     let context: IClientContext | undefined = undefined;
     if (token) {
       context = await getClientContext(token);

@@ -29,7 +29,7 @@ const scope = [
 ].join("%20");
 
 const baseClientId = process.env.SPOTIFY_APP_CLI;
-
+const defaultPort = process.env.SPOTIFY_APP_PORT;
 export class Authzor {
   url: string;
   app: express.Express;
@@ -37,7 +37,7 @@ export class Authzor {
   server: AuthzServer;
 
   constructor(
-    public port = 4815,
+    public port = defaultPort,
     public showDialog = false,
     public clientId = baseClientId
   ) {
@@ -79,8 +79,8 @@ export class Authzor {
     });
   }
 
-  authorize(handler: AuthzHandlerFn) {
-    if (baseClientId) {
+  authorize(connect: boolean, handler: AuthzHandlerFn) {
+    if (baseClientId && connect) {
       this.handler = handler;
       this.server = this.app.listen(this.port, () => {
         if (this.showDialog) {
@@ -90,12 +90,11 @@ export class Authzor {
         }
         open(this.url, { wait: false });
       });
-    }
-    else {
-        handler(undefined);
+    } else {
+      handler(undefined);
     }
   }
-
+  
   close() {
     if (this.server) {
       this.server.close();
