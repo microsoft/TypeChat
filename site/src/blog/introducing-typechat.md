@@ -1,10 +1,13 @@
 ---
-title: Introducting TypeChat
+title: Introducing TypeChat
 layout: blog
 tags: post
+date: 2023-07-20
 ---
 
-# Introducing TypeChat
+# {{title}}
+
+*{{date | formatDate}}{% if authors %} by {{authors | formatList}}{% endif %}*
 
 In the last few months, we've seen a rush of excitement around the newest wave of large language models.
 While chat assistants have been the been the most direct application, there's a big question around how to best integrate these models into existing app interfaces.

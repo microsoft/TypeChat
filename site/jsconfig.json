@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "target": "es2021",
+        "module": "nodenext",
+        "lib": ["esnext", "es2021.intl"],
+        "noEmit": true,
+        "checkJs": true
+    },
+    "include": [
+        "./.eleventy.js",
+    ],
+    "exclude": []
+}

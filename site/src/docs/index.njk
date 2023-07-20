@@ -1,4 +1,29 @@
 ---
-layout: docs.njk
 title: Docs
 ---
+
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    {% set firstDoc = docsTOC[0].pages[0] %}
+    {% if firstDoc %}
+    <meta charset="utf-8">
+    <title>Redirecting to {{firstDoc.title}}</title>
+    <meta http-equiv="refresh" content="0; URL={{firstDoc.url}}">
+    <link rel="canonical" href="{{firstDoc.url}}">
+    {%endif%}
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <!-- <link rel='stylesheet' type='text/css' media='screen' href='main.css'> -->
+    <link href="/css/5.3.0_dist_css_bootstrap.min.css" rel="stylesheet">
+    <link href="/css/styles.css" rel="stylesheet">
+</head>
+
+<body class="h-100">
+{% include "header-prologue.njk" %}
+
+{% include "footer.njk" %}
+</div>
+</body>
+</html>

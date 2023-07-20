@@ -14,45 +14,11 @@
 </head>
 
 <body class="h-100">
-<a class="skip-to-main" href="#site-content" tabindex="0">Skip to main content</a>
-<div class="d-flex w-100 h-100 p-3 mx-auto flex-column">
-<header class="container d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
-    <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none">
-        <!-- <svg class="bi me-2" width="40" height="32">
-            <use xlink:href="#bootstrap"></use>
-        </svg> -->
-        <span class="fs-3" style="margin-right: 2rem;">TypeChat</span>
-    </a>
-
-    <ul class="nav nav-underline">
-        {%- for navItem in headernav -%}
-            {%- if navItem.dest == page.url -%}
-                <li class="nav-item"><a href="{{navItem.dest}}" class="nav-link active" aria-current="page">{{navItem.title}}</a></li>
-            {% elif navItem.isExternal %}
-                <li class="nav-item"><a href="{{navItem.dest}}" target="_blank" rel="noopener" class="nav-link">{{navItem.title}}</a></li>
-            {% else %}
-                <li class="nav-item"><a href="{{navItem.dest}}" class="nav-link">{{navItem.title}}</a></li>
-            {% endif %}
-        {%- endfor -%}
-    </ul>
-</header>
-<div class="d-none" id="site-content"></div>
+{% include "header-prologue.njk" %}
 
 {{ content | safe }}
 
-<footer class="container mt-auto d-flex flex-wrap justify-content-between align-items-center py-3 border-top">
-    <div class="col-md-4 d-flex align-items-center">
-        <span class="mb-3 mb-md-0 text-body-secondary">© Microsoft</span>
-    </div>
-
-    <ul class="nav col-md-4 justify-content-end list-unstyled d-flex">
-        <li class="ms-3">
-            <a class="text-body-secondary" href="#">
-                Social Media - TODO
-            </a>
-        </li>
-    </ul>
-</footer>
+{% include "footer.njk" %}
 </div>
 </body>
 

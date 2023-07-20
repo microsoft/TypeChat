@@ -1,8 +1,49 @@
 ---
-layout: blog.njk
 title: Blog
 ---
 
-<div>
-    <!-- TODO: Redirect. -->
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    {% set latestPost = collections.post[0] %}
+    {% if latestPost %}
+    <meta charset="utf-8">
+    <title>Redirecting to {{latestPost.data.title}}</title>
+    <meta http-equiv="refresh" content="0; URL={{latestPost.url}}">
+    <link rel="canonical" href="{{latestPost.url}}">
+    {%endif%}
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <!-- <link rel='stylesheet' type='text/css' media='screen' href='main.css'> -->
+    <link href="/css/5.3.0_dist_css_bootstrap.min.css" rel="stylesheet">
+    <link href="/css/styles.css" rel="stylesheet">
+</head>
+
+<body class="h-100">
+{% include "header-prologue.njk" %}
+
+{% include "footer.njk" %}
 </div>
+</body>
+
+</html>
+{#-
+<main class="container text-center">
+<h1 class="pb-2">Blog Posts</h1>
+<ul class="list-unstyled ps-0">
+{% for post in collections.post %}
+<li class="mb-2">
+    <li class="mb-1">
+    <a href="{{post.url}}" class="link-dark link-underline-opacity-25 link-underline-opacity-50-hover">
+        <div class="fs-5">{{post.data.title}}</div>
+        <div>({{post.date | formatDate }}{% if post.data.authors %} by {{post.data.authors | formatList}} {% endif %})</div>
+    </a>
+    </li>
+    </ul>
+</li>
+{% endfor %}
+</ul>
+</main>
+-#}

@@ -1,12 +1,28 @@
+
 const shiki = require("shiki");
+
+// @ts-expect-error
+const { EleventyHtmlBasePlugin } = require("@11ty/eleventy");
+
+const dateFormatter = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "America/Los_Angeles" });
+const listFormatter = new Intl.ListFormat("en-US", { style: "long", type: "conjunction" });
 
 /**
  * 
  * @param {import("@11ty/eleventy").UserConfig} eleventyConfig 
  */
 module.exports = function (eleventyConfig) {
+    eleventyConfig.addPlugin(EleventyHtmlBasePlugin);
+
     eleventyConfig.addPassthroughCopy("./src/css");
     eleventyConfig.addPassthroughCopy("./src/js");
+
+    eleventyConfig.addFilter("formatDate", value => dateFormatter.format(value));
+    eleventyConfig.addFilter("formatList", value => listFormatter.format(value));
+
+    eleventyConfig.setNunjucksEnvironmentOptions({
+        throwOnUndefined: true,
+    });
 
     eleventyConfig.amendLibrary("md", () => { });
     eleventyConfig.on("eleventy.before", async () => {
@@ -18,7 +34,7 @@ module.exports = function (eleventyConfig) {
                 "bat", "sh",
                 "python", "py",
             ],
-            theme: "github-dark-dimmed"
+            theme: "dark-plus"
         });
         eleventyConfig.amendLibrary("md", (mdLib) =>
             mdLib.set({
@@ -31,6 +47,7 @@ module.exports = function (eleventyConfig) {
         dir: {
             input: "src",
             output: "_site"
-        }
+        },
+        pathPrefix: "TypeChat",
     };
 }
