@@ -2,7 +2,10 @@
     {
         "groupName": "Home",
         "pages": [
-            { "title": "Introduction", "url": "/docs/introduction/"}
+            { "title": "Introduction", "url": "/docs/introduction/"},
+            { "title": "Examples", "url": "/docs/examples/"},
+            { "title": "Techniques", "url": "/docs/techniques/"},
+            { "title": "FAQ", "url": "/docs/faq/"}
         ]
     }
 ]

@@ -118,4 +118,16 @@ But we wanted to make it as easy as possible to use this pattern, and brush away
 This is the key idea behind TypeChat.
 By just giving a model with a schema (some types) and a request, we can integrate natural language into an application and work through well-typed structured data.
 
-TODO
+## Introducing TypeChat
+
+TypeChat makes it easy to build natural language interfaces using types.
+
+Simply define types that represent the intents supported in your NL application. That could be as simple as an interface for categorizing sentiment or more complex examples like types for a shopping cart or music application. For example, to add additional intents to a schema, a developer can add the intents using type composition, such as adding additional types into a discriminated union. To make schemas hierarchicial, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
+
+After defining your types, TypeChat takes care of the rest by:
+
+1. Constructing a prompt to the LLM using types.
+2. Validating the LLM response conforms to the schema. If the validation fails, repair the non-conforming output through further language model interaction.
+3. Summarizing succinctly (without use of a LLM) the instance and confirm that it aligns with user intent.
+
+Types are all you need!
