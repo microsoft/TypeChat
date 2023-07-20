@@ -8,7 +8,7 @@ To see TypeChat in action, check out the examples found in this directory. Each 
 | [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/examples/coffeeShop) | Intelligent agent for a coffee shop. | Capturing user intent as a set of nouns, in this case, the items in a coffee order. |
 | [Calendar](https://github.com/microsoft/TypeChat/tree/main/examples/calendar) | Natural language calendar modification. | Capture user intent as a sequence of actions. | 
 | [Restaurant](https://github.com/microsoft/TypeChat/tree/main/examples/restaurant) | Intelligent agent for a generic restaurant. | Captures user intent as a set of nouns, but with more complex linguistic input, illustrating the line between simpler and more advanced language models in handling compound sentences, distractions, and corrections. This example also shows how we can use TypeScript to simplify creation of a user intent summary. |
-| [Math](https://github.com/microsoft/TypeChat/tree/main/examples/math) | Translate simple calculations into a simple program given an API that can perform the 4 basic mathematical operators | Program generation based on an API schema. |
+| [Math](https://github.com/microsoft/TypeChat/tree/main/examples/math) | Translate calculations into simple programs given an API that can perform the 4 basic mathematical operators | Program generation based on an API schema. |
 | [Music](https://github.com/microsoft/TypeChat/tree/main/examples/music) | Natural language app for playing music, creating playlists, etc. using Spotify. | Captures user intent as actions in JSON which correspond to a simple dataflow program over an API provided in the intent schema. |
 
 ## Step 1: Configure your development environment
@@ -17,9 +17,13 @@ To see TypeChat in action, check out the examples found in this directory. Each 
 
 You can experiment with these TypeChat examples on your local machine with just Node.js.
 
-1. Ensure [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en) or newer is installed.
-2. Clone the repo with `git clone https://github.com/microsoft/TypeChat.git`. `cd` to the root of the repo.
-3. Install packages with `npm install`.
+Ensure [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en) or newer is installed.
+
+```
+git clone https://github.com/microsoft/TypeChat
+cd TypeChat
+npm install
+```
 
 ### Option 2: GitHub Codespaces
 
@@ -47,9 +51,6 @@ For more information, see the [GitHub Codespaces Overview](https://docs.github.c
 Build TypeChat within the repository root.
 
 ```
-# rebuild typechat itself if necessary
-# npm run build
-
 npm run build-samples
 ```
 
