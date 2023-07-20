@@ -14,6 +14,7 @@
 </head>
 
 <body class="h-100">
+<a class="skip-to-main" href="#site-content" tabindex="0">Skip to main content</a>
 <div class="d-flex w-100 h-100 p-3 mx-auto flex-column">
 <header class="container d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
     <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none">
@@ -35,6 +36,7 @@
         {%- endfor -%}
     </ul>
 </header>
+<div class="d-none" id="site-content"></div>
 
 {{ content | safe }}
 
