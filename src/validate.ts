@@ -39,7 +39,7 @@ export interface TypeChatJsonValidator<T extends object> {
     createModuleTextFromJson(jsonObject: object): Result<string>;
     /**
      * Parses and validates the given JSON string according to the associated TypeScript schema. Returns a
-     * `Success<T>` object containing the parsed JSON object if valudation was successful. Otherwise, returns
+     * `Success<T>` object containing the parsed JSON object if validation was successful. Otherwise, returns
      * an `Error` object with a `message` property that contains the TypeScript compiler diagnostics.
      * @param jsonText The JSON string to validate.
      * @returns The parsed JSON object or the TypeScript compiler diagnostic messages.

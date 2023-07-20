@@ -83,7 +83,7 @@ Examples responses are great, but we wondered if there was another approach.
 In our case, we asked whether we could simply guide a model with TypeScript types.
 
 > **User:**
-> Provide 3 suggestions for specific places to go to in Seattle on a rainy day. Respond strictly with JSON. The JSON should be compatible with the TypeScript type `Response` from the folllowing:
+> Provide 3 suggestions for specific places to go to in Seattle on a rainy day. Respond strictly with JSON. The JSON should be compatible with the TypeScript type `Response` from the following:
 >
 > ```ts
 > interface Response {

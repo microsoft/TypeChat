@@ -71,7 +71,7 @@ export class SpotifyService {
 
             return authData.data;
         } catch (e) {
-            // TODO: REVIEW: should we really be returing the response
+            // TODO: REVIEW: should we really be returning the response
             // data in an error condition?
             if (e instanceof axios.AxiosError) {
                 // TODO: REVIEW: the type returned here may not be Promise<Object>
