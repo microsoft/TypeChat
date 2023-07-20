@@ -334,7 +334,6 @@ type SortTracksArgs = {
   descending?: boolean;
 };
 
-const musicalNote = "\u{1F3B5}";
 const translator = createProgramTranslator(model, schemaText);
 
 // convert milliseconds to elapsed minutes and seconds as a string
@@ -631,7 +630,7 @@ async function musicApp() {
         )
       );
     }
-    processRequests(`${musicalNote}> `, process.argv[2], async (request) => {
+    processRequests("🎵> ", process.argv[2], async (request) => {
       const localResult = localParser(request);
       let program: Program | undefined = undefined;
       if (localResult) {
