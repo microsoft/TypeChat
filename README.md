@@ -6,7 +6,7 @@ Building natural language interfaces has traditionally been difficult. These app
 
 TypeChat replaces _prompt engineering_ with _schema engineering_.
 
-Simply define types that represent the intents supported in your natural language application. That could be as simple as an interface for categorizing sentiment or more complex examples like types for a shopping cart or music application. For example, to add additional intents to a schema, a developer can add additional types into a discriminated union. To make schemas hierarchicial, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
+Simply define types that represent the intents supported in your natural language application. That could be as simple as an interface for categorizing sentiment or more complex examples like types for a shopping cart or music application. For example, to add additional intents to a schema, a developer can add additional types into a discriminated union. To make schemas hierarchical, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
 
 After defining your types, TypeChat takes care of the rest by:
 
