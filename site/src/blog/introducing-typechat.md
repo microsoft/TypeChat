@@ -74,7 +74,6 @@ Surprisingly, we can ask LLMs to respond in the form of JSON, and they generally
 > ```
 
 This is good — though this example shows the best-case response.
-It's unfortunately easy to get a response that includes `{ "name": "grande latte" }`.
 While examples can help guide structure, they don't define what an AI should return extensively, and they don't provide anything we can validate against.
 
 ## Just Add Types!
@@ -116,7 +115,7 @@ Because we're typically working with JSON — *JavaScript* Object Notation — a
 >     {
 >       "name": "latte",
 >       "quantity": 1,
->       "size": 16
+>       "size": "grande"
 >     }
 >   ]
 > }
