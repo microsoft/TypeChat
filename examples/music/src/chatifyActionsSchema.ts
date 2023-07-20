@@ -42,7 +42,7 @@ export type FilterTracksArgs = {
 
 
 export type API = {
-    // show now playing and device list
+    // show now playing
     status(): void;
     // Return a list of the tracks in a playlist
     getPlaylistTracks(name: string): TrackList;
