@@ -6,6 +6,7 @@ const shiki = require("shiki");
  */
 module.exports = function (eleventyConfig) {
     eleventyConfig.addPassthroughCopy("./src/css");
+    eleventyConfig.addPassthroughCopy("./src/js");
 
     eleventyConfig.amendLibrary("md", () => { });
     eleventyConfig.on("eleventy.before", async () => {
