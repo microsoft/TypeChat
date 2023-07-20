@@ -1,81 +1,34 @@
 # TypeChat
-TypeChat is a design pattern and a library for creating natural language (NL) interfaces. We originally developed TypeChat to increase the safety of NL interfaces for applications that make permanent changes. TypeChat increases safety by incorporating the following steps into each interaction with a language model:
 
-1. Constrain language model output using a formal schema over the possible user requests.
-2. Validate that model output conforms to the schema.  Repair non-conforming output through further language model interaction.
-3. Once outut is a valid schema instance, succinctly summarize (without use of language model) the instance and confirm that it aligns with user intent.
+TypeChat is a library that makes it easy to build natural language interfaces using types.
 
-Having followed these three steps, an application can make permanent changes knowing that intent is both confirmed and valid for processing. 
+[GIF]
 
-In addition to its safety benefit, we have found in practice that TypeChat also helps with the reliability and accuracy of NL interfaces.  This happens because TypeChat replaces "prompt engineering" with "schema engineering" and arbitrary text output with a formal representation.  These changes enable compositional properties not readily available with prompt engineering approaches that accrete into a prompt islands of NL text that may have varying goals.  
+Building natural language interfaces has traditionally been difficult. These apps often relied on complex decision trees to determine intent and collect required inputs take action. Large language models (LLMs) have made this easier by enabling us to take natural language input from a user and match to intent. This has introduced its own challenges including the need to constrain the model's reply for safety, structure responses from the model for further processing, and ensuring that the reply from the model is valid. Prompt engineering aims to solve these problems, but comes with a steep learning curve and increased fragility as the prompt increases in size.
 
-For example, to add additional intents to a schema, a developer can add the additional intents using type composition, such as adding additional types into a discriminated union.  To make schemas hierarchicial, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
+TypeChat replaces _prompt engineering_ with _schema engineering_.
 
-This repo uses TypeScript as the schema language. This choice works well in practice because
+Simply define types that represent the intents supported in your NL application. That could be as simple as an interface for categorizing sentiment or more complex examples like types for a shopping cart or music application. For example, to add additional intents to a schema, a developer can add the intents using type composition, such as adding additional types into a discriminated union. To make schemas hierarchicial, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
 
-1. TypeScript is a common training input for large language models.
-2. We can use the TypeScript compiler to validate JSON output and to provide high-quality diagnostic messages for JSON repair.
-3. TypeScript is concise: about 5X smaller than JSON Schema for a typical user intent schema.
+After defining your types, TypeChat takes care of the rest by:
 
-## Structure
-The repo consists of the TypeChat library and a set of examples that use the library.  Each example has a different purpose.
+1. Constructing a prompt to the LLM using types.
+2. Validating the LLM response conforms to the schema. If the validation fails, repair the non-conforming output through further language model interaction.
+3. Summarizing succinctly (without use of a LLM) the instance and confirm that it aligns with user intent.
 
-- _CoffeeShop_:  A basic example illustrating how to capture user intent as a set of nouns, in this case the items in a coffee order.
-- _Restaurant_:  Another set of nouns example but with more complex linguistic input, illustrating the line between simpler and more advanced language models in handling compound sentences, distrations and corrections. This example also shows how we can use TypeScript typing to simplify the creation of a user intent summary.
-- _Calendar_:  A basic example that shows how to capture user intent as a sequence of actions.
-- _Music_:  A more involved example of capturing intent as actions, this time using a JSON output form that corresponds to a simple dataflow program over an API provided in the intent schema.
+Types are all you need!
 
-## Alternative 1: Use GitHub CodeSpaces
-In your web browser, navigate to the [repo on GitHub](https://github.com/microsoft/typechat/). Click the green button, labelled `<> Code` and then choose the `Codespaces` tab.
-Then click the green `Create codespaces` button.
+# Getting Started
 
-![Create codespaces](docs/codespaces.png)
+Install TypeChat:
+`npm install typechat`
 
-If this is your first time creating a codespace on this repo, 
-GitHub will take a moment to create a dev container image for your session.
+You can also build TypeChat from source:
+`npm run build`
 
-![Setting up your codespace](docs/setting-up-your-codespace.png)
+To see TypeChat in action, we recommend exploring the [TypeChat samples](./examples). You can try them on your local machine or in a GitHub Codespace.
 
-Once the image has been created, the browser will load a version
-of VSCode, which has been configured to communicate with your dev container in the cloud.
-
-Note that the dev container is pre-configured to clone the repo and run `npm run install` so you are ready to go as soon as VS Code appears in your browser.
-
-Remember that you are running in the cloud, so all changes you make to the source tree must be committed and pushed before destroying the CodeSpace. GitHub accounts are usually configured to automatically delete CodeSpaces that have been inactive for 30 days.
-
-For more information, see the [GitHub Codespaces Overview](https://docs.github.com/en/codespaces/overview)
-
-## Alternative 2: Configure your Dev Machine
-1. Install [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en). Note that this version of node comes with `npm` package manager.
-2. Clone the repo with `git clone https://github.com/microsoft/typechat.git`.
-3. `cd` to the root of the repo.
-4. Install packages with `npm install`.
-
-## Build
-```     
-npm run build
-```
-This will build the library module and the apps.
-
-## Environment Variables
-Currently, the experiments are running on OpenAI or Azure OpenAI endpoints. To use an OpenAI endpoint, include the following environment variables:
-
-| Variable | Value |
-|----------|-------|
-| `OPENAI_MODEL`| The OpenAI model name (e.g. gpt-3.5-turbo or gpt-4) |
-| `OPENAI_API_KEY` | Your OpenAI API key |
-
-To use an Azure OpenAI endpoint, include the following environment variables:
-
-| Variable | Value |
-|----------|-------|
-| `AZURE_OPENAI_ENDPOINT` | The full URL of the Azure OpenAI REST API (e.g. https://YOUR_RESOURCE_NAME.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT_NAME/chat/completions?api-version=2023-05-15) |
-| `AZURE_OPENAI_API_KEY` | Your Azure API key |
-
-Environment variables can optionally be set by creating a `.env` file in the root directory of the project.
-
-## Running the examples
-The examples are found in `src/samples` and are built into `build/examples`. To run an example interactively, type `node <example-name>` in the example's build directory and enter requests when prompted. Type 'quit' or 'exit' to end the session. To run an example with an input file, type `node <example-name> <input-filename>`.
+To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
 
 ## Contributing
 
