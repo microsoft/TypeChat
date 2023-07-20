@@ -22,8 +22,8 @@
   },
   "scripts": {
     "build": "tsc -p src",
-    "build-samples": "cd examples/calendar && npm run build && cd ../coffeeShop && npm run build && cd ../math && npm run build && cd ../music && npm run build && cd ../restaurant && npm run build && cd ../sentiment && npm run build && cd ../..",
-    "prepare": "npm run build"
+    "build-all": "npm run build --workspaces",
+    "prepare": "npm run build-all"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
