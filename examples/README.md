@@ -91,15 +91,13 @@ AZURE_OPENAI_API_KEY=...
 
 Examples can be found in the `examples` directory.
 
-To run an example interactively, type `node ./dist/main.js` from the example's directory and enter requests when prompted.
-Type `quit` or `exit` to end the session.
+To run an example interactively, type `node ./dist/main.js` from the example's directory and enter requests when prompted. Type `quit` or `exit` to end the session.
 
-Note that there are various sample `.txt` input files provided in each `src` directory that can give a sense of what commands you can run.
+Note that there are various sample `input.txt` files provided in each `src` directory that can give a sense of what commands you can run.
+
 To run an example with an input file, run `node ./dist/main.js <input-file-path>`.
-For example, in the coffee shop directory, you can run:
+For example, in the `coffeeShop` directory, you can run:
 
 ```
-node ./dist/main.js ./dist/orders.txt
+node ./dist/main.js ./dist/input.txt
 ```
-
-<!-- TODO: Discuss ts-node etc. -->
