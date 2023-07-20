@@ -4,7 +4,7 @@ const shiki = require("shiki");
 // @ts-expect-error
 const { EleventyHtmlBasePlugin } = require("@11ty/eleventy");
 
-const dateFormatter = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "America/Los_Angeles" });
+const dateFormatter = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" });
 const listFormatter = new Intl.ListFormat("en-US", { style: "long", type: "conjunction" });
 
 /**
