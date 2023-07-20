@@ -3,6 +3,7 @@ title: Introducing TypeChat
 layout: blog
 tags: post
 date: 2023-07-20
+authors: ["Anders Hejlsberg", "Steve Lucco", "Daniel Rosenwasser", "Pierce Boggan", "Umesh Madan", "Mike Hopcroft", "Gayathri Chandrasekaran"]
 ---
 
 # {{title}}
