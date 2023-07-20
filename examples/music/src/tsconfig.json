@@ -3,7 +3,7 @@
     "target": "es2021",
     "lib": ["es2021"],
     "module": "node16",
-    "types": ["node","open","spotify-api","express"],
+    "types": ["node", "spotify-api"],
     "outDir": "../dist",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
