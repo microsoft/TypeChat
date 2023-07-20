@@ -2,7 +2,6 @@
 layout: doc-page
 title: Frequently Asked Questions (FAQ)
 ---
-# Frequently Asked Questions
 
 ### What is TypeChat?
 
