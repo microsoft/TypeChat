@@ -1,10 +1,9 @@
 {
   "name": "typechat",
   "author": "Microsoft",
-  "private": true,
   "version": "0.0.10",
   "license": "MIT",
-  "description": "An exploration of using schemas to make prompt engineering simpler and more reliable",
+  "description": "TypeChat is an experimental library that makes it easy to build natural language interfaces using types.",
   "keywords": [
     "schema",
     "LLM",
