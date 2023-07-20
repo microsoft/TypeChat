@@ -27,6 +27,12 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md",
+    "SECURITY.md"
+  ],
   "dependencies": {
     "axios": "^1.4.0",
     "typescript": "^5.1.3"
