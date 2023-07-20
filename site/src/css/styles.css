@@ -40,6 +40,10 @@
     --typechat-rounding-radius: 0.5rem;
 }
 
+.typechat-cap-content-width {
+    max-width: 1000px;
+}
+
 .typechat-hero .typechat-code-copy {
     background-color: #212529;
     color: #fff;
