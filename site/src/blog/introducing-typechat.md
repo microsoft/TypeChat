@@ -11,7 +11,7 @@ authors: ["Anders Hejlsberg", "Steve Lucco", "Daniel Rosenwasser", "Pierce Bogga
 *{{date | formatDate}}{% if authors %} by {{authors | formatList}}{% endif %}*
 
 In the last few months, we've seen a rush of excitement around the newest wave of large language models.
-While chat assistants have been the been the most direct application, there's a big question around how to best integrate these models into existing app interfaces.
+While chat assistants have been the most direct application, there's a big question around how to best integrate these models into existing app interfaces.
 
 In other words, how do we *augment* traditional UI with natural language interfaces?
 How do we use AI to take a user request and turn it into something our apps can operate on?
