@@ -2,8 +2,30 @@
 layout: base.njk
 title: Docs
 ---
-<main class="container d-flex flex-nowrap with-sidebar">
-<aside class="flex-shrink-0 p-3">
+<main>
+<nav class="typechat-docs-smol-nav d-md-none mx-auto text-center">
+    <label class="mb-3">
+    Doc Pages
+    <select class="nav-on-change">
+    {% for docsGroup in docsTOC %}
+        <li class="mb-2">
+            <optgroup label="{{docsGroup.groupName}}">
+                {% for docPage in docsGroup.pages %}
+                {%- if docPage.url == page.url -%}
+                <option value="{{docPage.url | url}}" selected>{{docPage.title}}</option>
+                {% else %}
+                <option value="{{docPage.url | url}}">{{docPage.title}}</option>
+                {% endif %}
+                {% endfor %}
+            </optgroup>
+        </li>
+    {% endfor %}
+    </select>
+    </label>
+    <hr />
+</nav>
+<div class="container d-flex flex-nowrap with-sidebar">
+<nav class="flex-shrink-0 p-3 d-none d-md-block">
     <a href="/docs/" class="d-flex align-items-center pb-3 mb-3 link-body-emphasis text-decoration-none border-bottom">
         <span class="fs-5 fw-semibold">Docs</span>
     </a>
@@ -13,18 +35,21 @@ title: Docs
             <div class="mb-2">{{docsGroup.groupName}}</div>
             <ul class="btn-toggle-nav list-unstyled fw-normal pb-1 ms-2 small">
                 {% for docPage in docsGroup.pages %}
+                <li class="mb-1">
                 {%- if navItem.dest == page.url -%}
-                <li><a href="{{docPage.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded active">{{docPage.title}}</a></li>
+                <a href="{{docPage.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded active" aria-current="page">{{docPage.title}}</a>
                 {% else %}
-                <li><a href="{{docPage.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded">{{docPage.title}}</a></li>
+                <a href="{{docPage.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded">{{docPage.title}}</a>
                 {% endif %}
+                </li>
                 {% endfor %}
             </ul>
         </li>
     {% endfor %}
     </ul>
-</aside>
+</nav>
 <article class="container typechat-prose-content">
 {{ content | safe }}
 </article>
+</div>
 </main>

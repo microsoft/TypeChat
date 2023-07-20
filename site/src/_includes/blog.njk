@@ -2,21 +2,39 @@
 layout: base.njk
 ---
 
-<main class="container d-flex flex-nowrap with-sidebar">
-<aside class="flex-shrink-0 p-3">
+<main>
+<nav class="typechat-docs-smol-nav d-md-none mx-auto text-center">
+    <label class="mb-3">
+    Blog Posts
+    <select class="nav-on-change">
+    {% for post in collections.post %}
+        {%- if post.url == page.url -%}
+        <option value="{{post.url | url}}" selected>{{post.data.title}}</a></li>
+        {% else %}
+        <option value="{{post.url | url}}">{{post.data.title}}</a></li>
+        {% endif %}
+    </li>
+    {% endfor %}
+    </select>
+    </label>
+    <hr />
+</nav>
+<div class="container d-flex flex-nowrap with-sidebar">
+<aside class="flex-shrink-0 p-3 d-none d-md-block">
 <a href="/blogs/" class="d-flex align-items-center pb-3 mb-3 link-body-emphasis text-decoration-none border-bottom">
     <span class="fs-5 fw-semibold">Blog Posts</span>
 </a>
 <ul class="list-unstyled ps-0">
 {% for post in collections.post %}
     <li class="mb-2">
-        <div class="mb-2">{{docsGroup.groupName}}</div>
         <ul class="btn-toggle-nav list-unstyled fw-normal pb-1 ms-2 small">
+            <li class="mb-1">
             {%- if post.url == page.url -%}
-            <li><a href="{{post.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded active">{{post.data.title}}</a></li>
+            <a href="{{post.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded active" aria-current="page">{{post.data.title}}</a>
             {% else %}
-            <li><a href="{{post.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded">{{post.data.title}}</a></li>
+            <a href="{{post.url}}" class="link-body-emphasis d-inline-flex text-decoration-none rounded">{{post.data.title}}</a>
             {% endif %}
+            </li>
         </ul>
     </li>
 {% endfor %}
@@ -25,4 +43,5 @@ layout: base.njk
 <article class="typechat-prose-content">
 {{ content | safe }}
 </article>
+</div>
 </main>
