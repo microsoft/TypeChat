@@ -3,7 +3,7 @@ layout: doc-page
 title: Examples
 ---
 
-To see TypeChat in action, check out the examples found in [`src/examples`](https://github.com/microsoft/TypeChat/tree/main/examples).
+To see TypeChat in action, check out the examples found in [`/examples`](https://github.com/microsoft/TypeChat/tree/main/examples).
 Each example shows how TypeChat handles natural language input, and maps to validated JSON as output.
 We recommend reading each example in the following order.
 
@@ -52,12 +52,12 @@ Remember that you are running in the cloud, so all changes you make to the sourc
 For more information, see the [GitHub Codespaces Overview](https://docs.github.com/en/codespaces/overview)
 </details>
 
-## Step 2: Build TypeChat Samples
+## Step 2: Build TypeChat Examples
 
-Build TypeChat within the repository root.
+Build TypeChat and the examples by running the following command in the repository root:
 
 ```
-npm run build-samples
+npm run build-all
 ```
 
 ## Step 3: Configure environment variables
@@ -86,7 +86,7 @@ OPENAI_API_KEY=...
 
 # For Azure OpenAI
 AZURE_OPENAI_ENDPOINT=...
-AZURE_API_KEY=...
+AZURE_OPENAI_API_KEY=...
 ```
 
 ## Step 4: Run the examples
