@@ -1,7 +1,7 @@
 
 To see TypeChat in action, check out the examples found in this directory. 
 
-Each example shows how TypeChat handles natural language input, and maps to validated JSON as output.
+Each example shows how TypeChat handles natural language input, and maps to validated JSON as output. Most example inputs run on both GPT 3.5 and GPT 4.  We are working to reproduce outputs with other models.  Generally, models trained on both code and natural language text have high accuracy.
 
 We recommend reading each example in the following order.
 
