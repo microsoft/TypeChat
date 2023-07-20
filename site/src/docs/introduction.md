@@ -122,7 +122,7 @@ By just giving a model with a schema (some types) and a request, we can integrat
 
 TypeChat makes it easy to build natural language interfaces using types.
 
-Simply define types that represent the intents supported in your NL application. That could be as simple as an interface for categorizing sentiment or more complex examples like types for a shopping cart or music application. For example, to add additional intents to a schema, a developer can add the intents using type composition, such as adding additional types into a discriminated union. To make schemas hierarchicial, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
+Simply define types that represent the intents supported in your NL application. That could be as simple as an interface for categorizing sentiment or more complex examples like types for a shopping cart or music application. For example, to add additional intents to a schema, a developer can add the intents using type composition, such as adding additional types into a discriminated union. To make schemas hierarchical, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
 
 After defining your types, TypeChat takes care of the rest by:
 
