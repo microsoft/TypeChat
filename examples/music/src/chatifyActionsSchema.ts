@@ -6,9 +6,9 @@ export type Track = { name: string };
 export type TrackList = Track[];
 
 export type FavoritesTerm =
-    | 'short_term' // last 4 weeks
-    | 'medium_term' // last 6 months
-    | 'long_term'; // several years
+    | "short_term" // last 4 weeks
+    | "medium_term" // last 6 months
+    | "long_term"; // several years
 
 export type GetFavoritesOptions = {
     // if favoritesTerm is specified, get the user's top tracks over the specified time range
@@ -70,7 +70,7 @@ export type API = {
     play(item: TrackList | Playlist, options?: PlayTracksOptions): void;
     // apply a filter to match tracks; result is the tracks that match the filter
     filterTracks(trackList: TrackList, args: FilterTracksArgs): TrackList;
-    // print a list of tracks 
+    // print a list of tracks
     printTracks(trackList: TrackList): void;
     // create a Spotify playlist from a list of tracks
     createPlaylist(trackList: TrackList, name: string): void;
@@ -78,4 +78,4 @@ export type API = {
     unknownAction(text: string): void;
     // Call this function if the user asks a non-music question, it is captured with this action; non-music, non-questions use UnknownAction
     nonMusicQuestion(text: string): void;
-}
+};
