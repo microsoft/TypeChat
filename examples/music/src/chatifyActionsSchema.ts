@@ -1,6 +1,8 @@
 // This is a schema for writing programs that control a Spotify music player
 
-export type Track = { name: string }
+export type Playlist = unknown;
+
+export type Track = { name: string };
 export type TrackList = Track[];
 
 export type FavoritesTerm =
@@ -27,7 +29,7 @@ export type PlayTracksOptions = {
     count?: number;
     // index of first track to play; default 0
     offset?: number;
-}
+};
 
 export type FilterTracksArgs = {
     // a filter string, which has the following structure (written as a grammar)
@@ -38,7 +40,7 @@ export type FilterTracksArgs = {
     filter: string;
     // keep the tracks that do not match, instead of the tracks that match; default false
     negate?: boolean;
-}
+};
 
 
 export type API = {
@@ -52,6 +54,8 @@ export type API = {
     pause(): void;
     // List all playlists
     listPlaylists(): void;
+    // Get playlist
+    getPlaylist(name: string): Playlist;
     // Delete playlist 'name'
     deletePlaylist(name: string): void;
     // Set volume
@@ -62,7 +66,7 @@ export type API = {
     // Return the last track list shown to the user
     getLastTrackList(): TrackList;
     // play some or all items from the input list
-    play(trackList: TrackList, options?: PlayTracksOptions): void;
+    play(item: TrackList | Playlist, options?: PlayTracksOptions): void;
     // apply a filter to match tracks; result is the tracks that match the filter
     filterTracks(trackList: TrackList, args: FilterTracksArgs): TrackList;
     // print a list of tracks 
