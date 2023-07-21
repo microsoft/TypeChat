@@ -29,7 +29,6 @@ import {
   getKRecent,
   limitMax,
   getTopK,
-  pause,
   // getArtist,
   createPlaylist,
   deletePlaylist,
@@ -38,6 +37,12 @@ import {
   getPlaybackState,
   getPlaylistTracks,
 } from "./endpoints";
+import {
+  pauseHandler,
+  nextHandler,
+  previousHandler,
+  shuffleHandler
+} from "./playback";
 import { SpotifyService, User } from "./service";
 
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
@@ -55,7 +60,7 @@ const keys = {
   clientSecret: process.env.SPOTIFY_APP_CLISEC,
 };
 
-interface IClientContext {
+export interface IClientContext {
   service: SpotifyService;
   deviceId?: string;
   user: User;
@@ -141,13 +146,17 @@ function chalkPlan(plan: Program) {
 
 function localParser(userPrompt: string) {
   userPrompt = userPrompt.trim();
-  if (userPrompt === "play" || userPrompt === "pause") {
+  if (userPrompt === "play" || userPrompt === "pause" || userPrompt === "next" || userPrompt === "previous" || userPrompt === "shuffle") {
     console.log(chalk.green("Instance parsed locally:"));
+    let localParseResult = userPrompt;
+    if (userPrompt !== "play") {
+      localParseResult = "controlPlayback";
+    }
     return JSON.stringify({
       "@steps": [
         {
-          "@func": userPrompt,
-          "@args": [],
+          "@func": localParseResult,
+          "@args": [userPrompt !== "play" ? userPrompt : ""],
         },
       ],
     });
@@ -398,10 +407,17 @@ async function handleCall(
       }
       break;
     }
-    case "pause": {
-      if (clientContext.deviceId) {
-        await pause(clientContext.service, clientContext.deviceId);
-      }
+    case "controlPlayback" : {
+      const action = args[0] as string;
+
+      const actionHandlers: { [key:string] : (clientContext: IClientContext) => Promise<void> } = {
+        pause : pauseHandler,
+        next : nextHandler,
+        previous : previousHandler,
+        shuffle: shuffleHandler
+      };
+
+      await actionHandlers[action](clientContext);
       break;
     }
     case "play": {

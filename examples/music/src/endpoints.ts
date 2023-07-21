@@ -291,6 +291,88 @@ export async function pause(service: SpotifyService, deviceId: string) {
     }
 }
 
+export async function next(
+    service: SpotifyService,
+    deviceId: string,
+) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    try {
+        const spotifyResult = await axios.post(
+            `https://api.spotify.com/v1/me/player/next?device_id=${deviceId}`,
+            {},
+            config
+        );
+
+        return spotifyResult.data;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
+export async function previous(
+    service: SpotifyService,
+    deviceId: string,
+) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    try {
+        const spotifyResult = await axios.post(
+            `https://api.spotify.com/v1/me/player/previous?device_id=${deviceId}`,
+            {},
+            config
+        );
+
+        return spotifyResult.data;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
+export async function shuffle(
+    service: SpotifyService,
+    deviceId: string,
+    newShuffleState: boolean
+) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    try {
+        const spotifyResult = await axios.put(
+            `https://api.spotify.com/v1/me/player/shuffle?state=${newShuffleState}&device_id=${deviceId}`,
+            {},
+            config
+        );
+
+        return spotifyResult.data;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
 export async function getPlaylists(service: SpotifyService) {
     const config = {
         headers: {
@@ -383,7 +465,6 @@ export async function createPlaylist(
             { name, public: false, description },
             config
         );
-
         const playlistResponse =
             spotifyResult.data as SpotifyApi.CreatePlaylistResponse;
         const addTracksResult = await axios.post(

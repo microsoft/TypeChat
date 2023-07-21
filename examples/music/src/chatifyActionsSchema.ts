@@ -42,6 +42,7 @@ export type FilterTracksArgs = {
     negate?: boolean;
 };
 
+export type PlaybackAction = "pause" | "next" | "previous" | "shuffle";
 
 export type API = {
     // show now playing
@@ -50,8 +51,8 @@ export type API = {
     getPlaylistTracks(name: string): TrackList;
     // Return a list of the user's favorite tracks
     getFavorites(options?: GetFavoritesOptions): TrackList;
-    // Pause playing
-    pause(): void;
+    // control playback
+    controlPlayback(action: PlaybackAction): void;
     // List all playlists
     listPlaylists(): void;
     // Get playlist
