@@ -29,7 +29,6 @@ import {
   getKRecent,
   limitMax,
   getTopK,
-  pause,
   // getArtist,
   createPlaylist,
   deletePlaylist,
@@ -38,6 +37,11 @@ import {
   getPlaybackState,
   getPlaylistTracks,
 } from "./endpoints";
+import {
+  pauseHandler,
+  nextHandler,
+  previousHandler
+} from "./playback";
 import { SpotifyService, User } from "./service";
 
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
@@ -55,7 +59,7 @@ const keys = {
   clientSecret: process.env.SPOTIFY_APP_CLISEC,
 };
 
-interface IClientContext {
+export interface IClientContext {
   service: SpotifyService;
   deviceId?: string;
   user: User;
@@ -129,13 +133,17 @@ function chalkPlan(plan: Program) {
 
 function localParser(userPrompt: string) {
   userPrompt = userPrompt.trim();
-  if (userPrompt === "play" || userPrompt === "pause") {
+  if (userPrompt === "play" || userPrompt === "pause" || userPrompt === "next" || userPrompt === "previous") {
     console.log(chalk.green("Instance parsed locally:"));
+    let localParseResult = userPrompt;
+    if (userPrompt !== "play") {
+      localParseResult = "controlPlayBack";
+    }
     return JSON.stringify({
       "@steps": [
         {
-          "@func": userPrompt,
-          "@args": [],
+          "@func": localParseResult,
+          "@args": [userPrompt !== "play" ? userPrompt : ""],
         },
       ],
     });
@@ -386,14 +394,21 @@ async function handleCall(
       }
       break;
     }
-    case "pause": {
-      if (clientContext.deviceId) {
-        await pause(clientContext.service, clientContext.deviceId);
-      }
+    case "controlPlayBack" : {
+      const action = args[0] as string;
+
+      const actionHandlers: { [key:string] : (clientContext: IClientContext) => Promise<void> } = {
+        pause : pauseHandler,
+        next : nextHandler,
+        previous : previousHandler
+      };
+
+      await actionHandlers[action](clientContext);
       break;
     }
     case "play": {
       const input = args[0] as SpotifyApi.TrackObjectFull[];
+
       if (input && input.length > 0) {
         let count = 1;
         let offset = 0;
