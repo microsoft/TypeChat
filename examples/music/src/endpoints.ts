@@ -209,7 +209,8 @@ export async function getPlaybackState(service: SpotifyService) {
 export async function play(
     service: SpotifyService,
     deviceId: string,
-    uris?: string[]
+    uris?: string[],
+    contextUri?: string
 ) {
     const config = {
         headers: {
@@ -219,6 +220,8 @@ export async function play(
     const smallTrack: SpotifyApi.PlayParameterObject = {};
     if (uris) {
         smallTrack.uris = uris;
+    } else if (contextUri) {
+        smallTrack.context_uri = contextUri;
     }
     const playUrl = getUrlWithParams("https://api.spotify.com/v1/me/player/play", { device_id: deviceId });
     try {
