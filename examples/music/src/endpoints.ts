@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { SpotifyService } from './service';
+import axios from "axios";
+import { SpotifyService } from "./service";
 
 export const limitMax = 50;
 
@@ -13,7 +13,10 @@ export async function search(
         },
     };
 
-    const searchUrl = getUrlWithParams("https://api.spotify.com/v1/search", query);
+    const searchUrl = getUrlWithParams(
+        "https://api.spotify.com/v1/search",
+        query
+    );
     try {
         const spotifyResult = await axios.get(searchUrl, config);
         return spotifyResult.data as SpotifyApi.SearchResponse;
@@ -38,7 +41,10 @@ export async function getTop(
         },
     };
 
-    const tracksUrl = getUrlWithParams("https://api.spotify.com/v1/me/tracks", { limit, offset });
+    const tracksUrl = getUrlWithParams("https://api.spotify.com/v1/me/tracks", {
+        limit,
+        offset,
+    });
     try {
         const spotifyResult = await axios.get(tracksUrl, config);
 
@@ -86,7 +92,9 @@ export async function getArtist(service: SpotifyService, id: string) {
         },
     };
 
-    const artistsUrl = getUrlWithParams("https://api.spotify.com/v1/artists", { ids: id });
+    const artistsUrl = getUrlWithParams("https://api.spotify.com/v1/artists", {
+        ids: id,
+    });
     try {
         const spotifyResult = await axios.get(artistsUrl, config);
 
@@ -112,10 +120,13 @@ export async function getHistory(
         },
     };
 
-    const recentlyPlayedUrl = getUrlWithParams("https://api.spotify.com/v1/me/player/recently-played", {
-        limit,
-        offset
-    });
+    const recentlyPlayedUrl = getUrlWithParams(
+        "https://api.spotify.com/v1/me/player/recently-played",
+        {
+            limit,
+            offset,
+        }
+    );
     console.log(recentlyPlayedUrl);
     // params += `&after=${Date.parse('2023-01-01T00:00:00.000Z')}`;
     // params += `&before=${Date.now()}`;
@@ -168,7 +179,7 @@ export async function getUserProfile(service: SpotifyService) {
 
     try {
         const spotifyResult = await axios.get(
-            'https://api.spotify.com/v1/me',
+            "https://api.spotify.com/v1/me",
             config
         );
 
@@ -191,11 +202,38 @@ export async function getPlaybackState(service: SpotifyService) {
     };
     try {
         const spotifyResult = await axios.get(
-            'https://api.spotify.com/v1/me/player',
+            "https://api.spotify.com/v1/me/player",
             config
         );
 
         return spotifyResult.data as SpotifyApi.CurrentPlaybackResponse;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
+export async function transferPlayback(
+    service: SpotifyService,
+    deviceId: string,
+    play = false
+) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    const xferUrl = "https://api.spotify.com/v1/me/player/";
+
+    const params = { device_ids: [deviceId], play };
+    try {
+        const spotifyResult = await axios.put(xferUrl, params, config);
+
+        return spotifyResult.data;
     } catch (e) {
         if (e instanceof axios.AxiosError) {
             console.log(e.message);
@@ -218,18 +256,18 @@ export async function play(
         },
     };
     const smallTrack: SpotifyApi.PlayParameterObject = {};
-    if (uris) {
-        smallTrack.uris = uris;
-    } else if (contextUri) {
+    if (contextUri) {
         smallTrack.context_uri = contextUri;
     }
-    const playUrl = getUrlWithParams("https://api.spotify.com/v1/me/player/play", { device_id: deviceId });
+    else if (uris) {
+        smallTrack.uris = uris;
+    }
+    const playUrl = getUrlWithParams(
+        "https://api.spotify.com/v1/me/player/play",
+        { device_id: deviceId }
+    );
     try {
-        const spotifyResult = await axios.put(
-            playUrl,
-            smallTrack,
-            config
-        );
+        const spotifyResult = await axios.put(playUrl, smallTrack, config);
 
         return spotifyResult.data;
     } catch (e) {
@@ -251,7 +289,7 @@ export async function getDevices(service: SpotifyService) {
 
     try {
         const spotifyResult = await axios.get(
-            'https://api.spotify.com/v1/me/player/devices',
+            "https://api.spotify.com/v1/me/player/devices",
             config
         );
 
@@ -273,13 +311,12 @@ export async function pause(service: SpotifyService, deviceId: string) {
         },
     };
 
-    const pauseUrl = getUrlWithParams("https://api.spotify.com/v1/me/player/pause", { device_id: deviceId });
+    const pauseUrl = getUrlWithParams(
+        "https://api.spotify.com/v1/me/player/pause",
+        { device_id: deviceId }
+    );
     try {
-        const spotifyResult = await axios.put(
-            pauseUrl,
-            {},
-            config
-        );
+        const spotifyResult = await axios.put(pauseUrl, {}, config);
 
         return spotifyResult.data;
     } catch (e) {
@@ -291,10 +328,7 @@ export async function pause(service: SpotifyService, deviceId: string) {
     }
 }
 
-export async function next(
-    service: SpotifyService,
-    deviceId: string,
-) {
+export async function next(service: SpotifyService, deviceId: string) {
     const config = {
         headers: {
             Authorization: `Bearer ${service.retrieveUser().token}`,
@@ -318,10 +352,7 @@ export async function next(
     return undefined;
 }
 
-export async function previous(
-    service: SpotifyService,
-    deviceId: string,
-) {
+export async function previous(service: SpotifyService, deviceId: string) {
     const config = {
         headers: {
             Authorization: `Bearer ${service.retrieveUser().token}`,
@@ -380,10 +411,36 @@ export async function getPlaylists(service: SpotifyService) {
         },
     };
     try {
-        const getUri = 'https://api.spotify.com/v1/me/playlists';
+        const getUri = "https://api.spotify.com/v1/me/playlists";
         const spotifyResult = await axios.get(getUri, config);
 
         return spotifyResult.data as SpotifyApi.ListOfCurrentUsersPlaylistsResponse;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
+export async function getAlbumTracks(
+    service: SpotifyService,
+    albumId: string
+) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    try {
+        const getUri = `https://api.spotify.com/v1/albums/${encodeURIComponent(
+            albumId
+        )}/tracks`;
+        const spotifyResult = await axios.get(getUri, config);
+
+        return spotifyResult.data as SpotifyApi.AlbumTracksResponse;
     } catch (e) {
         if (e instanceof axios.AxiosError) {
             console.log(e.message);
@@ -451,7 +508,7 @@ export async function createPlaylist(
     name: string,
     userId: string,
     uris: string[],
-    description = ''
+    description = ""
 ) {
     const config = {
         headers: {
@@ -490,15 +547,14 @@ export async function setVolume(service: SpotifyService, amt = limitMax) {
         },
     };
 
-    const volumeUrl = getUrlWithParams("https://api.spotify.com/v1/me/player/volume?volume_percent", {
-        volume_percent: amt
-    });
+    const volumeUrl = getUrlWithParams(
+        "https://api.spotify.com/v1/me/player/volume?volume_percent",
+        {
+            volume_percent: amt,
+        }
+    );
     try {
-        const spotifyResult = await axios.put(
-            volumeUrl,
-            {},
-            config
-        );
+        const spotifyResult = await axios.put(volumeUrl, {}, config);
 
         return spotifyResult.data;
     } catch (e) {

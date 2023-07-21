@@ -1,3 +1,7 @@
+import { TypeChatLanguageModel } from "../../../dist";
+import { getArtist } from "./endpoints";
+import { IClientContext } from "./main";
+
 export enum FilterTokenType {
     Genre,
     Artist,
@@ -239,6 +243,188 @@ export function parseFilter(filter: string): IFilterResult {
     }
 }
 
+
+const filterDiag = false;
+
+export async function applyFilterExpr(
+    clientContext: IClientContext,
+    model: TypeChatLanguageModel,
+    filterExpr: FilterNode,
+    tracks: SpotifyApi.TrackObjectFull[],
+    negate = false
+): Promise<SpotifyApi.TrackObjectFull[]> {
+    if (tracks.length === 0) {
+        return tracks;
+    }
+    switch (filterExpr.type) {
+        case "constraint":
+            switch (filterExpr.constraintType) {
+                case FilterConstraintType.Genre: {
+                    process.stdout.write(
+                        `fetching genre for ${tracks.length} tracks`
+                    );
+                    const genre = filterExpr.constraintValue;
+                    const results = [] as SpotifyApi.TrackObjectFull[];
+                    for (const track of tracks) {
+                        process.stdout.write(".");
+                        const wrapper = await getArtist(
+                            clientContext.service,
+                            track.album.artists[0].id
+                        );
+                        if (wrapper) {
+                            let hit = wrapper.artists[0].genres.includes(genre);
+                            if (negate) {
+                                hit = !hit;
+                            }
+                            if (hit) {
+                                results.push(track);
+                            }
+                        }
+                    }
+                    process.stdout.write("\n");
+                    tracks = results;
+                    break;
+                }
+                case FilterConstraintType.Artist: {
+                    const results = [] as SpotifyApi.TrackObjectFull[];
+                    for (const track of tracks) {
+                        let hit = false;
+                        for (const artist of track.artists) {
+                            if (filterDiag) {
+                                console.log(
+                                    `${artist.name.toLowerCase()} vs ${filterExpr.constraintValue.toLowerCase()}`
+                                );
+                            }
+                            if (
+                                artist.name
+                                    .toLowerCase()
+                                    .includes(
+                                        filterExpr.constraintValue.toLowerCase()
+                                    )
+                            ) {
+                                hit = true;
+                            }
+                            if (negate) {
+                                hit = !hit;
+                            }
+                            if (hit) {
+                                results.push(track);
+                            }
+                            if (hit) {
+                                break;
+                            }
+                        }
+                    }
+                    process.stdout.write("\n");
+                    tracks = results;
+                    break;
+                }
+                case FilterConstraintType.Year: {
+                    const results = [] as SpotifyApi.TrackObjectFull[];
+                    for (const track of tracks) {
+                        // TODO year ranges
+                        if (filterDiag) {
+                            console.log(
+                                `${track.album.release_date} vs ${filterExpr.constraintValue}`
+                            );
+                        }
+                        if (
+                            track.album.release_date.includes(
+                                filterExpr.constraintValue
+                            )
+                        ) {
+                            results.push(track);
+                        }
+                    }
+                    tracks = results;
+                    break;
+                }
+                case FilterConstraintType.Description: {
+                    const results = [] as SpotifyApi.TrackObjectFull[];
+
+                    const indicesResult = await llmFilter(
+                        model,
+                        filterExpr.constraintValue,
+                        tracks
+                    );
+                    if (indicesResult.success) {
+                        if (indicesResult.data) {
+                            const indices = JSON.parse(indicesResult.data) as {
+                                trackNumbers: number[];
+                            };
+                            for (const j of indices.trackNumbers) {
+                                results.push(tracks[j]);
+                            }
+                        }
+                    }
+                    tracks = results;
+                    break;
+                }
+            }
+            break;
+        case "combiner":
+            if (filterExpr.combinerType === FilterCombinerType.AND) {
+                for (const childExpr of filterExpr.operands) {
+                    tracks = await applyFilterExpr(
+                        clientContext,
+                        model,
+                        childExpr,
+                        tracks,
+                        negate
+                    );
+                }
+            } else if (
+                filterExpr.combinerType === FilterCombinerType.OR
+            ) {
+                let subTracks = [] as SpotifyApi.TrackObjectFull[];
+                for (const childExpr of filterExpr.operands) {
+                    subTracks = subTracks.concat(
+                        await applyFilterExpr(
+                            clientContext,
+                            model,
+                            childExpr,
+                            tracks,
+                            negate
+                        )
+                    );
+                }
+                tracks = uniqueTracks(subTracks);
+            }
+            break;
+    }
+    return tracks;
+}
+
+function uniqueTracks(tracks: SpotifyApi.TrackObjectFull[]) {
+    const map = new Map<string, SpotifyApi.TrackObjectFull>();
+    for (const track of tracks) {
+        map.set(track.id, track);
+    }
+    return [...map.values()];
+}
+
+async function llmFilter(
+    model: TypeChatLanguageModel,
+    description: string,
+    tracks: SpotifyApi.TrackObjectFull[]
+) {
+    let prompt =
+        "The following is a numbered list of music tracks, one track per line\n";
+    for (let i = 0; i < tracks.length; i++) {
+        const track = tracks[i];
+        prompt += `${i}: ${track.name}\n`;
+    }
+    prompt += `Use the following TypeScript type to output the track names that match the description ${description}:
+    type Matches = {
+        trackNumbers: number[];
+    };`;
+    prompt += `Here is a JSON object of type Matches containing the track numbers of the tracks that match ${description}:`;
+    const ret = await model.complete(prompt);
+    return ret;
+}
+
+
+// the remainder is for testing
 const testFilters = [
     'artist:elton john OR artist: bach',
     'genre:baroque AND description:animals',

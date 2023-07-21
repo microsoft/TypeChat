@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { Authzor } from "./authz";
 import chalk from "chalk";
+import dotenv from "dotenv";
 import * as Filter from "./trackFilter";
 import {
     createLanguageModel,
@@ -12,38 +13,35 @@ import {
     evaluateJsonProgram,
     getData,
 } from "typechat";
-import dotenv from "dotenv";
-
 import {
-    FilterTracksArgs,
-    GetFavoritesOptions,
-    PlayTracksOptions,
-    SetVolumeArgs,
-} from "./chatifyActionsSchema";
+    AlbumTrackCollection,
+    ITrackCollection,
+    PlaylistTrackCollection,
+    TrackCollection,
+} from "./trackCollections";
+import { applyFilterExpr } from "./trackFilter";
 import {
     play,
     getUserProfile,
     getDevices,
     search,
     setVolume,
-    getKRecent,
     limitMax,
     getTopK,
-    // getArtist,
     createPlaylist,
     deletePlaylist,
     getPlaylists,
-    getArtist,
     getPlaybackState,
     getPlaylistTracks,
+    pause,
+    next,
+    previous,
+    shuffle,
+    getAlbumTracks,
 } from "./endpoints";
-import {
-    pauseHandler,
-    nextHandler,
-    previousHandler,
-    shuffleHandler,
-} from "./playback";
+import { listAvailableDevices, printStatus, selectDevice } from "./playback";
 import { SpotifyService, User } from "./service";
+import { localParser } from "./localParser";
 
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 const schemaFilename = "chatifyActionsSchema.ts";
@@ -65,11 +63,13 @@ export interface IClientContext {
     deviceId?: string;
     user: User;
     lastTrackList?: SpotifyApi.TrackObjectFull[];
+    lastTrackOffset: number;
+    lastTrackCount: number;
 }
 
-function printTrackNames(
+async function printTrackNames(
     tracks: SpotifyApi.TrackObjectFull[],
-    context?: IClientContext
+    context: IClientContext
 ) {
     let count = 0;
     for (const track of tracks) {
@@ -80,65 +80,38 @@ function printTrackNames(
         console.log(chalk.cyanBright(`${prefix}${track.name}`));
         count++;
     }
-    if (context) {
-        context.lastTrackList = tracks.slice();
+    if (tracks.length > 1) {
+        context.lastTrackList = tracks;
+        context.lastTrackOffset = 0;
+        context.lastTrackCount = count;
     }
 }
 
 async function printPlaylist(
     playlist: SpotifyApi.PlaylistObjectSimplified,
+    fetchedTracks: SpotifyApi.TrackObjectFull[],
     context: IClientContext
 ) {
     console.log(chalk.cyanBright(`Starting playlist --> ${playlist.name}`));
     console.log(
         chalk.cyanBright(`--------------------------------------------`)
     );
-    const tracks = await getPlaylistTracks(context.service, playlist.id);
     const playlistTotalTracks = playlist.tracks.total;
     console.log(
         chalk.cyan(
-            `First ${tracks?.items.length} out of ${playlistTotalTracks} songs in list`
+            `First ${fetchedTracks.length} out of ${playlistTotalTracks} songs in list`
         )
     );
-    tracks?.items.forEach((track, i) => {
+    fetchedTracks.forEach((track, i) => {
         console.log(
             chalk.cyan(
-                ` ${i < 99 ? (i < 9 ? "  " : " ") : ""}${i + 1} - ${
-                    track.track?.name
-                }`
+                ` ${i < 99 ? (i < 9 ? "  " : " ") : ""}${i + 1} - ${track.name}`
             )
         );
     });
     console.log(
         chalk.cyanBright(`--------------------------------------------`)
     );
-}
-
-function uniqueTracks(tracks: SpotifyApi.TrackObjectFull[]) {
-    const map = new Map<string, SpotifyApi.TrackObjectFull>();
-    for (const track of tracks) {
-        map.set(track.id, track);
-    }
-    return [...map.values()];
-}
-
-async function llmFilter(
-    description: string,
-    tracks: SpotifyApi.TrackObjectFull[]
-) {
-    let prompt =
-        "The following is a numbered list of music tracks, one track per line\n";
-    for (let i = 0; i < tracks.length; i++) {
-        const track = tracks[i];
-        prompt += `${i}: ${track.name}\n`;
-    }
-    prompt += `Use the following TypeScript type to output the track names that match the description ${description}:
-    type Matches = {
-        trackNumbers: number[];
-    };`;
-    prompt += `Here is a JSON object of type Matches containing the track numbers of the tracks that match ${description}:`;
-    const ret = await model.complete(prompt);
-    return ret;
 }
 
 function chalkPlan(plan: Program) {
@@ -159,199 +132,6 @@ function chalkPlan(plan: Program) {
         );
         console.log(lines[i]);
     }
-}
-
-function localParser(userPrompt: string) {
-    userPrompt = userPrompt.trim();
-    if (
-        userPrompt === "play" ||
-        userPrompt === "pause" ||
-        userPrompt === "next" ||
-        userPrompt === "previous" ||
-        userPrompt === "shuffle"
-    ) {
-        console.log(chalk.green("Instance parsed locally:"));
-        let localParseResult = userPrompt;
-        if (userPrompt !== "play") {
-            localParseResult = "controlPlayback";
-        }
-        return JSON.stringify({
-            "@steps": [
-                {
-                    "@func": localParseResult,
-                    "@args": [userPrompt !== "play" ? userPrompt : ""],
-                },
-            ],
-        });
-    } else if (userPrompt.startsWith("play")) {
-        const matchedPlaySelect = userPrompt.match(
-            /play (T|t|track|Track|#|number|Number|no.|No.)?\s?([0-9]+)/
-        );
-        if (matchedPlaySelect) {
-            const trackOffset = +matchedPlaySelect[2];
-            console.log(chalk.green("Instance parsed locally:"));
-            return JSON.stringify({
-                "@steps": [
-                    {
-                        "@func": "getLastTrackList",
-                        "@args": [],
-                    },
-                    {
-                        "@func": "play",
-                        "@args": [{ "@ref": 0 }, { offset: trackOffset }],
-                    },
-                ],
-            });
-        }
-    }
-    return undefined;
-}
-
-const filterDiag = false;
-
-async function applyFilterExpr(
-    clientContext: IClientContext,
-    filterExpr: Filter.FilterNode,
-    tracks: SpotifyApi.TrackObjectFull[],
-    negate = false
-): Promise<SpotifyApi.TrackObjectFull[]> {
-    if (tracks.length === 0) {
-        return tracks;
-    }
-    switch (filterExpr.type) {
-        case "constraint":
-            switch (filterExpr.constraintType) {
-                case Filter.FilterConstraintType.Genre: {
-                    process.stdout.write(
-                        `fetching genre for ${tracks.length} tracks`
-                    );
-                    const genre = filterExpr.constraintValue;
-                    const results = [] as SpotifyApi.TrackObjectFull[];
-                    for (const track of tracks) {
-                        process.stdout.write(".");
-                        const wrapper = await getArtist(
-                            clientContext.service,
-                            track.album.artists[0].id
-                        );
-                        if (wrapper) {
-                            let hit = wrapper.artists[0].genres.includes(genre);
-                            if (negate) {
-                                hit = !hit;
-                            }
-                            if (hit) {
-                                results.push(track);
-                            }
-                        }
-                    }
-                    process.stdout.write("\n");
-                    tracks = results;
-                    break;
-                }
-                case Filter.FilterConstraintType.Artist: {
-                    const results = [] as SpotifyApi.TrackObjectFull[];
-                    for (const track of tracks) {
-                        let hit = false;
-                        for (const artist of track.artists) {
-                            if (filterDiag) {
-                                console.log(
-                                    `${artist.name.toLowerCase()} vs ${filterExpr.constraintValue.toLowerCase()}`
-                                );
-                            }
-                            if (
-                                artist.name
-                                    .toLowerCase()
-                                    .includes(
-                                        filterExpr.constraintValue.toLowerCase()
-                                    )
-                            ) {
-                                hit = true;
-                            }
-                            if (negate) {
-                                hit = !hit;
-                            }
-                            if (hit) {
-                                results.push(track);
-                            }
-                            if (hit) {
-                                break;
-                            }
-                        }
-                    }
-                    process.stdout.write("\n");
-                    tracks = results;
-                    break;
-                }
-                case Filter.FilterConstraintType.Year: {
-                    const results = [] as SpotifyApi.TrackObjectFull[];
-                    for (const track of tracks) {
-                        // TODO year ranges
-                        if (filterDiag) {
-                            console.log(
-                                `${track.album.release_date} vs ${filterExpr.constraintValue}`
-                            );
-                        }
-                        if (
-                            track.album.release_date.includes(
-                                filterExpr.constraintValue
-                            )
-                        ) {
-                            results.push(track);
-                        }
-                    }
-                    tracks = results;
-                    break;
-                }
-                case Filter.FilterConstraintType.Description: {
-                    const results = [] as SpotifyApi.TrackObjectFull[];
-
-                    const indicesResult = await llmFilter(
-                        filterExpr.constraintValue,
-                        tracks
-                    );
-                    if (indicesResult.success) {
-                        if (indicesResult.data) {
-                            const indices = JSON.parse(indicesResult.data) as {
-                                trackNumbers: number[];
-                            };
-                            for (const j of indices.trackNumbers) {
-                                results.push(tracks[j]);
-                            }
-                        }
-                    }
-                    tracks = results;
-                    break;
-                }
-            }
-            break;
-        case "combiner":
-            if (filterExpr.combinerType === Filter.FilterCombinerType.AND) {
-                for (const childExpr of filterExpr.operands) {
-                    tracks = await applyFilterExpr(
-                        clientContext,
-                        childExpr,
-                        tracks,
-                        negate
-                    );
-                }
-            } else if (
-                filterExpr.combinerType === Filter.FilterCombinerType.OR
-            ) {
-                let subTracks = [] as SpotifyApi.TrackObjectFull[];
-                for (const childExpr of filterExpr.operands) {
-                    subTracks = subTracks.concat(
-                        await applyFilterExpr(
-                            clientContext,
-                            childExpr,
-                            tracks,
-                            negate
-                        )
-                    );
-                }
-                tracks = uniqueTracks(subTracks);
-            }
-            break;
-    }
-    return tracks;
 }
 
 async function getClientContext(token: string) {
@@ -385,132 +165,40 @@ async function getClientContext(token: string) {
     } as IClientContext;
 }
 
-type SortTracksArgs = {
-    // List of tracks to sort
-    trackList: SpotifyApi.TrackObjectFull[];
-    // sort criteria
-    description?: string;
-    // default: false
-    descending?: boolean;
-};
-
 const translator = createProgramTranslator(model, schemaText);
-
-// convert milliseconds to elapsed minutes and seconds as a string
-function msToElapsedMinSec(ms: number) {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    // add leading zero if needed
-    if (remainingSeconds < 10) {
-        return `${minutes}:0${remainingSeconds}`;
-    } else {
-        return `${minutes}:${remainingSeconds}`;
-    }
-}
-
-const pauseSymbol = "⏸️";
-const playSymbol = "▶️";
-
-function chalkStatus(status: SpotifyApi.CurrentPlaybackResponse) {
-    if (status.item) {
-        let timePart = msToElapsedMinSec(status.item.duration_ms);
-        if (status.progress_ms) {
-            timePart = `${msToElapsedMinSec(status.progress_ms)}/${timePart}`;
-        }
-        let symbol = status.is_playing ? playSymbol : pauseSymbol;
-        console.log(
-            `${symbol}  ${timePart}  ${chalk.cyanBright(status.item.name)}`
-        );
-        if (status.item.type === "track") {
-            const artists =
-                "   Artists: " +
-                status.item.artists
-                    .map((artist) => chalk.green(artist.name))
-                    .join(", ");
-            console.log(artists);
-        }
-    }
-}
 
 async function handleCall(
     func: string,
     args: unknown[],
     clientContext: IClientContext
 ): Promise<unknown> {
-    let result:
-        | SpotifyApi.TrackObjectFull[]
-        | SpotifyApi.PlaylistObjectSimplified
-        | undefined = undefined;
+    let result: ITrackCollection | undefined = undefined;
     switch (func) {
-        case "getLastTrackList": {
-            if (clientContext) {
-                result = clientContext.lastTrackList;
-            }
-            break;
-        }
-        case "controlPlayback": {
-            const action = args[0] as string;
-
-            const actionHandlers: {
-                [key: string]: (clientContext: IClientContext) => Promise<void>;
-            } = {
-                pause: pauseHandler,
-                next: nextHandler,
-                previous: previousHandler,
-                shuffle: shuffleHandler,
-            };
-
-            await actionHandlers[action](clientContext);
-            break;
-        }
         case "play": {
-            const input = args[0] as
-                | SpotifyApi.TrackObjectFull[]
-                | SpotifyApi.PlaylistObjectSimplified;
-            if (Array.isArray(input) && input && input.length > 0) {
-                let count = 1;
-                let offset = 0;
-                let options = args[1] as PlayTracksOptions;
-                if (options) {
-                    if (options.count !== undefined) {
-                        count = options.count;
-                    }
-                    if (options.offset !== undefined) {
-                        offset = options.offset;
-                    }
+            const input = args[0] as ITrackCollection;
+            if (input && input.getTrackCount() > 0) {
+                let startIndex = args[1] ? +args[1] : 0;
+                const count = args[2] ? +args[2] : 1;
+                if (startIndex < 0) {
+                    startIndex = input.getTrackCount() + startIndex;
                 }
-                if (offset < 0) {
-                    offset = input.length + offset;
-                }
-                const tracks = input.slice(offset, offset + count);
+                const fetchedTracks = await input.getTracks(
+                    clientContext.service
+                );
+                const contextUri = input.getContext();
+                const tracks = fetchedTracks!.slice(
+                    startIndex,
+                    startIndex + count
+                );
                 const uris = tracks.map((track) => track.uri);
                 console.log(chalk.cyanBright("Playing..."));
-                if (tracks.length > 1) {
-                    printTrackNames(tracks, clientContext);
-                } else {
-                    printTrackNames(tracks);
-                }
+                printTrackNames(tracks, clientContext);
                 if (clientContext.deviceId) {
                     await play(
                         clientContext.service,
                         clientContext.deviceId,
-                        uris
-                    );
-                }
-            } else if (
-                !Array.isArray(input) &&
-                input &&
-                input.type === "playlist"
-            ) {
-                const uri = input.uri;
-                if (clientContext.deviceId) {
-                    await printPlaylist(input, clientContext);
-                    await play(
-                        clientContext.service,
-                        clientContext.deviceId,
-                        undefined,
-                        uri
+                        uris,
+                        contextUri
                     );
                 }
             } else if (clientContext.deviceId) {
@@ -519,9 +207,106 @@ async function handleCall(
             break;
         }
         case "printTracks": {
-            const input = args[0] as SpotifyApi.TrackObjectFull[];
+            const input = args[0] as ITrackCollection;
             if (input) {
-                printTrackNames(input, clientContext);
+                const fetchedTracks = await input.getTracks(
+                    clientContext.service
+                );
+                const playlist = input.getPlaylist();
+                if (playlist) {
+                    printPlaylist(playlist, fetchedTracks, clientContext);
+                } else {
+                    printTrackNames(fetchedTracks, clientContext);
+                }
+            }
+            break;
+        }
+        case "status": {
+            await printStatus(clientContext);
+            break;
+        }
+        case "pause": {
+            if (clientContext.deviceId) {
+                await pause(clientContext.service, clientContext.deviceId);
+                await printStatus(clientContext);
+            }
+            break;
+        }
+        case "next": {
+            if (clientContext.deviceId) {
+                await next(clientContext.service, clientContext.deviceId);
+                await printStatus(clientContext);
+            }
+            break;
+        }
+        case "previous": {
+            if (clientContext.deviceId) {
+                await previous(clientContext.service, clientContext.deviceId);
+                await printStatus(clientContext);
+            }
+            break;
+        }
+        case "shuffleOn": {
+            if (clientContext.deviceId) {
+                await shuffle(
+                    clientContext.service,
+                    clientContext.deviceId,
+                    true
+                );
+                await printStatus(clientContext);
+            }
+            break;
+        }
+        case "shuffleOff": {
+            if (clientContext.deviceId) {
+                await shuffle(
+                    clientContext.service,
+                    clientContext.deviceId,
+                    false
+                );
+                await printStatus(clientContext);
+            }
+            break;
+        }
+        case "resume": {
+            if (clientContext.deviceId) {
+                await play(clientContext.service, clientContext.deviceId);
+                await printStatus(clientContext);
+            }
+            break;
+        }
+        case "listDevices": {
+            await listAvailableDevices(clientContext);
+            break;
+        }
+        case "selectDevice": {
+            if (clientContext.deviceId) {
+                const keyword = args[0] as string;
+                await selectDevice(keyword, clientContext);
+            }
+            break;
+        }
+        case "setVolume": {
+            const newVolumeLevel = args[0] as number;
+            console.log(
+                chalk.yellowBright(`setting volume to ${newVolumeLevel} ...`)
+            );
+            await setVolume(clientContext.service, newVolumeLevel);
+            break;
+        }
+        case "changeVolume": {
+            const volumeChangeAmount = args[0] as number;
+            const playback = await getPlaybackState(clientContext.service);
+            if (playback && playback.device) {
+                const volpct = playback.device.volume_percent || 50;
+                let nv = Math.floor(
+                    (1.0 + volumeChangeAmount / 100.0) * volpct
+                );
+                if (nv > 100) {
+                    nv = 100;
+                }
+                console.log(chalk.yellowBright(`setting volume to ${nv} ...`));
+                await setVolume(clientContext.service, nv);
             }
             break;
         }
@@ -535,85 +320,23 @@ async function handleCall(
             };
             const data = await search(query, clientContext.service);
             if (data && data.tracks) {
-                result = data.tracks.items;
+                result = new TrackCollection(
+                    data.tracks.items,
+                    data.tracks.items.length
+                );
                 1;
             }
             break;
         }
-        case "getFavorites": {
-            const options = args[0] as GetFavoritesOptions;
-            let count = limitMax;
-            if (options && options.count !== undefined) {
-                count = options.count;
-            }
-            // TODO: use favorites term
-            if (options && options.favoritesTerm !== undefined) {
-                const tops = await getTopK(clientContext.service, count);
-                if (tops) {
-                    result = tops.map((pto) => pto.track!);
-                }
-            } else {
-                const wrappedTracks = await getKRecent(
-                    clientContext.service,
-                    count
+        case "getLastTrackList": {
+            if (clientContext && clientContext.lastTrackList) {
+                result = new TrackCollection(
+                    clientContext.lastTrackList,
+                    clientContext.lastTrackCount
                 );
-                if (wrappedTracks) {
-                    result = wrappedTracks.map((obj) => obj.track);
-                }
             }
             break;
         }
-        case "mergeTrackLists": {
-            const trackLists = args as SpotifyApi.TrackObjectFull[][];
-            result = trackLists.flat();
-            break;
-        }
-        case "filterTracks": {
-            const trackList = args[0] as SpotifyApi.TrackObjectFull[];
-            const filterArgs = args[1] as FilterTracksArgs;
-            // TODO: add filter validation to overall instance validation
-            const parseResult = Filter.parseFilter(filterArgs.filter);
-            if (parseResult.ast) {
-                if (trackList) {
-                    result = await applyFilterExpr(
-                        clientContext,
-                        parseResult.ast,
-                        trackList as SpotifyApi.TrackObjectFull[],
-                        filterArgs.negate
-                    );
-                }
-            } else {
-                console.log(parseResult.diagnostics);
-            }
-            break;
-        }
-        case "status": {
-            const status = await getPlaybackState(clientContext.service);
-            if (status) {
-                chalkStatus(status);
-            } else {
-                console.log("could not get status");
-            }
-            break;
-        }
-        case "sortTracks": {
-            const sortArgs = args[0] as SortTracksArgs;
-            if (sortArgs.trackList) {
-                const input =
-                    sortArgs.trackList as SpotifyApi.TrackObjectFull[];
-                if (sortArgs.descending) {
-                    result = input
-                        .slice()
-                        .sort((a, b) => b.name.localeCompare(a.name));
-                } else {
-                    result = input
-                        .slice()
-                        .sort((a, b) => a.name.localeCompare(b.name));
-                }
-            }
-            break;
-        }
-        case "mergeTrackLists":
         case "listPlaylists": {
             const playlists = await getPlaylists(clientContext.service);
             if (playlists) {
@@ -631,19 +354,103 @@ async function handleCall(
                     .toLowerCase()
                     .includes(playlistName.toLowerCase());
             });
-            result = playlist;
+            if (playlist) {
+                const playlistResponse = await getPlaylistTracks(
+                    clientContext.service,
+                    playlist.id
+                );
+                // TODO: add paging 
+                if (playlistResponse) {
+                    result = new PlaylistTrackCollection(
+                        playlist,
+                        playlistResponse.items.map((item) => item.track!)
+                    );
+                }
+            }
             break;
         }
-        case "getPlaylistTracks": {
-            const playlistName = args[0] as string;
-            const playlists = await getPlaylists(clientContext.service);
-            const playlist = playlists?.items.find(
-                (playlist) => playlist.name === playlistName
-            );
-            const playlistResponse =
-                playlist &&
-                (await getPlaylistTracks(clientContext.service, playlist.id));
-            result = playlistResponse?.items.map((item) => item.track!);
+        case "getAlbum": {
+            const name = args[0] as string;
+            if (name.length > 0) {
+                // search for album by name and load it as track collection
+            } else {
+                // get album of current playing track and load it as track collection
+                const status = await getPlaybackState(clientContext.service);
+                if (status && status.item && status.item.type === "track") {
+                    const track = status.item as SpotifyApi.TrackObjectFull;
+                    const album = track.album;
+                    // TODO: add paging 
+                    const getTracksResponse = await getAlbumTracks(
+                        clientContext.service,
+                        album.id
+                    );
+                    if (getTracksResponse) {
+                        result = new AlbumTrackCollection(
+                            album,
+                            getTracksResponse.items
+                        );
+                    }
+                }
+            }
+            break;
+        }
+        case "getFavorites": {
+            const countOption = args[0] as number;
+            let count = limitMax;
+            if (countOption !== undefined) {
+                count = countOption;
+            }
+            const tops = await getTopK(clientContext.service, count);
+            if (tops) {
+                const tracks = tops.map((pto) => pto.track!);
+                result = new TrackCollection(tracks, tracks.length);
+            }
+            break;
+        }
+        case "filterTracks": {
+            const trackList = args[0] as SpotifyApi.TrackObjectFull[];
+            let filterType = args[1] as string;
+            const filterText = args[2] as string;
+            const negate = args[3] as boolean;
+            // TODO: add filter validation to overall instance validation
+            if (filterType === "name") {
+                filterType = "description";
+            }
+            const filter = filterType + ":" + filterText;
+            const parseResult = Filter.parseFilter(filter);
+            if (parseResult.ast) {
+                if (trackList) {
+                    const tracks = await applyFilterExpr(
+                        clientContext,
+                        model,
+                        parseResult.ast,
+                        trackList as SpotifyApi.TrackObjectFull[],
+                        negate
+                    );
+                    result = new TrackCollection(tracks, tracks.length);
+                }
+            } else {
+                console.log(parseResult.diagnostics);
+            }
+            break;
+        }
+        case "createPlaylist": {
+            const input = args[0] as SpotifyApi.TrackObjectFull[];
+            const name = args[1] as string;
+            if (input && input.length > 0) {
+                const uris = input.map((track) => (track ? track.uri : ""));
+                await createPlaylist(
+                    clientContext.service,
+                    name,
+                    clientContext.service.retrieveUser().id!,
+                    uris,
+                    name
+                );
+                console.log(`playlist ${name} created with tracks:`);
+                printTrackNames(input, clientContext);
+            } else {
+                console.log(chalk.red("filter did not find any tracks"));
+            }
             break;
         }
         case "deletePlaylist": {
@@ -667,56 +474,9 @@ async function handleCall(
             }
             break;
         }
-        case "createPlaylist": {
-            const input = args[0] as SpotifyApi.TrackObjectFull[];
-            const name = args[1] as string;
-            if (input && input.length > 0) {
-                const uris = input.map((track) => (track ? track.uri : ""));
-                await createPlaylist(
-                    clientContext.service,
-                    name,
-                    clientContext.service.retrieveUser().id!,
-                    uris,
-                    name
-                );
-                console.log(`playlist ${name} created with tracks:`);
-                printTrackNames(input, clientContext);
-            } else {
-                console.log(chalk.red("filter did not find any tracks"));
-            }
-            break;
-        }
-        case "setVolume": {
-            const setVolArgs = args[0] as SetVolumeArgs;
-            if (setVolArgs.newVolumeLevel) {
-                if (setVolArgs.newVolumeLevel > 50) {
-                    setVolArgs.newVolumeLevel = 50;
-                }
-                console.log(
-                    chalk.yellowBright(
-                        `setting volume to ${setVolArgs.newVolumeLevel} ...`
-                    )
-                );
-                await setVolume(
-                    clientContext.service,
-                    setVolArgs.newVolumeLevel
-                );
-            } else if (setVolArgs.volumeChangeAmount) {
-                const playback = await getPlaybackState(clientContext.service);
-                if (playback && playback.device) {
-                    const volpct = playback.device.volume_percent || 50;
-                    let nv = Math.floor(
-                        (1.0 + setVolArgs.volumeChangeAmount / 100.0) * volpct
-                    );
-                    if (nv > 80) {
-                        nv = 80;
-                    }
-                    console.log(
-                        chalk.yellowBright(`setting volume to ${nv} ...`)
-                    );
-                    await setVolume(clientContext.service, nv);
-                }
-            }
+        case "unknownAction": {
+            const text = args[0] as string;
+            console.log(`Text not understood in this context: ${text}`);
             break;
         }
         case "nonMusicQuestion": {
@@ -727,15 +487,11 @@ async function handleCall(
             }
             break;
         }
-        case "unknownAction": {
-            const text = args[0] as string;
-            console.log(`Text not understood in this context: ${text}`);
-            break;
-        }
     }
     return result;
 }
 
+// set this to false to just look at llm generation without Spotify connection
 const spotifyConnect = true;
 
 // Process requests interactively or from the input file specified on the command line
@@ -748,7 +504,7 @@ async function musicApp() {
         } else {
             console.log(
                 chalk.yellow(
-                    "SPOTIFY_APP_CLI not set, no Spotify connection: showing plans only"
+                    "Spotify connection not active: showing plans only"
                 )
             );
         }
@@ -776,9 +532,11 @@ async function musicApp() {
                         }
                     );
                     if (result !== undefined) {
-                        if (Array.isArray(result)) {
-                            const trackList =
-                                result as SpotifyApi.TrackObjectFull[];
+                        const collection = result as ITrackCollection;
+                        const trackList = await collection.getTracks(
+                            context.service
+                        );
+                        if (trackList) {
                             printTrackNames(trackList, context);
                             context.lastTrackList = trackList;
                         }
