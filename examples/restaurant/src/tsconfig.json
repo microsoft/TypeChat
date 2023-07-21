@@ -11,5 +11,6 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "exactOptionalPropertyTypes": true,
+    "inlineSourceMap": true
   }
 }
