@@ -342,6 +342,34 @@ export async function previous(
     return undefined;
 }
 
+export async function shuffle(
+    service: SpotifyService,
+    deviceId: string,
+    newShuffleState: boolean
+) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    try {
+        const spotifyResult = await axios.put(
+            `https://api.spotify.com/v1/me/player/shuffle?state=${newShuffleState}&device_id=${deviceId}`,
+            {},
+            config
+        );
+
+        return spotifyResult.data;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
 export async function getPlaylists(service: SpotifyService) {
     const config = {
         headers: {

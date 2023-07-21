@@ -40,7 +40,8 @@ import {
 import {
   pauseHandler,
   nextHandler,
-  previousHandler
+  previousHandler,
+  shuffleHandler
 } from "./playback";
 import { SpotifyService, User } from "./service";
 
@@ -133,11 +134,11 @@ function chalkPlan(plan: Program) {
 
 function localParser(userPrompt: string) {
   userPrompt = userPrompt.trim();
-  if (userPrompt === "play" || userPrompt === "pause" || userPrompt === "next" || userPrompt === "previous") {
+  if (userPrompt === "play" || userPrompt === "pause" || userPrompt === "next" || userPrompt === "previous" || userPrompt === "shuffle") {
     console.log(chalk.green("Instance parsed locally:"));
     let localParseResult = userPrompt;
     if (userPrompt !== "play") {
-      localParseResult = "controlPlayBack";
+      localParseResult = "controlPlayback";
     }
     return JSON.stringify({
       "@steps": [
@@ -394,13 +395,14 @@ async function handleCall(
       }
       break;
     }
-    case "controlPlayBack" : {
+    case "controlPlayback" : {
       const action = args[0] as string;
 
       const actionHandlers: { [key:string] : (clientContext: IClientContext) => Promise<void> } = {
         pause : pauseHandler,
         next : nextHandler,
-        previous : previousHandler
+        previous : previousHandler,
+        shuffle: shuffleHandler
       };
 
       await actionHandlers[action](clientContext);
