@@ -6,3 +6,4 @@ make it loud
 get my favorite 80 tracks from the last 8 months and create one playlist named class8 containing the classical tracks and another playlist containing the blues tracks
 toggle shuffle on and skip to the next track
 go back to the last song
+play my playlist class8

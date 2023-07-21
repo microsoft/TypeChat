@@ -85,6 +85,18 @@ function printTrackNames(
   }
 }
 
+async function printPlaylist(playlist: SpotifyApi.PlaylistObjectSimplified, context: IClientContext) {
+  console.log(chalk.cyanBright(`Starting playlist --> ${playlist.name}`));
+  console.log(chalk.cyanBright(`--------------------------------------------`));
+  const tracks = await getPlaylistTracks(context.service, playlist.id);
+  const playlistTotalTracks = playlist.tracks.total;
+  console.log(chalk.cyan(`First ${tracks?.items.length} out of ${playlistTotalTracks} songs in list`));
+  tracks?.items.forEach((track, i) => {
+    console.log(chalk.cyan(` ${i < 99 ? i < 9 ? "  " : " " : ""}${i + 1} - ${track.track?.name}`));
+  })
+  console.log(chalk.cyanBright(`--------------------------------------------`));
+}
+
 function uniqueTracks(tracks: SpotifyApi.TrackObjectFull[]) {
   const map = new Map<string, SpotifyApi.TrackObjectFull>();
   for (const track of tracks) {
@@ -387,7 +399,7 @@ async function handleCall(
   args: unknown[],
   clientContext: IClientContext
 ): Promise<unknown> {
-  let result: SpotifyApi.TrackObjectFull[] | undefined = undefined;
+  let result: SpotifyApi.TrackObjectFull[] | SpotifyApi.PlaylistObjectSimplified | undefined = undefined;
   switch (func) {
     case "getLastTrackList": {
       if (clientContext) {
@@ -409,9 +421,8 @@ async function handleCall(
       break;
     }
     case "play": {
-      const input = args[0] as SpotifyApi.TrackObjectFull[];
-
-      if (input && input.length > 0) {
+      const input = args[0] as SpotifyApi.TrackObjectFull[] | SpotifyApi.PlaylistObjectSimplified;
+      if (Array.isArray(input) && input && input.length > 0) {
         let count = 1;
         let offset = 0;
         let options = args[1] as PlayTracksOptions;
@@ -436,6 +447,12 @@ async function handleCall(
         }
         if (clientContext.deviceId) {
           await play(clientContext.service, clientContext.deviceId, uris);
+        }
+      } else if(!Array.isArray(input) && input && input.type === 'playlist') {
+        const uri = input.uri;
+        if (clientContext.deviceId) {
+          await printPlaylist(input, clientContext);
+          await play(clientContext.service, clientContext.deviceId, undefined, uri);
         }
       } else if (clientContext.deviceId) {
         await play(clientContext.service, clientContext.deviceId);
@@ -537,6 +554,17 @@ async function handleCall(
           console.log(chalk.magentaBright(`${playlist.name}`));
         }
       }
+      break;
+    }
+    case "getPlaylist" : {
+      const playlistName = args[0] as string;
+      const playlists = await getPlaylists(clientContext.service);
+      const playlist = playlists?.items.find(
+        (playlist) => {
+          return playlist.name.toLowerCase().includes(playlistName.toLowerCase());
+        }
+      );
+      result = playlist
       break;
     }
     case "getPlaylistTracks": {
