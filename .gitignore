@@ -10,5 +10,6 @@ node_modules/
 # Local development and debugging
 **/.vscode/*
 **/tsconfig.debug.json
+!**/.vscode/launch.json
 
 
