@@ -248,7 +248,9 @@ export async function play(
     service: SpotifyService,
     deviceId: string,
     uris?: string[],
-    contextUri?: string
+    contextUri?: string,
+    trackNumber?: number,
+    seekms?: number
 ) {
     const config = {
         headers: {
@@ -258,6 +260,12 @@ export async function play(
     const smallTrack: SpotifyApi.PlayParameterObject = {};
     if (contextUri) {
         smallTrack.context_uri = contextUri;
+        if (trackNumber) {
+            smallTrack.offset = { position: trackNumber};
+            if (seekms) {
+                smallTrack.position_ms = seekms;
+            }
+        }
     }
     else if (uris) {
         smallTrack.uris = uris;

@@ -64,8 +64,8 @@ export type API = {
     ): TrackList;
     // create a Spotify playlist from a list of tracks
     createPlaylist(trackList: TrackList, name: string): void;
-    // Delete playlist 'name'
-    deletePlaylist(name: string): void;
+    // Delete playlist given by trackList
+    deletePlaylist(trackList: TrackList): void;
     // call this function for requests that weren't understood
     unknownAction(text: string): void;
     // call this function if the user asks a non-music question; non-music non-questions use UnknownAction

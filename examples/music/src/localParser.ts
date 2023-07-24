@@ -33,7 +33,7 @@ export function localParser(userPrompt: string) {
                     },
                     {
                         "@func": "play",
-                        "@args": [{ "@ref": 0 }, trackOffset],
+                        "@args": [{ "@ref": 0 }, trackOffset - 1],
                     },
                 ],
             });
