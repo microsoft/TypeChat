@@ -5,7 +5,7 @@ import { TypeChatJsonValidator, createJsonValidator } from "./validate";
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
  */
-export interface TypeChat<T extends object> {
+export interface TypeChatJsonTranslator<T extends object> {
     /**
      * The associated `TypeChatLanguageModel`.
      */
@@ -50,7 +50,7 @@ export interface TypeChat<T extends object> {
      * @param request The natural language request.
      * @returns A promise for the resulting object.
      */
-    completeAndValidate(request: string): Promise<Result<T>>;
+    translate(request: string): Promise<Result<T>>;
 }
 
 /**
@@ -60,24 +60,24 @@ export interface TypeChat<T extends object> {
  * @param model The language model to use for translating requests into JSON.
  * @param schema A string containing the TypeScript source code for the JSON schema.
  * @param typeName The name of the JSON target type in the schema.
- * @returns A `TypeChat<T>` instance.
+ * @returns A `TypeChatJsonTranslator<T>` instance.
  */
-export function createTypeChat<T extends object>(model: TypeChatLanguageModel, schema: string, typeName: string): TypeChat<T> {
+export function createJsonTranslator<T extends object>(model: TypeChatLanguageModel, schema: string, typeName: string): TypeChatJsonTranslator<T> {
     const validator = createJsonValidator<T>(schema, typeName);
-    const typeChat: TypeChat<T> = {
+    const typeChat: TypeChatJsonTranslator<T> = {
         model,
         validator,
         attemptRepair: true,
         stripNulls: false,
         createRequestPrompt,
         createRepairPrompt,
-        completeAndValidate
+        translate
     };
     return typeChat;
 
     function createRequestPrompt(request: string) {
         return `You are a service that translates user requests into JSON objects of type "${validator.typeName}" according to the following TypeScript definitions:\n` +
-            `###\n${validator.schema}###\n` +
+            `\`\`\`\n${validator.schema}\`\`\`\n` +
             `The following is a user request:\n` +
             `"""\n${request}\n"""\n` +
             `The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:\n`;
@@ -85,11 +85,11 @@ export function createTypeChat<T extends object>(model: TypeChatLanguageModel, s
 
     function createRepairPrompt(validationError: string) {
         return `The JSON object is invalid for the following reason:\n` +
-            `${validationError}\n` +
+            `"""\n${validationError}\n"""\n` +
             `The following is a revised JSON object:\n`;
     }
 
-    async function completeAndValidate(request: string) {
+    async function translate(request: string) {
         let prompt = typeChat.createRequestPrompt(request);
         let attemptRepair = typeChat.attemptRepair;
         while (true) {
@@ -97,14 +97,21 @@ export function createTypeChat<T extends object>(model: TypeChatLanguageModel, s
             if (!response.success) {
                 return response;
             }
-            const validation = validator.validate(response.data);
+            const responseText = response.data;
+            const startIndex = responseText.indexOf("{");
+            const endIndex = responseText.lastIndexOf("}");
+            if (!(startIndex >= 0 && endIndex > startIndex)) {
+                return error(`Response is not JSON:\n${responseText}`);
+            }
+            const jsonText = responseText.slice(startIndex, endIndex + 1);
+            const validation = validator.validate(jsonText);
             if (validation.success) {
                 return validation;
             }
             if (!attemptRepair) {
-                return error(`JSON object validation failed:\n${response.data}\n${validation.message}`);
+                return error(`JSON validation failed: ${validation.message}\n${jsonText}`);
             }
-            prompt += `${response.data}\n${typeChat.createRepairPrompt(validation.message)}`;
+            prompt += `${responseText}\n${typeChat.createRepairPrompt(validation.message)}`;
             attemptRepair = false;
         }
     }

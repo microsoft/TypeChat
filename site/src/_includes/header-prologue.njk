@@ -1,0 +1,23 @@
+<a class="skip-to-main" href="#site-content" tabindex="0">Skip to main content</a>
+<div class="d-flex w-100 h-100 p-3 mx-auto flex-column">
+<header class="container d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom">
+    <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-body-emphasis text-decoration-none">
+        <!-- <svg class="bi me-2" width="40" height="32">
+            <use xlink:href="#bootstrap"></use>
+        </svg> -->
+        <span class="fs-3" style="margin-right: 2rem;">TypeChat</span>
+    </a>
+
+    <ul class="nav nav-underline">
+        {%- for navItem in headernav -%}
+            {%- if page.url === navItem.dest or (navItem.dest !== "/" and page.url.startsWith(navItem.dest)) -%}
+                <li class="nav-item"><a href="{{navItem.dest}}" class="nav-link active" aria-current="page">{{navItem.title}}</a></li>
+            {%- elif navItem.isExternal -%}
+                <li class="nav-item"><a href="{{navItem.dest}}" target="_blank" rel="noopener" class="nav-link">{{navItem.title}}</a></li>
+            {%- else -%}
+                <li class="nav-item"><a href="{{navItem.dest}}" class="nav-link">{{navItem.title}}</a></li>
+            {%- endif -%}
+        {%- endfor -%}
+    </ul>
+</header>
+<div class="d-none" id="site-content"></div>

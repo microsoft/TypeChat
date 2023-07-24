@@ -1,0 +1,9 @@
+play Taylor Swift Shake It Off
+get my top 20 favorites and make a playlist named animalTracks of the tracks that have animals in their names
+get my favorite 100 tracks from the last two months and show only the ones by Bach
+make it loud
+get my favorite 80 tracks from the last 8 months and create one playlist named class8 containing the classical tracks and another playlist containing the blues tracks
+toggle shuffle on and skip to the next track
+go back to the last song
+play my playlist class8
+play the fourth one

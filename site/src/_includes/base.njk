@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>{% if title %}{{title}} - TypeChat{% else %}TypeChat{% endif %}</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <!-- <link rel='stylesheet' type='text/css' media='screen' href='main.css'> -->
+    <link href="/css/5.3.0_dist_css_bootstrap.min.css" rel="stylesheet">
+    <link href="/css/styles.css" rel="stylesheet">
+    <script src="/js/interactivity.js" defer></script>
+    <noscript><link href="/css/noscript-styles.css" rel="stylesheet"></noscript>
+</head>
+
+<body class="h-100">
+{% include "header-prologue.njk" %}
+
+{{ content | safe }}
+
+{% include "footer.njk" %}
+</div>
+</body>
+
+</html>

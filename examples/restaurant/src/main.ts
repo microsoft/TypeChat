@@ -3,7 +3,7 @@ import path from "path";
 import dotenv from "dotenv";
 import {
   createLanguageModel,
-  createTypeChat,
+  createJsonTranslator,
   processRequests,
 } from "typechat";
 import { Order } from "./foodOrderViewSchema";
@@ -11,13 +11,12 @@ import { Order } from "./foodOrderViewSchema";
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const pizza = "🍕";
-const model = createLanguageModel();
+const model = createLanguageModel(process.env);
 const viewSchema = fs.readFileSync(
   path.join(__dirname, "foodOrderViewSchema.ts"),
   "utf8"
 );
-const typeChat = createTypeChat<Order>(model, viewSchema, "Order");
+const translator = createJsonTranslator<Order>(model, viewSchema, "Order");
 
 const saladIngredients = [
   "lettuce",
@@ -173,8 +172,8 @@ function printOrder(order: Order) {
 }
 
 // Process requests interactively or from the input file specified on the command line
-processRequests(`${pizza}> `, process.argv[2], async (request) => {
-  const response = await typeChat.completeAndValidate(request);
+processRequests("🍕> ", process.argv[2], async (request) => {
+  const response = await translator.translate(request);
   if (!response.success) {
     console.log(response.message);
     return;

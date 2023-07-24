@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc -p src",
-    "postbuild": "copyfiles -u 1 src/**/*Schema.ts build"
+    "postbuild": "copyfiles -u 1 src/**/*Schema.ts src/**/*.txt dist"
   },
   "author": "",
   "license": "MIT",

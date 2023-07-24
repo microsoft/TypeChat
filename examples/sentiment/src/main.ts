@@ -1,20 +1,19 @@
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
-import { createLanguageModel, createTypeChat, processRequests } from "typechat";
+import { createLanguageModel, createJsonTranslator, processRequests } from "typechat";
 import { SentimentResponse } from "./sentimentSchema";
 
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const happyFace = "\u{1F600}";
-const model = createLanguageModel();
+const model = createLanguageModel(process.env);
 const schema = fs.readFileSync(path.join(__dirname, "sentimentSchema.ts"), "utf8");
-const typeChat = createTypeChat<SentimentResponse>(model, schema, "SentimentResponse");
+const translator = createJsonTranslator<SentimentResponse>(model, schema, "SentimentResponse");
 
 // Process requests interactively or from the input file specified on the command line
-processRequests(`${happyFace}> `, process.argv[2], async (request) => {
-    const response = await typeChat.completeAndValidate(request);
+processRequests("😀> ", process.argv[2], async (request) => {
+    const response = await translator.translate(request);
     if (!response.success) {
         console.log(response.message);
         return;
