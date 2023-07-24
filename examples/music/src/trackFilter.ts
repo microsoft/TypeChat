@@ -417,8 +417,8 @@ async function llmFilter(
     prompt += `Use the following TypeScript type to output the track names that match the description ${description}:
     type Matches = {
         trackNumbers: number[];
-    };`;
-    prompt += `Here is a JSON object of type Matches containing the track numbers of the tracks that match ${description}:`;
+    };\n`;
+    prompt += `Here is a JSON object of type Matches containing the track numbers of the tracks that match ${description}:\n`;
     const ret = await model.complete(prompt);
     return ret;
 }
