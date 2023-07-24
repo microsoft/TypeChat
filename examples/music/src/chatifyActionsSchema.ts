@@ -2,6 +2,7 @@
 
 type Track = { name: string };
 type TrackList = Track[];
+type Playlist = TrackList; 
 
 export type API = {
     // play track list
@@ -46,8 +47,8 @@ export type API = {
     getLastTrackList(): TrackList;
     // list all playlists
     listPlaylists(): void;
-    // get playlist
-    getPlaylist(name: string): TrackList;
+    // get playlist by name
+    getPlaylist(name: string): Playlist;
     // get album by name; if name is "", use the currently playing track
     getAlbum(name: string): TrackList;
     // Return a list of the user's favorite tracks
@@ -64,8 +65,8 @@ export type API = {
     ): TrackList;
     // create a Spotify playlist from a list of tracks
     createPlaylist(trackList: TrackList, name: string): void;
-    // Delete playlist given by trackList
-    deletePlaylist(trackList: TrackList): void;
+    // Delete playlist given by playlist
+    deletePlaylist(playlist: Playlist): void;
     // call this function for requests that weren't understood
     unknownAction(text: string): void;
     // call this function if the user asks a non-music question; non-music non-questions use UnknownAction

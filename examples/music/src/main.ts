@@ -74,7 +74,7 @@ async function printTrackNames(
     let count = 1;
     for (const track of tracks) {
         let prefix = "";
-        if (context) {
+        if (context && (tracks.length > 1)) {
             prefix = `T${count}: `;
         }
         console.log(chalk.cyanBright(`${prefix}${track.name}`));
@@ -82,6 +82,7 @@ async function printTrackNames(
             "   Artists: " +
             track.artists.map((artist) => chalk.green(artist.name)).join(", ");
         console.log(artists);
+        console.log("   Album: " + chalk.rgb(181, 101, 29)(track.album.name));
 
         count++;
     }
