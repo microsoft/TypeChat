@@ -31,7 +31,7 @@ export type API = {
     shuffleOff(): void;
     // resume playing
     resume(): void;
-    // list availabe playback devices
+    // list available playback devices
     listDevices(): void;
     // select playback device by keyword
     selectDevice(keyword: string): void;
