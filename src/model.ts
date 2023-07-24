@@ -43,7 +43,8 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
         const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
-        return createOpenAILanguageModel(apiKey, model, endPoint);
+        const org = env.OPENAI_ORGANIZATION ?? "";
+        return createOpenAILanguageModel(apiKey, model, org, endPoint);
     }
     if (env.AZURE_OPENAI_API_KEY) {
         const apiKey = env.AZURE_OPENAI_API_KEY ?? missingEnvironmentVariable("AZURE_OPENAI_API_KEY");
@@ -57,11 +58,17 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  * Creates a language model encapsulation of an OpenAI REST API endpoint.
  * @param apiKey The OpenAI API key.
  * @param model The model name.
+ * @param org: The OpenAI organization id.
  * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to "https://api.openai.com/v1/chat/completions".
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions",): TypeChatLanguageModel {
-    return createAxiosLanguageModel(endPoint, { headers: { Authorization: `Bearer ${apiKey}` } }, { model });
+export function createOpenAILanguageModel(apiKey: string, model: string, org: string, endPoint = "https://api.openai.com/v1/chat/completions"): TypeChatLanguageModel {
+    return createAxiosLanguageModel(endPoint, { 
+        headers: { 
+            Authorization: `Bearer ${apiKey}`,
+            "OpenAI-Organization": org
+         } 
+    }, { model });
 }
 
 /**
