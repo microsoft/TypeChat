@@ -23,7 +23,7 @@ The answer as many of us have seen is "yes - sort of", and it really depends on 
 
 Remember, by default these models respond in *natural language* which is how we read and write today;
 but traditional programs are kind of bad at working with these answers.
-Most software expects to work off of level of structure over bytes, characters, JSON blobs, etc. &mdash; not natural languages like English.
+Most software expects to work off of a level of structure over bytes, characters, JSON blobs, etc. &mdash; not natural languages like English.
 When we don't have structure, we have to parse out what we're interested in, and it might not always be practical.
 
 One way to add some structure and make parsing easier might be to ask for a list of answers:
@@ -79,7 +79,7 @@ As a matter of fact, many language models are great at generating JSON!
 Here we asked a model to respond directly with JSON code and provided a sort of "template" or example response to guide its answer.
 As you can see, it worked pretty well!
 
-Examples responses are great, but we wondered if there was another approach.
+Example responses are great, but we wondered if there was another approach.
 In our case, we asked whether we could simply guide a model with TypeScript types.
 
 > **User:**
