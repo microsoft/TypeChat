@@ -58,8 +58,8 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  * Creates a language model encapsulation of an OpenAI REST API endpoint.
  * @param apiKey The OpenAI API key.
  * @param model The model name.
- * @param org: The OpenAI organization id.
  * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to "https://api.openai.com/v1/chat/completions".
+ * @param org: The OpenAI organization id.
  * @returns An instance of `TypeChatLanguageModel`.
  */
 export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = ""): TypeChatLanguageModel {
