@@ -143,5 +143,5 @@ function sleep(ms: number): Promise<void> {
  * Throws an exception for a missing environment variable.
  */
 function missingEnvironmentVariable(name: string): never {
-    throw new Error(`"Missing environment variable: ${name}`);
+    throw new Error(`Missing environment variable: ${name}`);
 }
