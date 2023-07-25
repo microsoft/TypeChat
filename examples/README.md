@@ -89,6 +89,13 @@ AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_KEY=...
 ```
 
+Optional proxy setting: For some endpoints, proxy is needed to access services.
+You can set your http proxy environment variable that looks like the following:
+```
+# For Proxy
+HTTP_PROXY=http://host:port
+```
+
 ## Step 4: Run the examples
 
 Examples can be found in the `examples` directory.

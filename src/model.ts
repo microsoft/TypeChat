@@ -1,6 +1,8 @@
 import axios from "axios";
 import { Result, success, error } from "./result";
 
+import { HttpsProxyAgent } from 'https-proxy-agent';
+
 /**
  * Represents a AI language model that can complete prompts. TypeChat uses an implementation of this
  * interface to communicate with an AI service that can translate natural language requests to JSON
@@ -39,17 +41,19 @@ export interface TypeChatLanguageModel {
  * @returns An instance of `TypeChatLanguageModel`.
  */
 export function createLanguageModel(env: Record<string, string | undefined>): TypeChatLanguageModel {
+    const httpProxy = env.HTTP_PROXY ?? "";
+
     if (env.OPENAI_API_KEY) {
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
         const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
         const org = env.OPENAI_ORGANIZATION ?? "";
-        return createOpenAILanguageModel(apiKey, model, endPoint, org);
+        return createOpenAILanguageModel(apiKey, model, endPoint, org, httpProxy);
     }
     if (env.AZURE_OPENAI_API_KEY) {
         const apiKey = env.AZURE_OPENAI_API_KEY ?? missingEnvironmentVariable("AZURE_OPENAI_API_KEY");
         const endPoint = env.AZURE_OPENAI_ENDPOINT ?? missingEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
-        return createAzureOpenAILanguageModel(apiKey, endPoint);
+        return createAzureOpenAILanguageModel(apiKey, endPoint, httpProxy);
     }
     missingEnvironmentVariable("OPENAI_API_KEY or AZURE_OPENAI_API_KEY");
 }
@@ -60,14 +64,18 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  * @param model The model name.
  * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to "https://api.openai.com/v1/chat/completions".
  * @param org: The OpenAI organization id.
+ * @param httpProxy: The HTTP proxy setting.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = ""): TypeChatLanguageModel {
+export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", httpProxy = ""): TypeChatLanguageModel {
+    const agent = new HttpsProxyAgent(httpProxy);
     return createAxiosLanguageModel(endPoint, { 
         headers: { 
             Authorization: `Bearer ${apiKey}`,
             "OpenAI-Organization": org
-         } 
+        },
+        httpAgent: agent,
+        httpsAgent: agent
     }, { model });
 }
 
@@ -77,10 +85,16 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
  *   "https://{your-resource-name}.openai.azure.com/openai/deployments/{your-deployment-name}/chat/completions?api-version={API-version}".
  *   Example deployment names are "gpt-35-turbo" and "gpt-4". An example API versions is "2023-05-15".
  * @param apiKey The Azure OpenAI API key.
+ * @param httpProxy: The HTTP proxy setting.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string,): TypeChatLanguageModel {
-    return createAxiosLanguageModel(endPoint, { headers: { "api-key": apiKey } }, {});
+export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string, httpProxy = ""): TypeChatLanguageModel {
+    const agent = new HttpsProxyAgent(httpProxy);
+    return createAxiosLanguageModel(endPoint, { 
+        headers: { "api-key": apiKey },
+        httpAgent: agent,
+        httpsAgent: agent
+    }, {});
 }
 
 /**
