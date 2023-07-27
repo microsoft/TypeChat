@@ -24,7 +24,8 @@ For example, given the following order:
 **Output**:
 
 ```
-2 large pizza with mushrooms
+1 large pizza with mushrooms
+2 large pizza with sausage
 1 small pizza with sausage
 1 whole Greek salad
 1 Pale Ale
