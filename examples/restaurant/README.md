@@ -18,7 +18,7 @@ For example, given the following order:
 **Input**:
 
 ```
-😀> 🍕> I want three pizzas, one with mushrooms and the other two with sausage.  Make one sausage a small.  And give me a whole Greek and a Pale Ale.  And give me a Mack and Jacks.
+🍕> I want three pizzas, one with mushrooms and the other two with sausage.  Make one sausage a small.  And give me a whole Greek and a Pale Ale.  And give me a Mack and Jacks.
 ```
 
 **Output**:
@@ -31,3 +31,5 @@ For example, given the following order:
 1 Pale Ale
 1 Mack and Jacks
 ```
+
+> This shows that TypeChat may not be 100% accurate, and you may want to consider asking the user for confirmation before performing any action. The output here erroneously shows 1 mushroom pizzas and 3 sausage pizza, while it should be 1 mushroom pizza and 2 sausage pizzas (one large and one small).
