@@ -18,18 +18,35 @@ For example, given the following order:
 **Input**:
 
 ```
-🍕> I want three pizzas, one with mushrooms and the other two with sausage.  Make one sausage a small.  And give me a whole Greek and a Pale Ale.  And give me a Mack and Jacks.
+🍕> I want three pizzas, one with mushrooms and the other two with sausage. Make one sausage a small. And give me a whole Greek and a Pale Ale. And give me a Mack and Jacks.
 ```
 
 **Output**:
 
 ```
 1 large pizza with mushrooms
-2 large pizza with sausage
+1 large pizza with sausage
 1 small pizza with sausage
 1 whole Greek salad
 1 Pale Ale
 1 Mack and Jacks
 ```
 
-> This shows that TypeChat may not be 100% accurate, and you may want to consider asking the user for confirmation before performing any action. The output here erroneously shows 1 mushroom pizzas and 3 sausage pizza, while it should be 1 mushroom pizza and 2 sausage pizzas (one large and one small).
+> **Note**
+>
+> Across different models, you may see that TypeChat's responses may not correspond perfectly to the user intent.
+> In the above example, some models may not be able to capture the fact that the order is still only for 3 pizzas,
+> and that "make one sausage a small" is not a request for a new pizza.
+> 
+> ```diff
+>   1 large pizza with mushrooms
+> - 1 large pizza with sausage
+> + 2 large pizza with sausage
+>   1 small pizza with sausage
+>   1 whole Greek salad
+>   1 Pale Ale
+>   1 Mack and Jacks
+> ```
+>
+> The output here erroneously shows 1 mushroom pizzas and 3 sausage pizzas, whereas it *should* be 1 mushroom pizza, and 2 sausage pizzas (one large and one small).
+> Given this, you may want to consider asking the user for confirmation before performing any action.
