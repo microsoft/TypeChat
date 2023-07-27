@@ -18,14 +18,17 @@ For example, given the following order:
 **Input**:
 
 ```
-😀> 🍕> I want three pizzas, one with mushrooms and the other two with sausage.  Make one sausage a small.  And give me a whole Greek and a Pale Ale.  And give me a Mack and Jacks.
+🍕> I want three pizzas, one with mushrooms and the other two with sausage.  Make one sausage a small.  And give me a whole Greek and a Pale Ale.  And give me a Mack and Jacks.
 ```
 
 **Output**:
 
+*This is GPT-4-0613 output; GPT-3.5-turbo and most other models miss this one.*
+
 ```
-2 large pizza with mushrooms
+1 large pizza with mushrooms
 1 small pizza with sausage
+1 large pizza with sausage
 1 whole Greek salad
 1 Pale Ale
 1 Mack and Jacks
