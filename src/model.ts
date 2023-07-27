@@ -28,11 +28,11 @@ export interface TypeChatLanguageModel {
 /**
  * Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
  * chosen by environment variables.
- * 
+ *
  * If an `OPENAI_API_KEY` environment variable exists, the `createOpenAILanguageModel` function
  * is used to create the instance. The `OPENAI_ENDPOINT` and `OPENAI_MODEL` environment variables
  * must also be defined or an exception will be thrown.
- * 
+ *
  * If an `AZURE_OPENAI_API_KEY` environment variable exists, the `createAzureOpenAILanguageModel` function
  * is used to create the instance. The `AZURE_OPENAI_ENDPOINT` environment variable must also be defined
  * or an exception will be thrown.
@@ -157,5 +157,5 @@ function sleep(ms: number): Promise<void> {
  * Throws an exception for a missing environment variable.
  */
 function missingEnvironmentVariable(name: string): never {
-    throw new Error(`"Missing environment variable: ${name}`);
+    throw new Error(`Missing environment variable: ${name}`);
 }
