@@ -7,7 +7,7 @@ Currently TypeChat's a very small library, so let's start breaking down a few fu
 
 ## Providing a Model
 
-TypeChat is mostly model agnostic.
+TypeChat can be used with any language model.
 As long as you can construct an object with the following properties:
 
 ```ts
@@ -29,7 +29,8 @@ export interface TypeChatLanguageModel {
 ```
 
 then you should be able to try TypeChat out with such a model.
-The key thing here is that only the `complete` property is required, and is a function taking only a `string` and eventually returning a `string` if all goes well.
+The key thing here is that only `complete` is required.
+`complete` is just a function that takes a `string` and eventually returns a `string` if all goes well.
 
 For convenience, TypeChat provides two functions out of the box to connect to the OpenAI API and Azure's OpenAI Services.
 You can call these directly.
@@ -91,8 +92,9 @@ const translator =
     typechat.createJsonTranslator<SentimentResponse>(model, schema, "SentimentResponse");
 ```
 
-A translator takes a model, the schema file contents, and the name of the type within the schema file.
-That type name effectively acts as the "entry-point" of our schema for the language model.
+A translator takes a model, the schema file contents, and the name of a type within the schema file.
+A schema file can declare many types, but the one our response conforms to must be exported, and we have to specify its name to TypeChat.
+In a sense, you can think of this type as the "entry-point" of our schema for our language model.
 
 The translator also takes a type argument for the actual type we've imported from our schema.
 This should correspond *exactly* to the name of the type within the schema, and so you *must* watch out for typos here.
@@ -123,7 +125,7 @@ We'll fill that in next.
 
 ## Translating Requests
 
-Our handler gets a "request string" each time it's called.
+Our handler receives some user input (the `request` string) each time it's called.
 It's time to pass that string into over to our `translator` object.
 
 ```ts
@@ -138,9 +140,10 @@ typechat.processRequests("😀> ", process.argv[2], async (request) => {
 ```
 
 We're calling the `translate` method on each string and getting a response.
-If something went wrong, `response.success` is `false` and we'll be able to grab a `message` explaining what went wrong.
+If something goes wrong, TypeChat will retry requests up to a maximum specified by `retryMaxAttempts` on our `model`.
+However, if the initial request as well as all retries fail, `response.success` will be `false` and we'll be able to grab a `message` explaining what went wrong.
 
-But in the ideal case, `response.success` will be `true` and we'll be able to access our well-typed `data` property!
+In the ideal case, `response.success` will be `true` and we'll be able to access our well-typed `data` property!
 This will correspond to the type that we passed in when we created our translator object (i.e. `SentimentResponse`).
 
 That's it!
