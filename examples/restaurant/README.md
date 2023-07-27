@@ -23,8 +23,9 @@ For example, given the following order:
 
 **Output**:
 
-```
 *This is GPT-4-0613 output; GPT-3.5-turbo and most other models miss this one.*
+
+```
 1 large pizza with mushrooms
 1 small pizza with sausage
 1 large pizza with sausage
