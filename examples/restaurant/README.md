@@ -36,7 +36,7 @@ For example, given the following order:
 
 > **Note**
 >
-> Across different models, you may see that TypeChat's responses may not correspond perfectly to the user intent.
+> Across different models, you may see that model responses may not correspond to the user intent.
 > In the above example, some models may not be able to capture the fact that the order is still only for 3 pizzas,
 > and that "make one sausage a small" is not a request for a new pizza.
 > 
@@ -50,5 +50,6 @@ For example, given the following order:
 >   1 Mack and Jacks
 > ```
 >
-> The output here erroneously shows 1 mushroom pizzas and 3 sausage pizzas, whereas it *should* be 1 mushroom pizza, and 2 sausage pizzas (one large and one small).
-> Given this, you may want to consider asking the user for confirmation before performing any action.
+> The output here from GPT 3.5-turbo incorrectly shows 1 mushroom pizza and 3 sausage pizzas.
+
+Because all language models are probabilistic and therefore will sometimes output incorrect inferences, the TypeChat pattern includes asking the user for confirmation (or giving the user an easy way to undo actions).  It is important to ask for confirmation without use of the language model so that incorrect inference is guaranteed not to be part of the intent summary generated.
