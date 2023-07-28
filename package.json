@@ -36,6 +36,7 @@
     "SECURITY.md"
   ],
   "dependencies": {
+    "@types/axios": "^0.14.0",
     "axios": "^1.4.0",
     "typescript": "^5.1.3"
   },
