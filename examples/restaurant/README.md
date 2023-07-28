@@ -53,3 +53,11 @@ For example, given the following order:
 > The output here from GPT 3.5-turbo incorrectly shows 1 mushroom pizza and 3 sausage pizzas.
 
 Because all language models are probabilistic and therefore will sometimes output incorrect inferences, the TypeChat pattern includes asking the user for confirmation (or giving the user an easy way to undo actions).  It is important to ask for confirmation without use of the language model so that incorrect inference is guaranteed not to be part of the intent summary generated.
+
+In this example, the function `printOrder` in the file `main.ts` summarizes the food order (as seen in the above output) without use of a language model.  The `printOrder` function can work with a strongly typed `Order object` because the TypeChat validation process has checked that the emitted JSON corresponds to the `Order` type:
+
+```typescript
+function printOrder(order: Order) {
+```
+
+Having a validated, typed data structure simplifies the task of generating a succinct summary suitable for user confirmation.
