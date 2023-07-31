@@ -16,6 +16,8 @@ export type API = {
     ): void;
     // print a list of tracks
     printTracks(trackList: TrackList): void;
+    // see what is up next
+    getQueue(): void;
     // show now playing
     status(): void;
     // control playback

@@ -38,6 +38,7 @@ import {
     previous,
     shuffle,
     getAlbumTracks,
+    getQueue,
 } from "./endpoints";
 import { listAvailableDevices, printStatus, selectDevice } from "./playback";
 import { SpotifyService, User } from "./service";
@@ -229,6 +230,23 @@ async function handleCall(
         }
         case "status": {
             await printStatus(clientContext);
+            break;
+        }
+        case "getQueue": {
+            const currentQueue = await getQueue(clientContext.service);
+            if (currentQueue) {
+                // not yet supporting episidoes
+                const filtered = currentQueue.queue.filter((item) => item.type === "track") as SpotifyApi.TrackObjectFull[];
+                console.log(chalk.magentaBright("Current Queue:"));
+                console.log(
+                    chalk.cyanBright(`--------------------------------------------`)
+                );
+                await printTrackNames(filtered, clientContext);
+                console.log(
+                    chalk.cyanBright(`--------------------------------------------`)
+                );
+                await printStatus(clientContext);
+            }
             break;
         }
         case "pause": {
