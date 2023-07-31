@@ -336,20 +336,19 @@ export async function pause(service: SpotifyService, deviceId: string) {
     }
 }
 
-export async function next(service: SpotifyService, deviceId: string) {
+export async function getQueue(service: SpotifyService) {
     const config = {
         headers: {
             Authorization: `Bearer ${service.retrieveUser().token}`,
         },
     };
     try {
-        const spotifyResult = await axios.post(
-            `https://api.spotify.com/v1/me/player/next?device_id=${deviceId}`,
-            {},
+        const spotifyResult = await axios.get(
+            `https://api.spotify.com/v1/me/player/queue`,
             config
         );
 
-        return spotifyResult.data;
+        return spotifyResult.data as SpotifyApi.UsersQueueResponse;
     } catch (e) {
         if (e instanceof axios.AxiosError) {
             console.log(e.message);
@@ -397,6 +396,30 @@ export async function shuffle(
     try {
         const spotifyResult = await axios.put(
             `https://api.spotify.com/v1/me/player/shuffle?state=${newShuffleState}&device_id=${deviceId}`,
+            {},
+            config
+        );
+
+        return spotifyResult.data;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
+export async function next(service: SpotifyService, deviceId: string) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    try {
+        const spotifyResult = await axios.post(
+            `https://api.spotify.com/v1/me/player/next?device_id=${deviceId}`,
             {},
             config
         );
