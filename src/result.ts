@@ -1,12 +1,16 @@
 /**
  * An object representing a successful operation with a result of type `T`.
  */
-export type Success<T> = { success: true, data: T };
+export type Success<T> = {
+    success: true;
+    data: T;
+    api?: OpenAiInfo;
+};
 
 /**
  * An object representing an operation that failed for the reason given in `message`.
  */
-export type Error = { success: false, message: string };
+export type Error = { success: false; message: string };
 
 /**
  * An object representing a successful or failed operation of type `T`.
@@ -14,12 +18,29 @@ export type Error = { success: false, message: string };
 export type Result<T> = Success<T> | Error;
 
 /**
+ * An object containing the information returned by the OpenAI-Api. It contains
+ * information on the tokens used, the model used, a timestamp, and the specific
+ * id the prompt has in the backend.
+ */
+export type OpenAiInfo = {
+    id: string;
+    object: string;
+    created: number;
+    model: string;
+    usage: {
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
+    };
+};
+
+/**
  * Returns a `Success<T>` object.
  * @param data The value for the `data` property of the result.
  * @returns A `Success<T>` object.
  */
-export function success<T>(data: T): Success<T> {
-    return { success: true, data };
+export function success<T>(data: T, info?: OpenAiInfo): Success<T> {
+    return info ? { success: true, data, api: info } : { success: true, data };
 }
 
 /**

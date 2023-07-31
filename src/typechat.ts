@@ -97,7 +97,9 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             if (!response.success) {
                 return response;
             }
-            const responseText = response.data;
+
+            const { api, data: responseText } = response;
+
             const startIndex = responseText.indexOf("{");
             const endIndex = responseText.lastIndexOf("}");
             if (!(startIndex >= 0 && endIndex > startIndex)) {
@@ -106,7 +108,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             const jsonText = responseText.slice(startIndex, endIndex + 1);
             const validation = validator.validate(jsonText);
             if (validation.success) {
-                return validation;
+                return api ? { ...validation, api } : validation;
             }
             if (!attemptRepair) {
                 return error(`JSON validation failed: ${validation.message}\n${jsonText}`);

@@ -104,9 +104,14 @@ function createAxiosLanguageModel(url: string, config: object, defaultParams: Re
                 temperature: 0,
                 n: 1
             };
-            const result = await client.post(url, params, { validateStatus: status => true });
+            const result = await client.post(url, params, {
+                validateStatus: (_status) => true
+            });
+
+            const { choices, ...apiData } = result.data;
+
             if (result.status === 200) {
-                return success(result.data.choices[0].message?.content ?? "");
+                return success(result.data.choices[0].message?.content ?? "", apiData);
             }
             if (!isTransientHttpError(result.status) || retryCount >= retryMaxAttempts) {
                 return error(`REST API error ${result.status}: ${result.statusText}`);
