@@ -19,7 +19,7 @@ export type AddEventAction = {
 };
 
 export type RemoveEventAction = {
-    actionType: 'removeEvent';
+    actionType: 'remove event';
     eventReference: EventReference;
 };
 
