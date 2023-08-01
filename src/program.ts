@@ -27,6 +27,8 @@ export type JsonValue = string | number | boolean | null | { [x: string]: Expres
 export type ResultReference = {
     // Index of the previous expression in the "@steps" array
     "@ref": number;
+    // Path to the desired property within the result object, specified as an array of property names or indices
+    "path"?: (string | number)[];
 };
 `;
 
@@ -107,8 +109,24 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
     function objectToString(obj: Record<string, unknown>) {
         if (obj.hasOwnProperty("@ref")) {
             const index = obj["@ref"];
-            if (typeof index === "number" && index < currentStep && Object.keys(obj).length === 1) {
-                return `step${index + 1}`;
+            const hasPath = obj.hasOwnProperty("path");
+            if (typeof index === "number" && index < currentStep && Object.keys(obj).length === (hasPath ? 2 : 1)) {
+                const path = obj["path"];
+                let str = `step${index + 1}`;
+                if (Array.isArray(path)) {
+                    for (const prop of path) {
+                        if (typeof prop === "string") {
+                            str += `.${prop}`;
+                        }
+                        else if (typeof prop === "number") {
+                            str += `[${prop}]`;
+                        }
+                        else {
+                            str += `["${prop}"]`;
+                        }
+                    }
+                }
+                return str;
             }
         }
         else if (obj.hasOwnProperty("@func")) {
@@ -160,7 +178,23 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
         if (obj.hasOwnProperty("@ref")) {
             const index = obj["@ref"];
             if (typeof index === "number" && index < results.length) {
-                return results[index];
+                const path = obj["path"];
+                let value = results[index];
+                if (Array.isArray(path)) {
+                    for (const prop of path) {
+                        if (typeof prop === "string" && typeof value === "object" && value !== null && prop in value) {
+                            value = value[prop as keyof typeof value];
+                        }
+                        else if (typeof prop === "number" && Array.isArray(value) && prop < value.length) {
+                            value = value[prop];
+                        }
+                        else {
+                            return undefined;
+                        }
+                    }
+                    return value;
+                }
+                return value;
             }
         }
         else if (obj.hasOwnProperty("@func")) {
