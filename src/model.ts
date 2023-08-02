@@ -1,4 +1,5 @@
 import axios from "axios";
+import { PromptSection, PromptMemory, PromptFunctions, VolatileMemory, FunctionRegistry, GPT3Tokenizer } from "promptrix";
 import { Result, success, error } from "./result";
 
 /**
@@ -9,6 +10,10 @@ import { Result, success, error } from "./result";
  */
 export interface TypeChatLanguageModel {
     /**
+     * Optional maximum number of tokens to send to the language model (the default is 3000).
+     */
+    maxInputTokens?: number;
+    /**
      * Optional property that specifies the maximum number of retry attempts (the default is 3).
      */
     retryMaxAttempts?: number;
@@ -18,9 +23,11 @@ export interface TypeChatLanguageModel {
     retryPauseMs?: number;
     /**
      * Obtains a completion from the language model for the given prompt.
-     * @param prompt The prompt string.
+     * @param prompt The prompt template to complete.
+     * @param memory Optional memory object to pass to the language model.
+     * @param functions Optional registry of prompt template functions.
      */
-    complete(prompt: string): Promise<Result<string>>;
+    complete(prompt: PromptSection, memory?: PromptMemory, functions?: PromptFunctions): Promise<Result<string>>;
 }
 
 /**
@@ -93,14 +100,19 @@ function createAxiosLanguageModel(url: string, config: object, defaultParams: Re
     };
     return model;
 
-    async function complete(prompt: string) {
+    async function complete(prompt: PromptSection, memory?: PromptMemory, functions?: PromptFunctions) {
+        const rendered = await prompt.renderAsMessages(memory ?? new VolatileMemory(), functions ?? new FunctionRegistry(), new GPT3Tokenizer(), model.maxInputTokens ?? 3000);
+        if (rendered.tooLong) {
+            return error("Prompt is too long");
+        }
+
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
         while (true) {
             const params = {
                 ...defaultParams,
-                messages: [{ role: "user", content: prompt }],
+                messages: rendered.output,
                 temperature: 0,
                 n: 1
             };

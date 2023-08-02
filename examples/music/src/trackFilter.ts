@@ -1,3 +1,4 @@
+import { UserMessage } from "promptrix";
 import { TypeChatLanguageModel } from "../../../dist";
 import { getArtist } from "./endpoints";
 import { IClientContext } from "./main";
@@ -419,7 +420,7 @@ async function llmFilter(
         trackNumbers: number[];
     };\n`;
     prompt += `Here is a JSON object of type Matches containing the track numbers of the tracks that match ${description}:\n`;
-    const ret = await model.complete(prompt);
+    const ret = await model.complete(new UserMessage(prompt));
     return ret;
 }
 

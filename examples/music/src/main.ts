@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { UserMessage } from "promptrix";
 import { Authzor } from "./authz";
 import chalk from "chalk";
 import dotenv from "dotenv";
@@ -514,7 +515,7 @@ async function handleCall(
         }
         case "nonMusicQuestion": {
             const text = args[0] as string;
-            const ret = await model.complete(text);
+            const ret = await model.complete(new UserMessage(text));
             if (ret.success) {
                 console.log(ret.data);
             }

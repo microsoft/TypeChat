@@ -14,6 +14,7 @@
     "chalk": "^2.3.1",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "promptrix": "^0.4.2",
     "open": "^7.0.4"
   },
   "devDependencies": {

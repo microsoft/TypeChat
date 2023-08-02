@@ -1,6 +1,8 @@
+import { PromptSection, Prompt, UserMessage, AssistantMessage } from "promptrix";
 import { Result, error } from "./result";
 import { TypeChatLanguageModel } from "./model";
 import { TypeChatJsonValidator, createJsonValidator } from "./validate";
+
 
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
@@ -32,7 +34,7 @@ export interface TypeChatJsonTranslator<T extends object> {
      * @param request The natural language request.
      * @returns A prompt that combines the request with the schema and type name of the underlying validator.
      */
-    createRequestPrompt(request: string): string;
+    createRequestPrompt(request: string): PromptSection;
     /**
      * Creates a repair prompt to append to an original prompt/response in order to repair a JSON object that
      * failed to validate. This function is called by `completeAndValidate` when `attemptRepair` is true and the
@@ -41,7 +43,7 @@ export interface TypeChatJsonTranslator<T extends object> {
      * @param validationError The error message returned by the validator.
      * @returns A repair prompt constructed from the error message.
      */
-    createRepairPrompt(validationError: string): string;
+    createRepairPrompt(validationError: string): PromptSection;
     /**
      * Translates a natural language request into an object of type `T`. If the JSON object returned by
      * the language model fails to validate and the `attemptRepair` property is `true`, a second
@@ -76,17 +78,25 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
     return typeChat;
 
     function createRequestPrompt(request: string) {
-        return `You are a service that translates user requests into JSON objects of type "${validator.typeName}" according to the following TypeScript definitions:\n` +
-            `\`\`\`\n${validator.schema}\`\`\`\n` +
-            `The following is a user request:\n` +
-            `"""\n${request}\n"""\n` +
-            `The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:\n`;
+        return new Prompt([
+            new UserMessage(
+                `You are a service that translates user requests into JSON objects of type "${validator.typeName}" according to the following TypeScript definitions:\n` +
+                `\`\`\`\n${validator.schema}\`\`\`\n` +
+                `The following is a user request:\n` +
+                `"""\n${request}\n"""\n` +
+                `The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:\n`
+            )
+        ]);
     }
 
     function createRepairPrompt(validationError: string) {
-        return `The JSON object is invalid for the following reason:\n` +
-            `"""\n${validationError}\n"""\n` +
-            `The following is a revised JSON object:\n`;
+        return new Prompt([
+            new UserMessage(
+                `The JSON object is invalid for the following reason:\n` +
+                `"""\n${validationError}\n"""\n` +
+                `The following is a revised JSON object:\n`
+            )
+        ]);
     }
 
     async function translate(request: string) {
@@ -111,7 +121,11 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             if (!attemptRepair) {
                 return error(`JSON validation failed: ${validation.message}\n${jsonText}`);
             }
-            prompt += `${responseText}\n${typeChat.createRepairPrompt(validation.message)}`;
+            prompt = new Prompt([
+                prompt,
+                new AssistantMessage(responseText),
+                typeChat.createRepairPrompt(validation.message)
+            ]);
             attemptRepair = false;
         }
     }

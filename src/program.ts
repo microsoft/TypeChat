@@ -1,3 +1,4 @@
+import { Prompt, UserMessage } from "promptrix";
 import { Result, error, success } from "./result";
 import { TypeChatLanguageModel } from "./model";
 import { TypeChatJsonTranslator, createJsonTranslator } from "./typechat";
@@ -70,14 +71,14 @@ export type ResultReference = {
 /**
  * Transforms a JSON program object into an equivalent TypeScript module suitable for type checking.
  * The generated module takes the form:
- * 
+ *
  *   import { API } from "./schema";
  *   function program(api: API) {
  *     const step1 = api.someFunction1(...);
  *     const step2 = api.someFunction2(...);
  *     return api.someFunction3(...);
  *   }
- * 
+ *
  * @param jsonObject A JSON program object.
  * @returns A `Success<string>` with the module source code or an `Error` explaining why the JSON object
  * couldn't be transformed.
@@ -200,18 +201,26 @@ export function createProgramTranslator(model: TypeChatLanguageModel, schema: st
     return translator;
 
     function createRequestPrompt(request: string) {
-        return `You are a service that translates user requests into programs represented as JSON using the following TypeScript definitions:\n` +
-            `\`\`\`\n${programSchemaText}\`\`\`\n` +
-            `The programs can call functions from the API defined in the following TypeScript definitions:\n` +
-            `\`\`\`\n${translator.validator.schema}\`\`\`\n` +
-            `The following is a user request:\n` +
-            `"""\n${request}\n"""\n` +
-            `The following is the user request translated into a JSON program object with 2 spaces of indentation and no properties with the value undefined:\n`;
+        return new Prompt([
+            new UserMessage(
+                `You are a service that translates user requests into programs represented as JSON using the following TypeScript definitions:\n` +
+                `\`\`\`\n${programSchemaText}\`\`\`\n` +
+                `The programs can call functions from the API defined in the following TypeScript definitions:\n` +
+                `\`\`\`\n${translator.validator.schema}\`\`\`\n` +
+                `The following is a user request:\n` +
+                `"""\n${request}\n"""\n` +
+                `The following is the user request translated into a JSON program object with 2 spaces of indentation and no properties with the value undefined:\n`
+            )
+        ]);
     }
 
     function createRepairPrompt(validationError: string) {
-        return `The JSON program object is invalid for the following reason:\n` +
-            `"""\n${validationError}\n"""\n` +
-            `The following is a revised JSON program object:\n`;
+        return new Prompt([
+            new UserMessage(
+               `The JSON program object is invalid for the following reason:\n` +
+                `"""\n${validationError}\n"""\n` +
+                `The following is a revised JSON program object:\n`
+            )
+        ]);
     }
 }
