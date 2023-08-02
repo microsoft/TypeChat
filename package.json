@@ -21,8 +21,7 @@
   },
   "scripts": {
     "build": "tsc -p src",
-    "build-all": "npm run build --workspaces",
-    "prepare": "npm run build-all"
+    "prepare": "pnpm build && pnpm run -r build"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
