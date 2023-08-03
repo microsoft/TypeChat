@@ -21,7 +21,7 @@
   },
   "scripts": {
     "build": "tsc -p src",
-    "prepare": "pnpm build && pnpm run -r build"
+    "prepare": "pnpm run -r build"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
