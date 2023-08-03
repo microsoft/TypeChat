@@ -23,12 +23,12 @@ We recommend reading each example in the following order.
 
 You can experiment with these TypeChat examples on your local machine with just Node.js.
 
-Ensure [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en) or newer is installed.
+Ensure [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en) or newer is installed along with [pnpm](https://pnpm.io/).
 
 ```
 git clone https://github.com/microsoft/TypeChat
 cd TypeChat
-npm install
+pnpm install
 ```
 
 ### Option 2: GitHub Codespaces
@@ -57,7 +57,7 @@ For more information, see the [GitHub Codespaces Overview](https://docs.github.c
 Build TypeChat and the examples by running the following command in the repository root:
 
 ```
-npm run build-all
+pnpm build-all
 ```
 
 ## Step 3: Configure environment variables

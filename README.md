@@ -27,7 +27,10 @@ npm install typechat
 You can also build TypeChat from source:
 
 ```
-npm run build
+git clone https://github.com/microsoft/TypeChat
+cd TypeChat
+pnpm install
+pnpm build
 ```
 
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](./examples). You can try them on your local machine or in a GitHub Codespace.
