@@ -41,9 +41,5 @@
   },
   "devDependencies": {
     "@types/node": "^20.3.3"
-  },
-  "workspaces": [
-    "./",
-    "./examples/*"
-  ]
+  }
 }
