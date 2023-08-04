@@ -86,7 +86,7 @@ export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string,
 /**
  * Common implementation of language model encapsulation of an OpenAI REST API endpoint.
  */
-function createAxiosLanguageModel(url: string, config: object, defaultParams: Record<string, string>) {
+export function createAxiosLanguageModel(url: string, config: object, defaultParams: Record<string, string>) {
     const client = axios.create(config);
     const model: TypeChatLanguageModel = {
         complete
