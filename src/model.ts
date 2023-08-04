@@ -99,9 +99,9 @@ export function createAxiosLanguageModel(url: string, config: object, defaultPar
         const retryPauseMs = model.retryPauseMs ?? 1000;
         while (true) {
             const params = {
+                temperature: 0,
                 ...defaultParams,
                 messages: [{ role: "user", content: prompt }],
-                temperature: 0,
                 n: 1
             };
             const result = await client.post(url, params, { validateStatus: status => true });
