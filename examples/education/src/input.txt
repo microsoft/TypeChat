@@ -1,0 +1,3 @@
+Create a lab name with name "Introduction to LLMs" and valid to end of 2023 with 10 students each having $10
+Add a student with email saubhatt@microsoft.com into lab
+Send subscription invite with display name LLM Subscription for student
