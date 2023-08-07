@@ -21,8 +21,8 @@
   },
   "scripts": {
     "build": "tsc -p src",
-    "build-all": "npm run build --workspaces",
-    "prepare": "npm run build-all"
+    "build-all": "pnpm run -r build",
+    "prepare": "pnpm run build-all"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -41,9 +41,5 @@
   },
   "devDependencies": {
     "@types/node": "^20.3.3"
-  },
-  "workspaces": [
-    "./",
-    "./examples/*"
-  ]
+  }
 }
