@@ -65,12 +65,12 @@ npm run build-all
 Currently, the examples are running on OpenAI or Azure OpenAI endpoints.
 To use an OpenAI endpoint, include the following environment variables:
 
-| Variable | Description | Required | Default Value |
-|----------|-------|--------|-----|
-| `OPENAI_MODEL`| The OpenAI model name (e.g. `gpt-3.5-turbo` or `gpt-4`) | ✅ | None |
-| `OPENAI_API_KEY` | Your OpenAI API key | ✅ | None |
-| `OPENAI_ENDPOINT` | OpenAI API Endpoint | No | https://api.openai.com/v1/chat/completions |
-| `OPENAI_ORGANIZATION` | OpenAI Organization | No | "" |
+| Variable | Value |
+|----------|-------|
+| `OPENAI_MODEL`| The OpenAI model name (e.g. `gpt-3.5-turbo` or `gpt-4`) |
+| `OPENAI_API_KEY` | Your OpenAI API key  |
+| `OPENAI_ENDPOINT` | OpenAI API Endpoint - *optional*,  defaults to `"https://api.openai.com/v1/chat/completions"` |
+| `OPENAI_ORGANIZATION` | OpenAI Organization - *optional*, defaults to `""` |
 
 To use an Azure OpenAI endpoint, include the following environment variables:
 
