@@ -2,9 +2,9 @@ import sqlite3 from "sqlite3";
 
 const dbPath = "../musicLibrary.db"
 
-type Row = {}
+type Row = { [key:string] : unknown }
 
-function executeQuery(query: string, params: any[] = []): any {
+function executeQuery(query: string, params: any[] = []): Row[] | void {
     const db = new sqlite3.Database(dbPath, (error) => {
         if (error) {
             console.log(`Error executing query: ${query} against ${dbPath}`);
