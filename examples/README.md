@@ -68,7 +68,9 @@ To use an OpenAI endpoint, include the following environment variables:
 | Variable | Value |
 |----------|-------|
 | `OPENAI_MODEL`| The OpenAI model name (e.g. `gpt-3.5-turbo` or `gpt-4`) |
-| `OPENAI_API_KEY` | Your OpenAI API key |
+| `OPENAI_API_KEY` | Your OpenAI API key  |
+| `OPENAI_ENDPOINT` | OpenAI API Endpoint - *optional*,  defaults to `"https://api.openai.com/v1/chat/completions"` |
+| `OPENAI_ORGANIZATION` | OpenAI Organization - *optional*, defaults to `""` |
 
 To use an Azure OpenAI endpoint, include the following environment variables:
 
@@ -93,7 +95,7 @@ AZURE_OPENAI_API_KEY=...
 
 Examples can be found in the `examples` directory.
 
-To run an example interactively, type `node ./dist/main.js` from the example's directory and enter requests when prompted. Type `quit` or `exit` to end the session. You can also open in VS Code the selected example's directory and press <kbd>F5</kbd> to launch it in debug mode. 
+To run an example interactively, type `node ./dist/main.js` from the example's directory and enter requests when prompted. Type `quit` or `exit` to end the session. You can also open in VS Code the selected example's directory and press <kbd>F5</kbd> to launch it in debug mode.
 
 Note that there are various sample "prose" files (e.g. `input.txt`) provided in each `src` directory that can give a sense of what you can run.
 

@@ -8,5 +8,3 @@ go back to the last song
 play my playlist class8
 play the fourth one
 show me my queue
-display the queue
-what is my queue?
