@@ -14,7 +14,7 @@ We recommend reading each example in the following order.
 | Name | Description |
 | ---- | ----------- |
 | [Sentiment](https://github.com/microsoft/TypeChat/tree/main/examples/sentiment) | A sentiment classifier which categorizes user input as negative, neutral, or positive. This is TypeChat's "hello world!" |
-| [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/examples/coffeeShop) | An intelligent agent for a coffee shop. This sample translates user intent is translated to a list of coffee order items.
+| [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/examples/coffeeShop) | An intelligent agent for a coffee shop. This sample translates user intent into a list of coffee order items.
 | [Calendar](https://github.com/microsoft/TypeChat/tree/main/examples/calendar) | An intelligent scheduler. This sample translates user intent into a sequence of actions to modify a calendar. |
 | [Restaurant](https://github.com/microsoft/TypeChat/tree/main/examples/restaurant) | An intelligent agent for taking orders at a restaurant. Similar to the coffee shop example, but uses a more complex schema to model more complex linguistic input. The prose files illustrate the line between simpler and more advanced language models in handling compound sentences, distractions, and corrections. This example also shows how we can use TypeScript to provide a user intent summary. |
 | [Math](https://github.com/microsoft/TypeChat/tree/main/examples/math) | Translate calculations into simple programs given an API that can perform the 4 basic mathematical operators. This example highlights TypeChat's program generation capabilities. |
