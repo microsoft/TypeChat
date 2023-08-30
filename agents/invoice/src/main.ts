@@ -16,6 +16,10 @@ function generateInvoice(invoice: Invoice) {
     void invoice;
 }
 
+function printInvoice(invoice: Invoice) {
+    console.log(`Printing invoice to ${invoice.client.name}...`);
+}
+
 // Process requests interactively or from the input file specified on the command line
 processRequests("QB Assistant> ", process.argv[2], async (request) => {
     const response = await translator.translate(request);
@@ -30,8 +34,10 @@ processRequests("QB Assistant> ", process.argv[2], async (request) => {
         for (const item of invoice.items) {
             if (item.type === "unknown") console.log(item.text);
         }
+        console.log("Can you tell me more?")
         return;
     }
     generateInvoice(invoice);
+    printInvoice(invoice);
     console.log("Success!");
 });

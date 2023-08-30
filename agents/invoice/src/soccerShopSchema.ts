@@ -2,8 +2,7 @@
 
 export interface Invoice {
     client: Client;
-    // date (example: March 22, 2024)
-    date: DateTime;
+    date?: DateTime;
     items: (LineItem | UnknownText)[];
 }
 
@@ -48,6 +47,8 @@ export interface Client {
 export type OptionQuantity = 'no' | 'light' | 'regular' | 'extra' | number;
 
 export interface DateTime {
-    type: 'DateTime';
-    date?: Date;
+    type: 'dateTime';
+    // date (example: March 22, 2024)
+    date?: string;
 }
+
