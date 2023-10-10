@@ -11,7 +11,7 @@ const schema = fs.readFileSync(path.join(__dirname, "mathSchema.ts"), "utf8");
 const translator = createProgramTranslator(model, schema);
 
 // Process requests interactively or from the input file specified on the command line
-processRequests("➕➖✖️➗🟰> ", process.argv[2], async (request) => {
+processRequests("🧮 > ", process.argv[2], async (request) => {
     const response = await translator.translate(request);
     if (!response.success) {
         console.log(response.message);
