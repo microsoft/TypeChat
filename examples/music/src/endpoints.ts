@@ -109,31 +109,20 @@ export async function getArtist(service: SpotifyService, id: string) {
     return undefined;
 }
 
-export async function getHistory(
-    service: SpotifyService,
-    limit = limitMax,
-    offset = 0
-) {
+export async function getHistoryURL(service: SpotifyService, url: string) {
     const config = {
         headers: {
             Authorization: `Bearer ${service.retrieveUser().token}`,
         },
     };
 
-    const recentlyPlayedUrl = getUrlWithParams(
-        "https://api.spotify.com/v1/me/player/recently-played",
-        {
-            limit,
-            offset,
-        }
-    );
-    console.log(recentlyPlayedUrl);
-    // params += `&after=${Date.parse('2023-01-01T00:00:00.000Z')}`;
-    // params += `&before=${Date.now()}`;
+    console.log(url);
     try {
-        const spotifyResult = await axios.get(recentlyPlayedUrl, config);
+        const spotifyResult = await axios.get(url, config);
 
-        return spotifyResult.data as SpotifyApi.UsersRecentlyPlayedTracksResponse;
+        const spotData =
+            spotifyResult.data as SpotifyApi.UsersRecentlyPlayedTracksResponse;
+        return spotData;
     } catch (e) {
         if (e instanceof axios.AxiosError) {
             console.log(e.message);
@@ -144,30 +133,30 @@ export async function getHistory(
     return undefined;
 }
 
-export async function getKRecent(service: SpotifyService, k = 100) {
-    if (k > limitMax) {
-        const playHistory = [] as SpotifyApi.PlayHistoryObject[];
-        let offset = 0;
-        while (k > 0) {
-            let count = limitMax;
-            if (k < count) {
-                count = k;
-            }
-            const hist = await getHistory(service, count, offset);
-            if (hist && hist.items) {
-                playHistory.push(...hist.items);
-            }
-            k -= limitMax;
-            offset += limitMax;
-        }
-        return playHistory;
-    } else {
-        const hist = await getHistory(service, k);
+export async function getRecent(
+    service: SpotifyService,
+    after = Date.parse("2023-01-01T00:00:00.000Z")
+) {
+    const playHistory = [] as SpotifyApi.PlayHistoryObject[];
+    console.log(new Date(after).toLocaleString());
+    const params = {
+        limit: 50,
+        after,
+    };
+    let nextURL: string | null | undefined = getUrlWithParams(
+        "https://api.spotify.com/v1/me/player/recently-played",
+        params
+    );
+    while (nextURL) {
+        const hist = await getHistoryURL(service, nextURL);
         if (hist && hist.items) {
-            return hist.items;
+            console.log(hist.items.length);
+            playHistory.push(...hist.items);
         }
+        nextURL = hist?.next;
+        console.log(nextURL);
     }
-    return undefined;
+    return playHistory;
 }
 
 export async function getUserProfile(service: SpotifyService) {
@@ -261,13 +250,12 @@ export async function play(
     if (contextUri) {
         smallTrack.context_uri = contextUri;
         if (trackNumber) {
-            smallTrack.offset = { position: trackNumber};
+            smallTrack.offset = { position: trackNumber };
             if (seekms) {
                 smallTrack.position_ms = seekms;
             }
         }
-    }
-    else if (uris) {
+    } else if (uris) {
         smallTrack.uris = uris;
     }
     const playUrl = getUrlWithParams(
@@ -336,20 +324,19 @@ export async function pause(service: SpotifyService, deviceId: string) {
     }
 }
 
-export async function next(service: SpotifyService, deviceId: string) {
+export async function getQueue(service: SpotifyService) {
     const config = {
         headers: {
             Authorization: `Bearer ${service.retrieveUser().token}`,
         },
     };
     try {
-        const spotifyResult = await axios.post(
-            `https://api.spotify.com/v1/me/player/next?device_id=${deviceId}`,
-            {},
+        const spotifyResult = await axios.get(
+            `https://api.spotify.com/v1/me/player/queue?limit=50`,
             config
         );
 
-        return spotifyResult.data;
+        return spotifyResult.data as SpotifyApi.UsersQueueResponse;
     } catch (e) {
         if (e instanceof axios.AxiosError) {
             console.log(e.message);
@@ -412,6 +399,30 @@ export async function shuffle(
     return undefined;
 }
 
+export async function next(service: SpotifyService, deviceId: string) {
+    const config = {
+        headers: {
+            Authorization: `Bearer ${service.retrieveUser().token}`,
+        },
+    };
+    try {
+        const spotifyResult = await axios.post(
+            `https://api.spotify.com/v1/me/player/next?device_id=${deviceId}`,
+            {},
+            config
+        );
+
+        return spotifyResult.data;
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+    return undefined;
+}
+
 export async function getPlaylists(service: SpotifyService) {
     const config = {
         headers: {
@@ -433,10 +444,7 @@ export async function getPlaylists(service: SpotifyService) {
     return undefined;
 }
 
-export async function getAlbumTracks(
-    service: SpotifyService,
-    albumId: string
-) {
+export async function getAlbumTracks(service: SpotifyService, albumId: string) {
     const config = {
         headers: {
             Authorization: `Bearer ${service.retrieveUser().token}`,

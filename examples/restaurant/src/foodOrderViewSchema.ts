@@ -3,19 +3,18 @@ export type Order = {
     items: (OrderItem | UnknownText)[];
 };
 
-export type OrderItem = Pizza | Beer | Salad | NamedPizza;
+export type OrderItem = Pizza | Beer | Salad;
 
 // Use this type for order items that match nothing else
 export interface UnknownText {
-    itemType: 'unknown',
+    itemType: "unknown",
     text: string; // The text that wasn't understood
 }
 
-
 export type Pizza = {
-    itemType: 'pizza';
+    itemType: "pizza";
     // default: large
-    size?: 'small' | 'medium' | 'large' | 'extra large';
+    size?: "small" | "medium" | "large" | "extra large";
     // toppings requested (examples: pepperoni, arugula)
     addedToppings?: string[];
     // toppings requested to be removed (examples: fresh garlic, anchovies)
@@ -26,23 +25,20 @@ export type Pizza = {
     name?: "Hawaiian" | "Yeti" | "Pig In a Forest" | "Cherry Bomb";
 };
 
-export interface NamedPizza extends Pizza {
-}
-
 export type Beer = {
-    itemType: 'beer';
+    itemType: "beer";
     // examples: Mack and Jacks, Sierra Nevada Pale Ale, Miller Lite
     kind: string;
     // default: 1
     quantity?: number;
 };
 
-export const saladSize = ['half', 'whole'];
+export const saladSize = ["half", "whole"];
 
-export const saladStyle = ['Garden', 'Greek'];
+export const saladStyle = ["Garden", "Greek"];
 
 export type Salad = {
-    itemType: 'salad';
+    itemType: "salad";
     // default: half
     portion?: string;
     // default: Garden

@@ -19,7 +19,7 @@ export type AddEventAction = {
 };
 
 export type RemoveEventAction = {
-    actionType: 'removeEvent';
+    actionType: 'remove event';
     eventReference: EventReference;
 };
 
@@ -67,7 +67,7 @@ export type EventTimeRange = {
 };
 
 export type Event = {
-    // date (example: March 22, 2024) or relative date (example: after EventReference)
+    // date (example: March 22, 2024) or relative date (example: after EventReference) 
     day: string;
     timeRange: EventTimeRange;
     description: string;

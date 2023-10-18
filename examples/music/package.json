@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "",
-  "main": "index.js",
+  "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p src",
     "postbuild": "copyfiles -u 1 src/**/*Schema.ts src/**/*.txt src/**/*.html dist"
@@ -14,7 +14,9 @@
     "chalk": "^2.3.1",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "open": "^7.0.4"
+    "open": "^7.0.4",
+    "sqlite3": "^5.1.6",
+    "typechat": "^0.0.10"
   },
   "devDependencies": {
     "@types/express": "^4.17.17",

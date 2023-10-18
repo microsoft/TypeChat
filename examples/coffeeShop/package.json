@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "",
-  "main": "index.js",
+  "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p src",
     "postbuild": "copyfiles -u 1 src/**/*Schema.ts src/**/*.txt dist"
@@ -11,7 +11,8 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.3.1",
+    "typechat": "^0.0.10"
   },
   "devDependencies": {
     "@types/node": "^20.3.1",

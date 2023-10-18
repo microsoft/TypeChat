@@ -7,3 +7,4 @@ toggle shuffle on and skip to the next track
 go back to the last song
 play my playlist class8
 play the fourth one
+show me my queue
