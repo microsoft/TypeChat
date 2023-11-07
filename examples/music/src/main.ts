@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import readline from "readline/promises";
 import { Authzor } from "./authz";
 import chalk from "chalk";
 import dotenv from "dotenv";
@@ -7,7 +8,6 @@ import * as Filter from "./trackFilter";
 import {
     createLanguageModel,
     createProgramTranslator,
-    processRequests,
     Program,
     createModuleTextFromProgram,
     evaluateJsonProgram,
@@ -39,6 +39,7 @@ import {
     shuffle,
     getAlbumTracks,
     getQueue,
+    getRecent,
 } from "./endpoints";
 import { listAvailableDevices, printStatus, selectDevice } from "./playback";
 import { SpotifyService, User } from "./service";
@@ -75,7 +76,7 @@ async function printTrackNames(
     let count = 1;
     for (const track of tracks) {
         let prefix = "";
-        if (context && (tracks.length > 1)) {
+        if (context && tracks.length > 1) {
             prefix = `T${count}: `;
         }
         console.log(chalk.cyanBright(`${prefix}${track.name}`));
@@ -236,14 +237,20 @@ async function handleCall(
             const currentQueue = await getQueue(clientContext.service);
             if (currentQueue) {
                 // not yet supporting episidoes
-                const filtered = currentQueue.queue.filter((item) => item.type === "track") as SpotifyApi.TrackObjectFull[];
+                const filtered = currentQueue.queue.filter(
+                    (item) => item.type === "track"
+                ) as SpotifyApi.TrackObjectFull[];
                 console.log(chalk.magentaBright("Current Queue:"));
                 console.log(
-                    chalk.cyanBright(`--------------------------------------------`)
+                    chalk.cyanBright(
+                        `--------------------------------------------`
+                    )
                 );
                 await printTrackNames(filtered, clientContext);
                 console.log(
-                    chalk.cyanBright(`--------------------------------------------`)
+                    chalk.cyanBright(
+                        `--------------------------------------------`
+                    )
                 );
                 await printStatus(clientContext);
             }
@@ -311,7 +318,10 @@ async function handleCall(
             break;
         }
         case "setVolume": {
-            const newVolumeLevel = args[0] as number;
+            let newVolumeLevel = args[0] as number;
+            if (newVolumeLevel > 50) {
+                newVolumeLevel = 50;
+            }
             console.log(
                 chalk.yellowBright(`setting volume to ${newVolumeLevel} ...`)
             );
@@ -326,8 +336,8 @@ async function handleCall(
                 let nv = Math.floor(
                     (1.0 + volumeChangeAmount / 100.0) * volpct
                 );
-                if (nv > 100) {
-                    nv = 100;
+                if (nv > 50) {
+                    nv = 50;
                 }
                 console.log(chalk.yellowBright(`setting volume to ${nv} ...`));
                 await setVolume(clientContext.service, nv);
@@ -495,10 +505,7 @@ async function handleCall(
             const playlistCollection = args[0] as PlaylistTrackCollection;
             if (playlistCollection) {
                 const playlist = playlistCollection.getPlaylist();
-                await deletePlaylist(
-                    clientContext.service,
-                    playlist.id
-                );
+                await deletePlaylist(clientContext.service, playlist.id);
                 console.log(
                     chalk.magentaBright(`playlist ${playlist.name} deleted`)
                 );
@@ -527,7 +534,34 @@ async function handleCall(
 // set this to false to just look at llm generation without Spotify connection
 const spotifyConnect = true;
 
-// Process requests interactively or from the input file specified on the command line
+export async function index(context: IClientContext) {
+    let playHistory = await getRecent(
+        context.service,
+        Date.parse("2018-01-01T00:00:00.00Z")
+    );
+    if (playHistory) {
+        console.log(playHistory?.length);
+        let trackNames = '';
+        playHistory.map((item) => {
+            trackNames += item.track.name + '\n';
+        });
+        fs.writeFileSync("bigFetch.txt", trackNames);
+    }
+}
+
+function checkAck(input: string, program: Program): Program | undefined {
+    const linput = input.toLocaleLowerCase();
+    if (["y","yes","ok"].includes(linput)) {
+        return program;
+    } else {
+        return undefined;
+    }
+}
+
+// whether to confirm each action with the user
+const confirmMode = true;
+
+// Process requests interactively (no batch mode for now)
 async function musicApp() {
     const authz = new Authzor();
     authz.authorize(spotifyConnect, async (token) => {
@@ -541,7 +575,15 @@ async function musicApp() {
                 )
             );
         }
-        processRequests("🎵> ", process.argv[2], async (request) => {
+        const musicPrompt = "🎵> ";
+        const confirmPrompt = "👍👎 (answer y/n)> ";
+        const stdio = readline.createInterface({ input: process.stdin, output: process.stdout });
+        while (true) {
+            const request = await stdio.question(musicPrompt);
+            if (request.toLowerCase() === "quit" || request.toLowerCase() === "exit") {
+                stdio.close();
+                return;
+            }
             const localResult = localParser(request);
             let program: Program | undefined = undefined;
             if (localResult) {
@@ -550,13 +592,21 @@ async function musicApp() {
                 const response = await translator.translate(request);
                 if (!response.success) {
                     console.log(response.message);
-                    return;
+                    continue;
                 }
                 program = response.data;
             }
             if (program !== undefined) {
                 chalkPlan(program);
                 console.log(getData(createModuleTextFromProgram(program)));
+                if (confirmMode && (!localResult)) {
+                     const input = await stdio.question(confirmPrompt);
+                     program = checkAck(input, program);
+                     if (program === undefined) {
+                        console.log("Thanks for the feedback. Canceling execution...")
+                        continue;
+                     }                       
+                }
                 if (context !== undefined) {
                     const result = await evaluateJsonProgram(
                         program,
@@ -576,7 +626,7 @@ async function musicApp() {
                     }
                 }
             }
-        });
+        }
     });
 }
 

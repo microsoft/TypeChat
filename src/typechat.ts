@@ -1,4 +1,4 @@
-import { Result, error } from "./result";
+import { Result, success, error } from "./result";
 import { TypeChatLanguageModel, PromptSection } from "./model";
 import { TypeChatJsonValidator, createJsonValidator } from "./validate";
 
@@ -43,6 +43,15 @@ export interface TypeChatJsonTranslator<T extends object> {
      */
     createRepairPrompt(validationError: string): string;
     /**
+     * Optionally implements additional validation logic beyond what is expressed in the schema. This function is
+     * called following successful schema validation of an instance. By default the function just returns a
+     * `Success<T>` for the given instance, but an application can assign a new function that implements any
+     * additional validation.
+     * @param instance The instance to validate.
+     * @returns A `Success<T>` with the final validated instance, or an `Error` explaning the validation failure.
+     */
+    validateInstance(instance: T): Result<T>;
+    /**
      * Translates a natural language request into an object of type `T`. If the JSON object returned by
      * the language model fails to validate and the `attemptRepair` property is `true`, a second
      * attempt to translate the request will be made. The prompt for the second attempt will include the
@@ -73,6 +82,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
         stripNulls: false,
         createRequestPrompt,
         createRepairPrompt,
+        validateInstance: success,
         translate
     };
     return typeChat;
@@ -107,7 +117,8 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
                 return error(`Response is not JSON:\n${responseText}`);
             }
             const jsonText = responseText.slice(startIndex, endIndex + 1);
-            const validation = validator.validate(jsonText);
+            const schemaValidation = validator.validate(jsonText);
+            const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
             if (validation.success) {
                 return validation;
             }

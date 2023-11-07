@@ -10,7 +10,7 @@ function executeQuery(query: string, params: any[] = []): Row[] | void {
             console.log(`Error executing query: ${query} against ${dbPath}`);
             return;
         }
-
+        
         db.all(query, params, (error: Error, rows: Row[]) => {
             db.close();
 
@@ -24,6 +24,15 @@ function executeQuery(query: string, params: any[] = []): Row[] | void {
     });
 }
 
+export function insertTracks(tracks: SpotifyApi.TrackObjectFull[]) {
+    let insertQuery = 'INSERT INTO tracks (id, title, artist_id, album_id, duration, release_data, genre)\nVALUES\n';
+    for (const track of tracks) {
+        // TODO: genre
+        insertQuery += `    (${track.id},${track.name},${track.artists[0].id},${track.album.id},${track.duration_ms},${track.album.release_date})`;
+    }    
+
+
+}
 export function getArtists() {
     const query = "SELECT * FROM artists";
     const artists = executeQuery(query);

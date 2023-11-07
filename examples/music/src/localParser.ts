@@ -1,7 +1,31 @@
 import chalk from "chalk";
+import axios from "axios";
+import path from "path";
+import dotenv from "dotenv";
+
+dotenv.config({ path: path.join(__dirname, "../../../.env") });
+
+export async function parseOut(request: string, surl: string) {
+    try {
+        const result = await axios.post(surl, {
+            Text: request,
+        });
+        console.log(result.data);
+    } catch (e) {
+        if (e instanceof axios.AxiosError) {
+            console.log(e.message);
+        } else {
+            throw e;
+        }
+    }
+}
 
 export function localParser(userPrompt: string) {
     userPrompt = userPrompt.trim();
+    const surl = process.env.PARSER_SERVICE_ENDPOINT;
+    if (surl) {
+       parseOut(userPrompt, surl);
+    }
     if (
         userPrompt === "play" ||
         userPrompt === "resume" ||
@@ -45,10 +69,9 @@ export function localParser(userPrompt: string) {
         if (matchedShuffleSet) {
             const shuffleArg = matchedShuffleSet[1];
             let shuffleFunc = "";
-            if (["on","true","yes"].includes(shuffleArg)) {
+            if (["on", "true", "yes"].includes(shuffleArg)) {
                 shuffleFunc = "shuffleOn";
-            }
-            else if (["off","false","no"].includes(shuffleArg)) {
+            } else if (["off", "false", "no"].includes(shuffleArg)) {
                 shuffleFunc = "shuffleOff";
             }
             if (shuffleFunc.length > 0) {
@@ -60,7 +83,6 @@ export function localParser(userPrompt: string) {
                         },
                     ],
                 });
-                       
             }
         }
     }
