@@ -2,6 +2,22 @@ import axios from "axios";
 import { Result, success, error } from "./result";
 
 /**
+ * Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for
+ * prompts it generates and the "assistant" role for previous LLM responses (which will be part of
+ * the prompt in repair attempts). TypeChat currently doesn't use the "system" role.
+ */
+export interface PromptSection {
+    /**
+     * Specifies the role of this section.
+     */
+    role: "system" | "user" | "assistant";
+    /**
+     * Specifies the content of this section.
+     */
+    content: string;
+}
+
+/**
  * Represents a AI language model that can complete prompts. TypeChat uses an implementation of this
  * interface to communicate with an AI service that can translate natural language requests to JSON
  * instances according to a provided schema. The `createLanguageModel`, `createOpenAILanguageModel`,
@@ -18,9 +34,10 @@ export interface TypeChatLanguageModel {
     retryPauseMs?: number;
     /**
      * Obtains a completion from the language model for the given prompt.
-     * @param prompt The prompt string.
+     * @param prompt A prompt string or an array of prompt sections. If a string is specified,
+     *   it is converted into a single "user" role prompt section.
      */
-    complete(prompt: string): Promise<Result<string>>;
+    complete(prompt: string | PromptSection[]): Promise<Result<string>>;
 }
 
 /**
@@ -93,14 +110,15 @@ function createAxiosLanguageModel(url: string, config: object, defaultParams: Re
     };
     return model;
 
-    async function complete(prompt: string) {
+    async function complete(prompt: string | PromptSection[]) {
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
+        const messages = typeof prompt === "string" ? [{ role: "user", content: prompt }] : prompt;
         while (true) {
             const params = {
                 ...defaultParams,
-                messages: [{ role: "user", content: prompt }],
+                messages,
                 temperature: 0,
                 n: 1
             };

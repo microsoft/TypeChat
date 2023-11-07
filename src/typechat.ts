@@ -1,5 +1,5 @@
 import { Result, success, error } from "./result";
-import { TypeChatLanguageModel } from "./model";
+import { TypeChatLanguageModel, PromptSection } from "./model";
 import { TypeChatJsonValidator, createJsonValidator } from "./validate";
 
 /**
@@ -57,9 +57,11 @@ export interface TypeChatJsonTranslator<T extends object> {
      * attempt to translate the request will be made. The prompt for the second attempt will include the
      * diagnostics produced for the first attempt. This often helps produce a valid instance.
      * @param request The natural language request.
+     * @param promptPreamble An optional string or array of prompt sections to prepend to the generated
+     *   prompt. If a string is specified, it is converted into a single "user" role prompt section.
      * @returns A promise for the resulting object.
      */
-    translate(request: string): Promise<Result<T>>;
+    translate(request: string, promptPreamble?: string | PromptSection[]): Promise<Result<T>>;
 }
 
 /**
@@ -99,8 +101,9 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             `The following is a revised JSON object:\n`;
     }
 
-    async function translate(request: string) {
-        let prompt = typeChat.createRequestPrompt(request);
+    async function translate(request: string, promptPreamble?: string | PromptSection[]) {
+        const preamble: PromptSection[] = typeof promptPreamble === "string" ? [{ role: "user", content: promptPreamble }] : promptPreamble ?? [];
+        let prompt: PromptSection[] = [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }];
         let attemptRepair = typeChat.attemptRepair;
         while (true) {
             const response = await model.complete(prompt);
@@ -122,7 +125,8 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             if (!attemptRepair) {
                 return error(`JSON validation failed: ${validation.message}\n${jsonText}`);
             }
-            prompt += `${responseText}\n${typeChat.createRepairPrompt(validation.message)}`;
+            prompt.push({ role: "assistant", content: responseText });
+            prompt.push({ role: "user", content: typeChat.createRepairPrompt(validation.message) });
             attemptRepair = false;
         }
     }
