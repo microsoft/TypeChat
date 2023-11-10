@@ -66,7 +66,7 @@ export type Command =
 There are a few problems with this approach.
 First off, let's imagine the response we might get from a language model.
 
-```json
+```jsonc
 {
   "commands": [
     {
