@@ -1,5 +1,5 @@
 import * as ts from 'typescript';
-import { Result, success, error, Success } from './result';
+import { Result, success, error } from './result';
 
 const libText = `interface Array<T> { length: number, [n: number]: T }
 interface Object { toString(): string }
@@ -29,7 +29,7 @@ export interface TypeChatJsonValidator<T extends object> {
      * them. The default for this property is `false`, but an application can set the property to `true` for schemas
      * that don't permit null values.
      */
-    stripNulls:  boolean;
+    stripNulls: boolean;
     /**
      * Transform JSON into TypeScript code for validation. Returns a `Success<string>` object if the conversion is
      * successful, or an `Error` object if the JSON can't be transformed. The returned TypeScript source code is
