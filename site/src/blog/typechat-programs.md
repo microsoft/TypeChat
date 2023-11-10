@@ -269,7 +269,7 @@ const handlers = {
 ## Early Alternatives
 
 When designing TypeChat Programs, we played around with several different concepts.
-One idea we had was to generate a TypeScript program that could be executed directly.
+One idea we had was to generate a JavaScript program that could be executed directly.
 While lots of great work is underway in JavaScript to do so more securely, we wanted something more general that could eventually work in other languages, and which had a much smaller "attack surface".
 
 On that same note, the programs that TypeChat permits are very limited.
