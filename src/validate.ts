@@ -76,7 +76,8 @@ export function createJsonValidator<T extends object = object>(schema: string, t
         let jsonObject;
         try {
             jsonObject = JSON.parse(jsonText) as object;
-        } catch (e) {
+        }
+        catch (e) {
             return error(e instanceof SyntaxError ? e.message : "JSON parse error");
         }
         if (validator.stripNulls) {
