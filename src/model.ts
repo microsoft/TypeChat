@@ -97,7 +97,14 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
  * @returns An instance of `TypeChatLanguageModel`.
  */
 export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string,): TypeChatLanguageModel {
-    return createAxiosLanguageModel(endPoint, { headers: { "api-key": apiKey } }, {});
+    return createAxiosLanguageModel(endPoint, {
+        headers: {
+            // Needed when using managed identity
+            Authorization: `Bearer ${apiKey}`,
+            // Needed when using regular API key
+            "api-key": apiKey
+        }
+    }, {});
 }
 
 /**
