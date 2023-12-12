@@ -6,6 +6,9 @@ import {
   createJsonTranslator,
   processRequests,
 } from "typechat";
+import {
+  createTypeScriptJsonValidator,
+} from "typechat/ts";
 import { Order } from "./foodOrderViewSchema";
 
 // TODO: use local .env file.
@@ -16,7 +19,8 @@ const viewSchema = fs.readFileSync(
   path.join(__dirname, "foodOrderViewSchema.ts"),
   "utf8"
 );
-const translator = createJsonTranslator<Order>(model, viewSchema, "Order");
+const validator = createTypeScriptJsonValidator<Order>(viewSchema, "Order");
+const translator = createJsonTranslator(model, validator);
 
 const saladIngredients = [
   "lettuce",

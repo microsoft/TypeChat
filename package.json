@@ -1,7 +1,7 @@
 {
   "name": "typechat",
   "author": "Microsoft",
-  "version": "0.0.10",
+  "version": "1.0.0",
   "license": "MIT",
   "description": "TypeChat is an experimental library that makes it easy to build natural language interfaces using types.",
   "keywords": [
@@ -24,8 +24,20 @@
     "build-all": "npm run build --workspaces",
     "prepare": "npm run build-all"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./ts": {
+      "types": "./dist/ts/index.d.ts",
+      "default": "./dist/ts/index.js"
+    },
+    "./zod": {
+      "types": "./dist/zod/index.d.ts",
+      "default": "./dist/zod/index.js"
+    }
+  },
   "engines": {
     "node": ">=18"
   },
@@ -36,11 +48,11 @@
     "SECURITY.md"
   ],
   "dependencies": {
-    "axios": "^1.4.0",
-    "typescript": "^5.1.3"
+    "typescript": "^5.3.3",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/node": "^20.3.3"
+    "@types/node": "^20.10.4"
   },
   "workspaces": [
     "./",

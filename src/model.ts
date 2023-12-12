@@ -1,4 +1,3 @@
-import axios from "axios";
 import { Result, success, error } from "./result";
 
 /**
@@ -80,12 +79,11 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  * @returns An instance of `TypeChatLanguageModel`.
  */
 export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = ""): TypeChatLanguageModel {
-    return createAxiosLanguageModel(endPoint, {
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "OpenAI-Organization": org
-         }
-    }, { model });
+    const headers = {
+        "Authorization": `Bearer ${apiKey}`,
+        "OpenAI-Organization": org
+    };
+    return createFetchLanguageModel(endPoint, headers, { model });
 }
 
 /**
@@ -97,21 +95,19 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
  * @returns An instance of `TypeChatLanguageModel`.
  */
 export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string,): TypeChatLanguageModel {
-    return createAxiosLanguageModel(endPoint, {
-        headers: {
-            // Needed when using managed identity
-            Authorization: `Bearer ${apiKey}`,
-            // Needed when using regular API key
-            "api-key": apiKey
-        }
-    }, {});
+    const headers = {
+        // Needed when using managed identity
+        "Authorization": `Bearer ${apiKey}`,
+        // Needed when using regular API key
+        "api-key": apiKey
+    };
+    return createFetchLanguageModel(endPoint, headers, {});
 }
 
 /**
- * Common implementation of language model encapsulation of an OpenAI REST API endpoint.
+ * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
-function createAxiosLanguageModel(url: string, config: object, defaultParams: Record<string, string>) {
-    const client = axios.create(config);
+function createFetchLanguageModel(url: string, headers: object, defaultParams: Record<string, string>) {
     const model: TypeChatLanguageModel = {
         complete
     };
@@ -123,18 +119,26 @@ function createAxiosLanguageModel(url: string, config: object, defaultParams: Re
         const retryPauseMs = model.retryPauseMs ?? 1000;
         const messages = typeof prompt === "string" ? [{ role: "user", content: prompt }] : prompt;
         while (true) {
-            const params = {
-                ...defaultParams,
-                messages,
-                temperature: 0,
-                n: 1
-            };
-            const result = await client.post(url, params, { validateStatus: status => true });
-            if (result.status === 200) {
-                return success(result.data.choices[0].message?.content ?? "");
+            const options = {
+                method: "POST",
+                body: JSON.stringify({
+                    ...defaultParams,
+                    messages,
+                    temperature: 0,
+                    n: 1
+                }),
+                headers: {
+                    "content-type": "application/json",
+                    ...headers
+                }
             }
-            if (!isTransientHttpError(result.status) || retryCount >= retryMaxAttempts) {
-                return error(`REST API error ${result.status}: ${result.statusText}`);
+            const response = await fetch(url, options);
+            if (response.ok) {
+                const json = await response.json() as any;
+                return success(json.choices[0].message?.content ?? "");
+            }
+            if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
+                return error(`REST API error ${response.status}: ${response.statusText}`);
             }
             await sleep(retryPauseMs);
             retryCount++;
