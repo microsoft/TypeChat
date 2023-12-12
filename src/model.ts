@@ -94,7 +94,7 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
  * @param apiKey The Azure OpenAI API key.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string,): TypeChatLanguageModel {
+export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string): TypeChatLanguageModel {
     const headers = {
         // Needed when using managed identity
         "Authorization": `Bearer ${apiKey}`,
@@ -107,7 +107,7 @@ export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string,
 /**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
-function createFetchLanguageModel(url: string, headers: object, defaultParams: Record<string, string>) {
+function createFetchLanguageModel(url: string, headers: object, defaultParams: object) {
     const model: TypeChatLanguageModel = {
         complete
     };
@@ -134,8 +134,8 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: R
             }
             const response = await fetch(url, options);
             if (response.ok) {
-                const json = await response.json() as any;
-                return success(json.choices[0].message?.content ?? "");
+                const json = await response.json() as { choices: { message: PromptSection }[] };
+                return success(json.choices[0].message.content ?? "");
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
                 return error(`REST API error ${response.status}: ${response.statusText}`);
