@@ -1,0 +1,22 @@
+{
+  "name": "sentiment-zod",
+  "version": "0.0.1",
+  "private": true,
+  "description": "",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p src",
+    "postbuild": "copyfiles -u 1 src/**/*.txt dist"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "typechat": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.4",
+    "copyfiles": "^2.4.1",
+    "typescript": "^5.3.3"
+  }
+}
