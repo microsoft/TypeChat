@@ -1,0 +1,17 @@
+{
+    "typeCheckingMode": "strict",
+    "reportCallInDefaultInitializer": "error",
+    "reportImplicitOverride": "error",
+    "reportImplicitStringConcatenation": "error",
+    "reportImportCycles": "error",
+    "reportMissingSuperCall": "error",
+    "reportPropertyTypeMismatch": "error",
+    "reportShadowedImports": "error",
+    "reportUninitializedInstanceVariable": "error",
+    "reportUnnecessaryTypeIgnoreComment": "error",
+    "reportUnusedCallResult": "none",
+    "pythonVersion": "3.12",
+    "include": [
+        "**/*",
+    ],
+}
