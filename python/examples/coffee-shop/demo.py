@@ -7,13 +7,13 @@ import openai
 import schema as coffeeshop
 from dotenv import dotenv_values
 
-from typechat import Failure, Model, Result, Success, TypeChatTranslator, TypeChatValidator
+from typechat import Failure, Result, Success, TypeChatModel, TypeChatTranslator, TypeChatValidator
 
 
 @dataclass
-class OpenAIModel(Model):
+class OpenAIModel(TypeChatModel):
     model_name: str
-    client: openai.OpenAI
+    client: openai.OpenAI | openai.AzureOpenAI
 
     @override
     def complete(self, input: str) -> Result[str]:
