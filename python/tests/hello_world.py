@@ -1,7 +1,6 @@
 from typing import Annotated, Literal, NotRequired, Optional, Required, Self, TypedDict
 
-from typechat.py2ts import pyd_to_ts
-from typechat.ts2str import ts_declaration_to_str
+from typechat import python_type_to_typescript_schema
 
 
 class C[T](TypedDict):
@@ -37,17 +36,12 @@ class E(C[str]):
 type D_or_E = D | E
 
 
-# ^ Python input
-result = pyd_to_ts(D_or_E)
+result = python_type_to_typescript_schema(D_or_E)
 
-ts_nodes = result.type_declarations
-errs = result.errors
-
-ss = [ts_declaration_to_str(node) for node in ts_nodes]
-for s in ss:
-    print(s)
-
-if errs:
+print("// Entry point is: '{result.typescript_type_reference}'")
+print("// TypeScript Schema:\n")
+print(result.typescript_schema_str)
+if result.errors:
     print("// Errors:")
-    for err in errs:
+    for err in result.errors:
         print(f"// - {err}\n")

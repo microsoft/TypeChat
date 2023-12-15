@@ -1,7 +1,7 @@
 import json
 from typing import assert_never
 
-from typechat.ts_type_node import (
+from typechat._internal.ts_conversion.ts_type_nodes import (
     ArrayTypeNode,
     IdentifierNode,
     IndexSignatureDeclarationNode,

@@ -1,8 +1,6 @@
 from typing import Literal, TypedDict
 
-from typechat.py2ts import pyd_to_ts
-from typechat.ts2str import ts_declaration_to_str
-
+from typechat import python_type_to_typescript_schema
 
 class First[T](TypedDict):
     kind: Literal["first"]
@@ -16,16 +14,12 @@ class Second[T](TypedDict):
 
 type FirstOrSecond[T] = First[T] | Second[T]
 
-result = pyd_to_ts(FirstOrSecond)
+result = python_type_to_typescript_schema(FirstOrSecond)
 
-ts_nodes = result.type_declarations
-errs = result.errors
-
-ss = [ts_declaration_to_str(node) for node in ts_nodes]
-for s in ss:
-    print(s)
-
-if errs:
+print("// Entry point is: '{result.typescript_type_reference}'")
+print("// TypeScript Schema:\n")
+print(result.typescript_schema_str)
+if result.errors:
     print("// Errors:")
-    for err in errs:
+    for err in result.errors:
         print(f"// - {err}\n")

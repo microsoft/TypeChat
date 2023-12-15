@@ -3,9 +3,8 @@ from typing import Generic, TypeVar
 
 from typechat._internal.model import TypeChatModel
 from typechat._internal.result import Failure, Result, Success
+from typechat._internal.ts_conversion import python_type_to_typescript_schema
 from typechat._internal.validator import TypeChatValidator
-from typechat.py2ts import pyd_to_ts
-from typechat.ts2str import ts_declaration_to_str
 
 T = TypeVar("T", covariant=True)
 
@@ -14,7 +13,7 @@ class TypeChatTranslator(Generic[T]):
     validator: TypeChatValidator[T]
     target_type: type[T]
     _type_name: str
-    _declaration_str: str
+    _schema_str: str
     _max_repair_attempts = 1
 
     def __init__(self, model: TypeChatModel, validator: TypeChatValidator[T], target_type: type[T]):
@@ -22,10 +21,9 @@ class TypeChatTranslator(Generic[T]):
         self.model = model
         self.target_type = target_type
         self.validator = validator
-        self._type_name = target_type.__name__  # TODO: https://github.com/microsoft/TypeChat.py/issues/4
-        self._declaration_str = "\n".join(
-            ts_declaration_to_str(decl) for decl in pyd_to_ts(target_type).type_declarations
-        )
+        conversion_result = python_type_to_typescript_schema(target_type)
+        self._type_name = conversion_result.typescript_type_reference
+        self._schema_str = conversion_result.typescript_schema_str
 
     def translate(self, request: str) -> Result[T]:
         request = self._create_request_prompt(request)
@@ -53,7 +51,7 @@ class TypeChatTranslator(Generic[T]):
             request = f"{text_response}\n{self._create_repair_prompt(error_message)}"
 
     def _create_request_prompt(self, intent: str) -> str:
-        decl_str = indent(self._declaration_str, "            ")
+        decl_str = indent(self._schema_str, "            ")
         prompt = F"""
             You are a service that translates user requests into JSON objects of type "{self._type_name}" according to the following TypeScript definitions:
             ```

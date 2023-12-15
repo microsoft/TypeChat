@@ -29,7 +29,7 @@ from typing import (
     is_typeddict,
 )
 
-from typechat.ts_type_node import (
+from typechat._internal.ts_conversion.ts_type_nodes import (
     AnyTypeReferenceNode,
     ArrayTypeNode,
     BooleanTypeReferenceNode,
@@ -89,7 +89,7 @@ _KNOWN_SPECIAL_BASES: frozenset[Any] = frozenset([TypedDict, Protocol])
 
 
 @dataclass
-class TypeScriptTranslationResult:
+class TypeScriptNodeTranslationResult:
     type_declarations: list[TopLevelDeclarationNode]
     errors: list[str]
 
@@ -115,7 +115,7 @@ _LIST_TYPES: set[object] = {
 # }
 
 
-def pyd_to_ts(root_py_type: object) -> TypeScriptTranslationResult:
+def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTranslationResult:
     # TODO: handle conflicting names
 
     declared_types: dict[object, TopLevelDeclarationNode | None] = {}
@@ -308,4 +308,4 @@ def pyd_to_ts(root_py_type: object) -> TypeScriptTranslationResult:
     type_declarations = cast(list[TopLevelDeclarationNode], list(declared_types.values()))
     assert None not in type_declarations
 
-    return TypeScriptTranslationResult(type_declarations, errors)
+    return TypeScriptNodeTranslationResult(type_declarations, errors)
