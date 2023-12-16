@@ -25,18 +25,9 @@
     "prepare": "npm run build-all"
   },
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./ts": {
-      "types": "./dist/ts/index.d.ts",
-      "default": "./dist/ts/index.js"
-    },
-    "./zod": {
-      "types": "./dist/zod/index.d.ts",
-      "default": "./dist/zod/index.js"
-    }
+    ".": "./dist/index.js",
+    "./ts": "./dist/ts/index.js",
+    "./zod": "./dist/zod/index.js"
   },
   "engines": {
     "node": ">=18"
