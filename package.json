@@ -1,7 +1,7 @@
 {
   "name": "typechat",
   "author": "Microsoft",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "license": "MIT",
   "description": "TypeChat is an experimental library that makes it easy to build natural language interfaces using types.",
   "keywords": [
