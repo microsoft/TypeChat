@@ -8,7 +8,7 @@ import { SentimentSchema } from "./sentimentSchema";
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
 const model = createLanguageModel(process.env);
-const validator = createZodJsonValidator(SentimentSchema, SentimentSchema.SentimentResponse);
+const validator = createZodJsonValidator(SentimentSchema, "SentimentResponse");
 const translator = createJsonTranslator(model, validator);
 
 // Process requests interactively or from the input file specified on the command line

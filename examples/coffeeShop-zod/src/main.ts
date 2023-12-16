@@ -9,7 +9,7 @@ import { CoffeeShopSchema } from "./coffeeShopSchema";
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
 const model = createLanguageModel(process.env);
-const validator = createZodJsonValidator(CoffeeShopSchema, CoffeeShopSchema.Cart);
+const validator = createZodJsonValidator(CoffeeShopSchema, "Cart");
 const translator = createJsonTranslator(model, validator);
 
 function processOrder(cart: z.TypeOf<typeof CoffeeShopSchema.Cart>) {

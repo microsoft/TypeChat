@@ -4,30 +4,28 @@ import { TypeChatJsonValidator } from '../typechat';
 
 /**
  * Returns a JSON validator for a given Zod schema. The schema is supplied as an object where each property provides
- * a name for an associated Zod type. The type argument `T` represents the target Zod type in the schema. The `validate`
- * method of the returned object validates a JSON object against the supplied schema, the `getSchemaText` method obtains
- * the TypeScript source text representation of the schema, and the `getTypeName` method obtains the name of the given
- * target type in the schema.
+ * a name for an associated Zod type. The `validate` method of the returned object validates a JSON object against the
+ * supplied schema, the `getSchemaText` method obtains the TypeScript source text representation of the schema, and
+ * the `getTypeName` method obtains the name of the given target type in the schema.
  * @param schema A schema object where each property provides a name for an associated Zod type.
- * @param targetType The target type for the JSON validation. This must be one of the Zod types in the schema.
- * @returns A `TypeChatJsonValidator<z.TypeOf<T>>, where T is the type of `targetType`.
+ * @param targetType The name in the schema of the target type for JSON validation.
+ * @returns A `TypeChatJsonValidator<z.TypeOf<T[K]>>`, where T is the schema and K is the target type name.
  */
-export function createZodJsonValidator<T extends z.ZodType>(schema: Record<string, z.ZodType>, targetType: T): TypeChatJsonValidator<z.TypeOf<T>> {
+export function createZodJsonValidator<T extends Record<string, z.ZodType>, K extends keyof T & string>(schema: T, typeName: K): TypeChatJsonValidator<z.TypeOf<T[K]>> {
     let schemaText: string;
-    let typeName: string;
-    const validator: TypeChatJsonValidator<z.TypeOf<T>> = {
+    const validator: TypeChatJsonValidator<z.TypeOf<T[K]>> = {
         getSchemaText: () => schemaText ??= getZodSchemaAsTypeScript(schema),
-        getTypeName: () => typeName ??= getTypeName(schema, targetType) ?? "???",
+        getTypeName: () => typeName,
         validate
     };
     return validator;
 
     function validate(jsonObject: object) {
-        const result = targetType.safeParse(jsonObject);
+        const result = schema[typeName].safeParse(jsonObject);
         if (!result.success) {
             return error(result.error.issues.map(({ path, message }) => `${path.map(key => `[${JSON.stringify(key)}]`).join("")}: ${message}`).join("\""));
         }
-        return success(result.data as z.TypeOf<T>);
+        return success(result.data as z.TypeOf<T[K]>);
     }
 }
 
@@ -63,15 +61,6 @@ function getTypePrecendece(type: z.ZodType): TypePrecedence {
             return TypePrecedence.Intersection;
     }
     return TypePrecedence.Object;
-}
-
-function getTypeName(types: Record<string, z.ZodType>, type: z.ZodType): string | undefined {
-    const id = getTypeIdentity(type);
-    for (const [name, type] of Object.entries(types)) {
-        if (getTypeIdentity(type) === id) {
-            return name;
-        }
-    }
 }
 
 /**
