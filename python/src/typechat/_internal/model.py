@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from typing import Protocol, override
 
 import openai
@@ -7,19 +6,23 @@ from typechat._internal.result import Failure, Result, Success
 
 
 class TypeChatModel(Protocol):
-    def complete(self, input: str) -> Result[str]:
+    async def complete(self, input: str) -> Result[str]:
         ...
 
 
-@dataclass
 class DefaultOpenAIModel(TypeChatModel):
     model_name: str
-    client: openai.OpenAI | openai.AzureOpenAI
+    client: openai.AsyncOpenAI | openai.AsyncAzureOpenAI
+
+    def __init__(self, model_name: str, client: openai.AsyncOpenAI | openai.AsyncAzureOpenAI):
+        super().__init__()
+        self.model_name = model_name
+        self.client = client
 
     @override
-    def complete(self, input: str) -> Result[str]:
+    async def complete(self, input: str) -> Result[str]:
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[{"role": "user", "content": input}],
                 temperature=0.0,

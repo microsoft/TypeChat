@@ -25,11 +25,11 @@ class TypeChatTranslator(Generic[T]):
         self._type_name = conversion_result.typescript_type_reference
         self._schema_str = conversion_result.typescript_schema_str
 
-    def translate(self, request: str) -> Result[T]:
+    async def translate(self, request: str) -> Result[T]:
         request = self._create_request_prompt(request)
         num_repairs_attempted = 0
         while True:
-            completion_response = self.model.complete(request)
+            completion_response = await self.model.complete(request)
             if isinstance(completion_response, Failure):
                 return completion_response
 
