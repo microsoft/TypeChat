@@ -18,16 +18,36 @@ Types are all you need!
 
 # Getting Started
 
+To get started to contribute to this project, click on the fork button on the top right of the github page, then click on the create fork repo to have a copy of the repository on your machine.
+
+After the repo has been created, click on the code to copy the URL of the repository using this example below:
+
+```
+
+git clone https://github.com/your-username/your-app-name.git
+
+```
+
+```
+
+cd your-app-name
+
+```
+
 Install TypeChat:
 
 ```
+
 npm install typechat
+
 ```
 
 You can also build TypeChat from source:
 
 ```
+
 npm run build
+
 ```
 
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](./examples). You can try them on your local machine or in a GitHub Codespace.
@@ -36,7 +56,7 @@ To learn more about TypeChat, visit the [documentation](https://microsoft.github
 
 ## Contributing
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+This project welcomes contributions and suggestions. Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
 
@@ -50,8 +70,12 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 
 ## Trademarks
 
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow 
+This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
+trademarks or logos is subject to and must follow
 [Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
 Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
 Any use of third-party trademarks or logos are subject to those third-party's policies.
+
+```
+
+```
