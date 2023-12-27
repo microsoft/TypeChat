@@ -18,20 +18,18 @@ Types are all you need!
 
 # Getting Started
 
+This project used Typescript to ensure clean and error free code. It is therefor important to know the basic distinction between type and interface
+Almost all features of an interface are available in type, the key distinction is that a type cannot be re-opened to add new properties vs an interface which is always extendable.
 To get started to contribute to this project, click on the fork button on the top right of the github page, then click on the create fork repo to have a copy of the repository on your machine.
 
 After the repo has been created, click on the code to copy the URL of the repository using this example below:
 
 ```
-
 git clone https://github.com/your-username/your-app-name.git
-
 ```
 
 ```
-
 cd your-app-name
-
 ```
 
 Install TypeChat:
