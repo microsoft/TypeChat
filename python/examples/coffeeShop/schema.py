@@ -127,7 +127,7 @@ class BakeryProduct(TypedDict):
     options: list[BakeryOption | BakeryPreparation]
 
 
-Product = BakeryProduct | LatteDrink | EspressoDrink | CoffeeDrink
+Product = BakeryProduct | LatteDrink | EspressoDrink | CoffeeDrink | UnknownText
 
 
 class LineItem(TypedDict):
