@@ -32,6 +32,9 @@ Source = "https://github.com/microsoft/TypeChat"
 [tool.hatch.version]
 path = "src/typechat/__about__.py"
 
+[dirs.env]
+virtual = ".hatch"
+
 [tool.hatch.envs.default]
 dependencies = [
   "coverage[toml]>=6.5",

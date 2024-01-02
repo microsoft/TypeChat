@@ -1,6 +1,7 @@
-from typing import Literal, NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict, Annotated
 
 from typechat import python_type_to_typescript_schema
+def Doc(s: str) -> str: return s
 
 
 class UnknownText(TypedDict):
@@ -9,7 +10,7 @@ class UnknownText(TypedDict):
     """
 
     type: Literal["UnknownText"]
-    text: str
+    text: Annotated[str, Doc("The text that wasn't understood")]
 
 
 class Caffeine(TypedDict):
@@ -91,7 +92,7 @@ class LatteDrink(TypedDict):
     type: Literal["LatteDrink"]
     name: Literal["cappuccino", "flat white", "latte", "latte macchiato", "mocha", "chai latte"]
     temperature: NotRequired["CoffeeTemperature"]
-    size: NotRequired["CoffeeSize"]  # The default is 'grande'
+    size: NotRequired[Annotated["CoffeeSize", Doc("The default is 'grande'")]]
     options: NotRequired[list[Creamer | Sweetener | Syrup | Topping | Caffeine | LattePreparation]]
 
 
@@ -99,7 +100,7 @@ class EspressoDrink(TypedDict):
     type: Literal["EspressoDrink"]
     name: Literal["espresso", "lungo", "ristretto", "macchiato"]
     temperature: NotRequired["CoffeeTemperature"]
-    size: NotRequired["EspressoSize"]  # The default is 'doppio'
+    size: NotRequired[Annotated["EspressoSize", Doc("The default is 'doppio'")]]
     options: NotRequired[list[Creamer | Sweetener | Syrup | Topping | Caffeine | LattePreparation]]
 
 
@@ -107,7 +108,7 @@ class CoffeeDrink(TypedDict):
     type: Literal["CoffeeDrink"]
     name: Literal["americano", "coffee"]
     temperature: NotRequired[CoffeeTemperature]
-    size: NotRequired[CoffeeSize]  # The default is "grande"
+    size: NotRequired[Annotated[CoffeeSize, Doc("The default is 'grande'")]]
     options: NotRequired[list[Creamer | Sweetener | Syrup | Topping | Caffeine | LattePreparation]]
 
 
@@ -128,7 +129,7 @@ class BakeryProduct(TypedDict):
     options: NotRequired[list[BakeryOption | BakeryPreparation]]
 
 
-Product = BakeryProduct | LatteDrink | CoffeeDrink | UnknownText
+Product = BakeryProduct | LatteDrink | CoffeeDrink | EspressoDrink | UnknownText
 
 
 class LineItem(TypedDict):

@@ -1,5 +1,5 @@
 from typing import Protocol, override
-
+import os
 import openai
 
 from typechat._internal.result import Failure, Result, Success
@@ -33,3 +33,21 @@ class DefaultOpenAIModel(TypeChatModel):
             return Success(content)
         except Exception as e:
             return Failure(str(e))
+
+def create_language_model(vals: dict[str,str|None]) -> TypeChatModel:
+    model:TypeChatModel
+    client: openai.AsyncOpenAI | openai.AsyncAzureOpenAI
+    
+    if "OPENAI_API_KEY" in vals:
+        client = openai.AsyncOpenAI(api_key=vals["OPENAI_API_KEY"])
+        model = DefaultOpenAIModel(model_name=vals.get("OPENAI_MODEL", None) or "gpt-35-turbo", client=client)
+
+    elif "AZURE_OPENAI_API_KEY" in vals and "AZURE_OPENAI_ENDPOINT" in vals:
+        os.environ["OPENAI_API_TYPE"] = "azure"
+        client=openai.AsyncAzureOpenAI(azure_endpoint=vals.get("AZURE_OPENAI_ENDPOINT",None) or "", api_key=vals["AZURE_OPENAI_API_KEY"],api_version="2023-03-15-preview")
+        model = DefaultOpenAIModel(model_name=vals.get("AZURE_OPENAI_MODEL", None) or "gpt-35-turbo", client=client)
+    
+    else:
+        raise ValueError("Missing environment variables for Open AI or Azure OpenAI model")
+        
+    return model
