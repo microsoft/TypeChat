@@ -234,7 +234,16 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
     def declare_property(name: str, py_annotation: type | TypeAliasType, optional: bool):
         origin: object = py_annotation
+        comments: str = ""
         while origin := get_origin(origin):
+            if origin is Annotated and hasattr(py_annotation, "__metadata__"):
+                comments = py_annotation.__metadata__[0]
+            elif origin in _KNOWN_GENERIC_SPECIAL_FORMS:
+                nested = get_args(py_annotation)
+                if nested:
+                    nested_origin = get_origin(nested[0])
+                    if nested_origin is Annotated:
+                        comments = nested[0].__metadata__[0]
             if origin is Required:
                 optional = False
                 break
@@ -242,7 +251,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                 optional = True
                 break
         type_annotation = convert_to_type_node(skip_annotations(py_annotation))
-        return PropertyDeclarationNode(name, optional, "", type_annotation)
+        return PropertyDeclarationNode(name, optional, comments, type_annotation)
 
     def declare_type(py_type: object):
         if is_typeddict(py_type):

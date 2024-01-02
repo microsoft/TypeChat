@@ -2,17 +2,15 @@ import asyncio
 import json
 import sys
 
-import openai
 import schema as coffeeshop
 from dotenv import dotenv_values
 
-from typechat import DefaultOpenAIModel, Failure, TypeChatTranslator, TypeChatValidator
+from typechat import Failure, TypeChatTranslator, TypeChatValidator, create_language_model
 
 
 async def main():
     vals = dotenv_values()
-    client = openai.AsyncOpenAI(api_key=vals["OPENAI_API_KEY"])
-    model = DefaultOpenAIModel(model_name=vals.get("OPENAI_MODEL", None) or "gpt-3.5-turbo", client=client)
+    model = create_language_model(vals)
     validator = TypeChatValidator(coffeeshop.Cart)
     translator = TypeChatTranslator(model, validator, coffeeshop.Cart)
     print("☕> ", end="", flush=True)
