@@ -9,8 +9,6 @@ node_modules/
 
 # Local development and debugging
 .scratch/
-.vscode
-**/.vscode/*
 **/tsconfig.debug.json
 !**/.vscode/launch.json
 **/build.bat
