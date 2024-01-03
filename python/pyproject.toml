@@ -54,6 +54,11 @@ cov = [
   "cov-report",
 ]
 
+[tool.hatch.envs.examples]
+extra-dependencies = [
+  "spotipy",
+]
+
 [[tool.hatch.envs.all.matrix]]
 python = ["3.12"]
 
@@ -88,6 +93,7 @@ all = [
 
 [tool.mypy]
 python_version = "3.12"
+untyped_calls_exclude  = ["spotipy"]
 
 [tool.black]
 target-version = ["py312"]
