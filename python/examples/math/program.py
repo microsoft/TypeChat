@@ -69,8 +69,8 @@ Expression = JsonValue | FunctionCall | ResultReference
 JsonProgram = TypedDict("Program", {"@steps": list[FunctionCall]})
 
 
-async def evaluate_json_program(program: JsonProgram, onCall: Callable[[str, Sequence[Any]], Awaitable[Any]]) -> Any:
-    results: list[Any] = []
+async def evaluate_json_program(program: JsonProgram, onCall: Callable[[str, Sequence[Expression]], Awaitable[Expression]]) -> Expression:
+    results: list[Expression] = []
 
     async def evaluate_array(array: Sequence[Expression]) -> Sequence[Expression]:
         return await asyncio.gather(*[evaluate_call(e) for e in array]) # type: ignore
