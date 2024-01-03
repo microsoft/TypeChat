@@ -42,7 +42,7 @@ async def main():
             print("Translation Succeeded! ✅\n")
             print("JSON View")
             print(json.dumps(result, indent=2))
-            math_result = await evaluate_json_program(result, handle_call)
+            math_result = await evaluate_json_program(result, handle_call) # type: ignore
             print(f"Math Result: {math_result}")
 
         print("\n🧮> ", end="", flush=True)
