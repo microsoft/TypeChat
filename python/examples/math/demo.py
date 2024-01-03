@@ -7,7 +7,7 @@ from typechat import Failure, create_language_model
 from program import TypeChatProgramTranslator, TypeChatProgramValidator, JsonProgram, evaluate_json_program
 
 
-def handle_call(func: str, args: list[int | float]):
+async def handle_call(func: str, args: list[int | float]) -> int | float:
     print(f"{func}({json.dumps(args)}) ")
     match func:
         case "add":
@@ -22,6 +22,8 @@ def handle_call(func: str, args: list[int | float]):
             return -1 * args[0]
         case "id":
             return args[0]
+        case _:
+            raise ValueError(f'Unexpected function name {func}')
 
 
 async def main():
@@ -40,7 +42,7 @@ async def main():
             print("Translation Succeeded! ✅\n")
             print("JSON View")
             print(json.dumps(result, indent=2))
-            math_result = evaluate_json_program(result, handle_call)
+            math_result = await evaluate_json_program(result, handle_call)
             print(f"Math Result: {math_result}")
 
         print("\n🧮> ", end="", flush=True)

@@ -1,7 +1,8 @@
 from __future__ import annotations
+import asyncio
 import json
 from textwrap import dedent, indent
-from typing import Mapping, TypeVar, Any, override
+from typing import Mapping, TypeVar, Any, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override
 
 from typechat import (
     Failure,
@@ -48,7 +49,7 @@ export type ResultReference = {
     "@ref": number;
 };
 '''
-from typing import TypedDict, Annotated, Callable, NotRequired
+
 
 ResultReference = TypedDict(
     "ResultReference", {"@ref": Annotated[int, Doc("Index of the previous expression in the 'steps' array")]}
@@ -68,13 +69,13 @@ Expression = JsonValue | FunctionCall | ResultReference
 JsonProgram = TypedDict("Program", {"@steps": list[FunctionCall]})
 
 
-def evaluate_json_program(program: Mapping[str, Any], onCall: Callable[[str, list[Any]], Any]) -> Any:
+async def evaluate_json_program(program: Mapping[str, Any], onCall: Callable[[str, list[Any]], Awaitable[Any]]) -> Any:
     results: list[Any] = []
 
-    def evaluate_array(array: list[Any]) -> list[Any]:
-        return [evaluate_call(e) for e in array]
+    async def evaluate_array(array: list[Any]) -> list[Any]:
+        return await asyncio.gather(*[evaluate_call(e) for e in array])
 
-    def evaluate_object(expr: FunctionCall):
+    async def evaluate_object(expr: FunctionCall):
         if "@ref" in expr:
             index = expr["@ref"]
             if index < len(results):
@@ -82,22 +83,22 @@ def evaluate_json_program(program: Mapping[str, Any], onCall: Callable[[str, lis
 
         elif "@func" in expr and "@args" in expr:
             function_name = expr["@func"]
-            return onCall(function_name, evaluate_array(expr["@args"]))
+            return await onCall(function_name, await evaluate_array(expr["@args"]))
 
         elif isinstance(expr, collections.abc.Sequence):
-            return evaluate_array(expr)
+            return await evaluate_array(expr)
 
         else:
             raise ValueError("This condition should never hit")
 
-    def evaluate_call(expr: FunctionCall):
+    async def evaluate_call(expr: FunctionCall):
         # implement awaitable pattern
         if isinstance(expr, int) or isinstance(expr, float) or isinstance(expr, str):
             return expr
-        return evaluate_object(expr)
+        return await evaluate_object(expr)
 
     for step in program["@steps"]:
-        results.append(evaluate_call(step))
+        results.append(await evaluate_call(step))
 
     if len(results) > 0:
         return results[-1]
