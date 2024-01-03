@@ -154,9 +154,9 @@ class SearchTracksActionParameters(TypedDict):
         str,
         Doc(
         """ 
-                     the part of the request specifying the the search keywords
-                     examples: song name, album name, artist name
-                     """),
+        the part of the request specifying the the search keywords
+        examples: song name, album name, artist name
+        """),
     ]
 
 
