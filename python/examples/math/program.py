@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 from textwrap import dedent, indent
-from typing import Mapping, TypeVar, Any, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override
+from typing import Mapping, TypeVar, Any, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override, Sequence
 
 from typechat import (
     Failure,
@@ -69,11 +69,11 @@ Expression = JsonValue | FunctionCall | ResultReference
 JsonProgram = TypedDict("Program", {"@steps": list[FunctionCall]})
 
 
-async def evaluate_json_program(program: Mapping[str, Any], onCall: Callable[[str, list[Any]], Awaitable[Any]]) -> Any:
+async def evaluate_json_program(program: JsonProgram, onCall: Callable[[str, Sequence[Any]], Awaitable[Any]]) -> Any:
     results: list[Any] = []
 
-    async def evaluate_array(array: list[Any]) -> list[Any]:
-        return await asyncio.gather(*[evaluate_call(e) for e in array])
+    async def evaluate_array(array: Sequence[Expression]) -> Sequence[Expression]:
+        return await asyncio.gather(*[evaluate_call(e) for e in array]) # type: ignore
 
     async def evaluate_object(expr: FunctionCall):
         if "@ref" in expr:
@@ -92,7 +92,6 @@ async def evaluate_json_program(program: Mapping[str, Any], onCall: Callable[[st
             raise ValueError("This condition should never hit")
 
     async def evaluate_call(expr: FunctionCall):
-        # implement awaitable pattern
         if isinstance(expr, int) or isinstance(expr, float) or isinstance(expr, str):
             return expr
         return await evaluate_object(expr)
