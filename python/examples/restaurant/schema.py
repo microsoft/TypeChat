@@ -1,5 +1,8 @@
-from typing import Literal, NotRequired, TypedDict, Annotated
-def Doc(s: str) -> str: return s
+from typing import Literal, Required, NotRequired, TypedDict, Annotated
+
+
+def Doc(s: str) -> str:
+    return s
 
 
 class UnknownText(TypedDict):
@@ -11,19 +14,15 @@ class UnknownText(TypedDict):
     text: Annotated[str, "The text that wasn't understood"]
 
 
-class Pizza(TypedDict):
-    itemType: Literal["Pizza"]
-    size: NotRequired[Annotated[Literal["small", "medium", "large", "extra large"], "default: large"]]
-    addedToppings: NotRequired[Annotated[list[str], Doc("toppings requested (examples: pepperoni, arugula)")]]
-    removedToppings: NotRequired[
-        Annotated[list[str], Doc("toppings requested to be removed (examples: fresh garlic, anchovies)")]
-    ]
-    quantity: NotRequired[Annotated[int, "default: 1"]]
-    name: NotRequired[
-        Annotated[
-            Literal["Hawaiian", "Yeti", "Pig In a Forest", "Cherry Bomb"],
-            Doc("used if the requester references a pizza by name"),
-        ]
+class Pizza(TypedDict, total=False):
+    itemType: Required[Literal["Pizza"]]
+    size: Annotated[Literal["small", "medium", "large", "extra large"], "default: large"]
+    addedToppings: Annotated[list[str], Doc("toppings requested (examples: pepperoni, arugula)")]
+    removedToppings: Annotated[list[str], Doc("toppings requested to be removed (examples: fresh garlic, anchovies)")]
+    quantity: Annotated[int, "default: 1"]
+    name: Annotated[
+        Literal["Hawaiian", "Yeti", "Pig In a Forest", "Cherry Bomb"],
+        Doc("used if the requester references a pizza by name"),
     ]
 
 
@@ -38,13 +37,13 @@ SaladSize = Literal["half", "whole"]
 SaladStyle = Literal["Garden", "Greek"]
 
 
-class Salad(TypedDict):
-    itemType: Literal["Salad"]
-    portion: NotRequired[Annotated[str, "default: half"]]
-    style: NotRequired[Annotated[str, "default: Garden"]]
-    addedIngredients: NotRequired[Annotated[list[str], Doc("ingredients requested (examples: parmesan, croutons)")]]
-    removedIngredients: NotRequired[Annotated[list[str], Doc("ingredients requested to be removed (example: red onions)")]]
-    quantity: NotRequired[Annotated[int, "default: 1"]]
+class Salad(TypedDict, total=False):
+    itemType: Required[Literal["Salad"]]
+    portion: Annotated[str, "default: half"]
+    style: Annotated[str, "default: Garden"]
+    addedIngredients: Annotated[list[str], Doc("ingredients requested (examples: parmesan, croutons)")]
+    removedIngredients: Annotated[list[str], Doc("ingredients requested to be removed (example: red onions)")]
+    quantity: Annotated[int, "default: 1"]
 
 
 OrderItem = Pizza | Beer | Salad

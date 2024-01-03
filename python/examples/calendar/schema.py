@@ -1,5 +1,8 @@
 from typing import Literal, NotRequired, TypedDict, Annotated
-def Doc(s: str) -> str: return s
+
+
+def Doc(s: str) -> str:
+    return s
 
 
 class UnknownAction(TypedDict):
@@ -11,10 +14,10 @@ class UnknownAction(TypedDict):
     text: Annotated[str, Doc("text typed by the user that the system did not understand")]
 
 
-class EventTimeRange(TypedDict):
-    startTime: NotRequired[str]
-    endTime: NotRequired[str]
-    duration: NotRequired[str]
+class EventTimeRange(TypedDict, total=False):
+    startTime: str
+    endTime: str
+    duration: str
 
 
 class Event(TypedDict):
@@ -25,18 +28,18 @@ class Event(TypedDict):
     participants: NotRequired[Annotated[list[str], Doc("a list of people or named groups like 'team'")]]
 
 
-class EventReference(TypedDict):
+class EventReference(TypedDict, total=False):
     """
     properties used by the requester in referring to an event
     these properties are only specified if given directly by the requester
     """
 
-    day: NotRequired[Annotated[str, Doc("date (example: March 22, 2024) or relative date (example: after EventReference)")]]
-    dayRange: NotRequired[Annotated[str, Doc("(examples: this month, this week, in the next two days)")]]
-    timeRange: NotRequired[EventTimeRange]
-    description: NotRequired[str]
-    location: NotRequired[str]
-    participants: NotRequired[list[str]]
+    day: Annotated[str, Doc("date (example: March 22, 2024) or relative date (example: after EventReference)")]
+    dayRange: Annotated[str, Doc("(examples: this month, this week, in the next two days)")]
+    timeRange: EventTimeRange
+    description: str
+    location: str
+    participants: list[str]
 
 
 class FindEventsAction(TypedDict):
@@ -71,7 +74,7 @@ class RemoveEventAction(TypedDict):
 
 class AddEventAction(TypedDict):
     actionType: Literal["add event"]
-    eventReference: Event
+    event: Event
 
 
 Actions = (
