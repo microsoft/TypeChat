@@ -4,7 +4,7 @@ from typing import Protocol, runtime_checkable
 @runtime_checkable
 class MathAPI(Protocol):
     """
-    This is a schema for writing programs that evaluate expressions.
+    This is API for a simple calculator
     """
 
     def add(self, x: float, y: float) -> float:
