@@ -54,6 +54,15 @@
             "group": "build",
             "problemMatcher": [],
             "detail": "tsc -p src"
+        },
+        {
+            "label": "build-classification",
+            "type": "npm",
+            "script": "build",
+            "path": "examples/classification",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "tsc -p src"
         }
     ]
 }

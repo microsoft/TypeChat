@@ -1,8 +1,8 @@
-export type Class = {
+export type Classification = {
     name: string;
     description: string;
 };
 
 export interface ClassificationResponse {
-    class: Class;
+    class: Classification;
 }

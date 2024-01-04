@@ -2,17 +2,17 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { createLanguageModel, createJsonTranslator, processRequests } from "typechat";
-import { Class, ClassificationResponse } from "./classificationSchema";
+import { Classification, ClassificationResponse } from "./classificationSchema";
 
-const classes: Class[] = [
+const classes: Classification[] = [
   {
     "name": "CoffeeShop",
     "description": "Order Coffee Drinks (Italian names included) and Baked Goods"
   },
-{
+  {
     "name": "Mystery Bookshop",
     "description": "A bookstore that specializes in mystery books"
-},
+  },
   {
     "name": "Bookstore",
     "description": "A bookstore that sells all kinds of books"

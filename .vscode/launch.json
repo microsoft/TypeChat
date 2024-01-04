@@ -217,24 +217,41 @@
             ],
             "console": "externalTerminal"
         },
-    ],
-    "compounds": [
         {
-            "name": "Debug All Projects",
-            "configurations": [
-                "sentiment-wsl",
-                "calendar-wsl",
-                "music-wsl",
-                "math-wsl",
-                "restaurant-wsl",
-                "coffeeShop-wsl",
-                "sentiment",
-                "calendar",
-                "music",
-                "math",
-                "restaurant",
-                "coffeeShop",
-            ]
+            "name": "classification-wsl",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/classification/src/main.ts",
+            "stopOnEntry": false,
+            "args": [],
+            "cwd": "${workspaceFolder}/examples/classification",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "preLaunchTask": "build-classification",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/examples/classification/dist/**/*.js"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "classification",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/examples/classification/src/main.ts",
+            "stopOnEntry": false,
+            "args": [],
+            "cwd": "${workspaceFolder}/examples/classification",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "preLaunchTask": "build-classification",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/examples/classification/dist/**/*.js"
+            ],
+            "console": "externalTerminal"
         }
-    ]
+    ],
 }
