@@ -13,8 +13,20 @@
 	"forwardPorts": [7860,7861,7862,7863,7864,7865,7866,7867,7868,7869,7870],
 
 
-	// Configure tool-specific properties.
-	// "customizations": {},
+	 // Configure tool-specific properties.
+	 "customizations": {
+        "vscode": {
+            "extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance"
+			],
+            "settings": {
+                "python.defaultInterpreterPath": "/workspaces/TypeChat/python/.hatch/typechat/bin/python3.12"
+            }
+        }
+    },
+
+	"postCreateCommand": "hatch config set dirs.env.virtual .hatch; hatch config update;hatch env create"
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
 	// "remoteUser": "root"
