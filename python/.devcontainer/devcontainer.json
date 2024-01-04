@@ -15,16 +15,16 @@
 
 	 // Configure tool-specific properties.
 	 "customizations": {
-        "vscode": {
+         "vscode": {
             "extensions": [
-				"ms-python.python",
-				"ms-python.vscode-pylance"
-			],
+                "ms-python.python",
+                "ms-python.vscode-pylance"
+            ],
             "settings": {
                 "python.defaultInterpreterPath": "/workspaces/TypeChat/python/.hatch/typechat/bin/python3.12"
-            }
-        }
-    },
+             }
+           }
+         },
 
 	"postCreateCommand": "hatch config set dirs.env.virtual .hatch; hatch config update;hatch env create"
 
