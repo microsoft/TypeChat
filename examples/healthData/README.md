@@ -22,8 +22,9 @@ For example, given the following input statement:
 
 **Input**:
 
-```
+```console
 💉💊🤧> klaritin
+
 ```
 
 **Output**:
