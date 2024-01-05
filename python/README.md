@@ -7,18 +7,22 @@
 
 -----
 
-**Table of Contents**
+# TypeChat
 
-- [Installation](#installation)
-- [License](#license)
+TypeChat is a library that makes it easy to build natural language interfaces using types.
 
 ## Installation
 
-<!--
-```console
-pip install typechat
+TypeChat for Python is not yet on PyPI, but you can try our [examples](./examples/) by cloning this repository.
+
+You will need [Python 3.12](https://www.python.org/downloads/release/python-3121/) and [hatch](https://hatch.pypa.io/1.6/install/).
+
 ```
--->
+git clone https://github.com/microsoft/TypeChat
+cd TypeChat/python
+hatch shell
+python examples/sentiment/demo.py
+```
 
 ## License
 
