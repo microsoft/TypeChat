@@ -53,7 +53,7 @@ class TranslatorWithHistory(TypeChatTranslator[T]):
             '''
 
             user:
-            Use precise date and times RELATIVE TO CURRENT DATE: {now.strftime('%A, %m %d, %Y')} CURRENT TIME: {now.split(' ')[0])}
+            Use precise date and times RELATIVE TO CURRENT DATE: {now.strftime('%A, %m %d, %Y')} CURRENT TIME: {now.strftime("%H:%M:%S")}
             Also turn ranges like next week and next month into precise dates
             
             user:
