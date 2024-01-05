@@ -1,10 +1,10 @@
-from typing import Any, Callable, Awaitable, Dict
+from typing import Any, Callable, Awaitable
 from typechat import Failure, TypeChatValidator, TypeChatModel
 from translator import TextClassiferTranslator, TextClassification, ClassificationItem
 
 
 class TextRequestRouter:
-    _current_agents: Dict[str, ClassificationItem]
+    _current_agents: dict[str, ClassificationItem]
     _validator: TypeChatValidator[TextClassification]
     _translator: TextClassiferTranslator[TextClassification]
 

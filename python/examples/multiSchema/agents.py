@@ -5,18 +5,25 @@ examples_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 if examples_path not in sys.path:
     sys.path.append(examples_path)
 
+import asyncio
 import json
 
 from typing import TypeVar, Generic
 from typechat import Failure, TypeChatTranslator, TypeChatValidator, TypeChatModel
 
 import examples.math.schema as math_schema
-from examples.math.program import TypeChatProgramTranslator, TypeChatProgramValidator, evaluate_json_program, JsonProgram
+from examples.math.program import (
+    TypeChatProgramTranslator,
+    TypeChatProgramValidator,
+    evaluate_json_program,
+    JsonProgram,
+)
 
 import examples.music.schema as music_schema
 from examples.music.client import ClientContext, handle_call, get_client_context
 
 T = TypeVar("T", covariant=True)
+
 
 class JsonPrintAgent(Generic[T]):
     _validator: TypeChatValidator[T]
@@ -40,14 +47,15 @@ class JsonPrintAgent(Generic[T]):
 
 
 class MathAgent:
-    _validator: TypeChatProgramValidator
-    _translator: TypeChatProgramTranslator[math_schema.MathAPI]
+    _validator: TypeChatProgramValidator[JsonProgram]
+    _translator: TypeChatProgramTranslator[JsonProgram]
 
     def __init__(self, model: TypeChatModel):
+        super().__init__()
         self._validator = TypeChatProgramValidator(JsonProgram)
         self._translator = TypeChatProgramTranslator(model, self._validator, math_schema.MathAPI)
 
-    async def _handle_jsonProgram_call(self, func: str, args: list[int|float]):
+    async def _handle_json_program_call(self, func: str, args: list[int | float]):
         print(f"{func}({json.dumps(args)}) ")
         match func:
             case "add":
@@ -74,7 +82,7 @@ class MathAgent:
             print("JSON View")
             print(json.dumps(result, indent=2))
 
-            math_result = await evaluate_json_program(result, self._handle_jsonProgram_call)
+            math_result = await evaluate_json_program(result, self._handle_json_program_call)
             print(f"Math Result: {math_result}")
 
 
@@ -83,10 +91,12 @@ class MusicAgent:
     _translator: TypeChatTranslator[music_schema.PlayerActions]
     _client_context: ClientContext
 
-    def __init__(self, model: TypeChatModel, vals: dict[str,str | None]):
+    def __init__(self, model: TypeChatModel, vals: dict[str, str | None]):
+        super().__init__()
         self._validator = TypeChatValidator(music_schema.PlayerActions)
         self._translator = TypeChatTranslator(model, self._validator, music_schema.PlayerActions)
-        self._client_context = get_client_context(vals)
+        loop = asyncio.get_event_loop() 
+        self._client_context = loop.run_until_complete(get_client_context(vals))
 
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)

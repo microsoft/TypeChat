@@ -52,15 +52,3 @@ class TextClassiferTranslator(TypeChatTranslator[T]):
             """
         prompt = dedent(prompt)
         return prompt
-
-    @override
-    def _create_repair_prompt(self, validation_error: str) -> str:
-        validation_error = indent(validation_error, "            ")
-        prompt = F"""
-            The JSON object is invalid for the following reason:
-            '''
-            {validation_error}
-            '''
-            The following is a revised JSON object:
-            """
-        return dedent(prompt)
