@@ -131,3 +131,37 @@ After defining your types, TypeChat takes care of the rest by:
 3. Summarizing succinctly (without use of a LLM) the instance and confirm that it aligns with user intent.
 
 Types are all you need!
+
+## 1. Installation
+
+To begin using TypeChat, follow these steps:
+
+1. Install the TypeChat package using your preferred package manager:
+
+   ```bash
+   npm install typechat
+
+2. Defining Types
+
+Define types that represent the intents in your NL application. Use TypeScript interfaces for clarity:
+
+   ```typescript
+ interface MyIntentType {
+   // Define your intent properties here
+  }
+```
+3.Constructing Prompts
+Construct prompts to the language model using types. Example:
+
+```typescript
+const prompt: MyIntentType = { /* ... */ };
+```
+4. Validating Responses
+Ensure responses conform to the schema. Handle validation failures:
+```
+const response = typechat.getResponse(prompt);
+
+if (!isValid(response)) {
+  // Handle validation failure
+}
+```
