@@ -55,7 +55,7 @@ class MathAgent:
         self._validator = TypeChatProgramValidator(JsonProgram)
         self._translator = TypeChatProgramTranslator(model, self._validator, math_schema.MathAPI)
 
-    async def _handle_json_program_call(self, func: str, args: list[int | float]):
+    async def _handle_json_program_call(self, func: str, args: list[int | float]) -> int | float:
         print(f"{func}({json.dumps(args)}) ")
         match func:
             case "add":
@@ -70,6 +70,8 @@ class MathAgent:
                 return -1 * args[0]
             case "id":
                 return args[0]
+            case _:
+                raise ValueError(f'Unexpected function name {func}')
 
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)
@@ -89,14 +91,16 @@ class MathAgent:
 class MusicAgent:
     _validator: TypeChatValidator[music_schema.PlayerActions]
     _translator: TypeChatTranslator[music_schema.PlayerActions]
-    _client_context: ClientContext
+    _client_context: ClientContext | None
 
-    def __init__(self, model: TypeChatModel, vals: dict[str, str | None]):
+    def __init__(self, model: TypeChatModel):
         super().__init__()
         self._validator = TypeChatValidator(music_schema.PlayerActions)
         self._translator = TypeChatTranslator(model, self._validator, music_schema.PlayerActions)
-        loop = asyncio.get_event_loop() 
-        self._client_context = loop.run_until_complete(get_client_context(vals))
+        self._client_context = None
+    
+    async def authenticate(self, vals: dict[str, str | None]):
+        self._client_context = await get_client_context(vals)
 
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)

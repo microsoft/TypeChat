@@ -32,7 +32,8 @@ async def main():
         name="Math", description="Calculations using the four basic math operations", handler=math_agent.handle_request
     )
 
-    music_agent = MusicAgent(model=model, vals=vals)
+    music_agent = MusicAgent(model=model)
+    await music_agent.authenticate(vals)
     router.register_agent(
         name="Music Player",
         description="Actions related to music, podcasts, artists, and managing music libraries",
