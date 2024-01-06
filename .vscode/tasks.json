@@ -1,0 +1,59 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-sentiment",
+            "type": "npm",
+            "script": "build",
+            "path": "examples/sentiment",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "tsc -p src"
+        },
+        {
+            "label": "build-calendar",
+            "type": "npm",
+            "script": "build",
+            "path": "examples/calendar",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "tsc -p src"
+        },
+        {
+            "label": "build-math",
+            "type": "npm",
+            "script": "build",
+            "path": "examples/math",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "tsc -p src"
+        },
+        {
+            "label": "build-music",
+            "type": "npm",
+            "script": "build",
+            "path": "examples/music",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "tsc -p src"
+        },
+        {
+            "label": "build-restaurant",
+            "type": "npm",
+            "script": "build",
+            "path": "examples/restaurant",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "tsc -p src"
+        },
+        {
+            "label": "build-coffeeShop",
+            "type": "npm",
+            "script": "build",
+            "path": "examples/coffeeShop",
+            "group": "build",
+            "problemMatcher": [],
+            "detail": "tsc -p src"
+        }
+    ]
+}
