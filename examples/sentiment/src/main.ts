@@ -18,5 +18,6 @@ processRequests("😀> ", process.argv[2], async (request) => {
         console.log(response.message);
         return;
     }
-    console.log(`The sentiment is ${response.data.sentiment}`);
+
+    console.log(`The sentiment is ${response.data.sentiment}. The request used ${response.api?.usage.total_tokens ?? -1} tokens.`);
 });
