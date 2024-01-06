@@ -1,6 +1,7 @@
-import { Result, error, success } from "./result";
-import { TypeChatLanguageModel } from "./model";
-import { TypeChatJsonTranslator, createJsonTranslator } from "./typechat";
+import { Result, error, success } from "../result";
+import { TypeChatLanguageModel } from "../model";
+import { createTypeScriptJsonValidator } from "./validate";
+import { TypeChatJsonTranslator, createJsonTranslator } from "../typechat";
 
 const programSchemaText = `// A program consists of a sequence of function calls that are evaluated in order.
 export type Program = {
@@ -193,8 +194,9 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
  * @returns A `TypeChatJsonTranslator<Program>` instance.
  */
 export function createProgramTranslator(model: TypeChatLanguageModel, schema: string): TypeChatJsonTranslator<Program> {
-    const translator = createJsonTranslator<Program>(model, schema, "Program");
-    translator.validator.createModuleTextFromJson = createModuleTextFromProgram;
+    const validator = createTypeScriptJsonValidator<Program>(schema, "Program");
+    validator.createModuleTextFromJson = createModuleTextFromProgram;
+    const translator = createJsonTranslator<Program>(model, validator);
     translator.createRequestPrompt = createRequestPrompt;
     translator.createRepairPrompt = createRepairPrompt;
     return translator;
@@ -203,7 +205,7 @@ export function createProgramTranslator(model: TypeChatLanguageModel, schema: st
         return `You are a service that translates user requests into programs represented as JSON using the following TypeScript definitions:\n` +
             `\`\`\`\n${programSchemaText}\`\`\`\n` +
             `The programs can call functions from the API defined in the following TypeScript definitions:\n` +
-            `\`\`\`\n${translator.validator.schema}\`\`\`\n` +
+            `\`\`\`\n${validator.getSchemaText()}\`\`\`\n` +
             `The following is a user request:\n` +
             `"""\n${request}\n"""\n` +
             `The following is the user request translated into a JSON program object with 2 spaces of indentation and no properties with the value undefined:\n`;

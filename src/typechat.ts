@@ -1,6 +1,5 @@
 import { Result, success, error } from "./result";
 import { TypeChatLanguageModel, PromptSection } from "./model";
-import { TypeChatJsonValidator, createJsonValidator } from "./validate";
 
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
@@ -65,16 +64,37 @@ export interface TypeChatJsonTranslator<T extends object> {
 }
 
 /**
+ * An object that represents a TypeScript schema for JSON objects.
+ */
+export interface TypeChatJsonValidator<T extends object> {
+    /**
+     * Return a string containing TypeScript source code for the validation schema.
+     */
+    getSchemaText(): string;
+    /**
+     * Return the name of the JSON object target type in the schema.
+     */
+    getTypeName(): string;
+    /**
+     * Validates the given JSON object according to the associated TypeScript schema. Returns a
+     * `Success<T>` object containing the JSON object if validation was successful. Otherwise, returns
+     * an `Error` object with a `message` property describing the error.
+     * @param jsonText The JSON object to validate.
+     * @returns The JSON object or an error message.
+     */
+    validate(jsonObject: object): Result<T>;
+}
+
+/**
  * Creates an object that can translate natural language requests into JSON objects of the given type.
  * The specified type argument `T` must be the same type as `typeName` in the given `schema`. The function
  * creates a `TypeChatJsonValidator<T>` and stores it in the `validator` property of the returned instance.
  * @param model The language model to use for translating requests into JSON.
- * @param schema A string containing the TypeScript source code for the JSON schema.
+ * @param validator A string containing the TypeScript source code for the JSON schema.
  * @param typeName The name of the JSON target type in the schema.
  * @returns A `TypeChatJsonTranslator<T>` instance.
  */
-export function createJsonTranslator<T extends object>(model: TypeChatLanguageModel, schema: string, typeName: string): TypeChatJsonTranslator<T> {
-    const validator = createJsonValidator<T>(schema, typeName);
+export function createJsonTranslator<T extends object>(model: TypeChatLanguageModel, validator: TypeChatJsonValidator<T>): TypeChatJsonTranslator<T> {
     const typeChat: TypeChatJsonTranslator<T> = {
         model,
         validator,
@@ -88,8 +108,8 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
     return typeChat;
 
     function createRequestPrompt(request: string) {
-        return `You are a service that translates user requests into JSON objects of type "${validator.typeName}" according to the following TypeScript definitions:\n` +
-            `\`\`\`\n${validator.schema}\`\`\`\n` +
+        return `You are a service that translates user requests into JSON objects of type "${validator.getTypeName()}" according to the following TypeScript definitions:\n` +
+            `\`\`\`\n${validator.getSchemaText()}\`\`\`\n` +
             `The following is a user request:\n` +
             `"""\n${request}\n"""\n` +
             `The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:\n`;
@@ -117,7 +137,17 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
                 return error(`Response is not JSON:\n${responseText}`);
             }
             const jsonText = responseText.slice(startIndex, endIndex + 1);
-            const schemaValidation = validator.validate(jsonText);
+            let jsonObject;
+            try {
+                jsonObject = JSON.parse(jsonText) as object;
+            }
+            catch (e) {
+                return error(e instanceof SyntaxError ? e.message : "JSON parse error");
+            }
+            if (typeChat.stripNulls) {
+                stripNulls(jsonObject);
+            }
+            const schemaValidation = validator.validate(jsonObject);
             const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
             if (validation.success) {
                 return validation;
@@ -128,6 +158,36 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             prompt.push({ role: "assistant", content: responseText });
             prompt.push({ role: "user", content: typeChat.createRepairPrompt(validation.message) });
             attemptRepair = false;
+        }
+    }
+}
+
+/**
+ * Recursively delete properties with null values from the given object. This function assumes there are no
+ * circular references in the object.
+ * @param obj The object in which to strip null valued properties.
+ */
+function stripNulls(obj: any) {
+    let keysToDelete: string[] | undefined;
+    for (const k in obj) {
+        const value = obj[k];
+        if (value === null) {
+            (keysToDelete ??= []).push(k);
+        }
+        else {
+            if (Array.isArray(value)) {
+                if (value.some(x => x === null)) {
+                    obj[k] = value.filter(x => x !== null);
+                }
+            }
+            if (typeof value === "object") {
+                stripNulls(value);
+            }
+        }
+    }
+    if (keysToDelete) {
+        for (const k of keysToDelete) {
+            delete obj[k];
         }
     }
 }
