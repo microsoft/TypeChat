@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 import json
 from textwrap import dedent, indent
-from typing import TypeVar, Any, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override, Sequence
+from typing_extensions import TypeVar, Any, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override, Sequence, Doc
 
 from typechat import (
     Failure,
@@ -16,9 +16,6 @@ from typechat import (
 import collections.abc
 
 T = TypeVar("T", covariant=True)
-
-def Doc(s: str) -> str:
-    return s
 
 
 program_schema_text = '''

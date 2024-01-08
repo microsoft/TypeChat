@@ -1,4 +1,4 @@
-from typing import Protocol, runtime_checkable
+from typing_extensions import Protocol, runtime_checkable
 
 
 @runtime_checkable

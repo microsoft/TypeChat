@@ -1,9 +1,5 @@
-from typing import Literal, NotRequired, TypedDict, Annotated
-
-
-def Doc(s: str) -> str:
-    return s
-
+from __future__ import annotations
+from typing_extensions import Literal, NotRequired, TypedDict, Annotated, Doc
 
 class UnknownAction(TypedDict):
     """
