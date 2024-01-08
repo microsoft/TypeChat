@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import typing
-from dataclasses import dataclass
+from dataclasses import MISSING, Field, dataclass
+import inspect
 from types import NoneType, UnionType, get_original_bases
 from typing import (
     Annotated,
@@ -62,6 +62,8 @@ class Annotatedish(Protocol):
     __origin__: object
     __metadata__: tuple[object, ...]
 
+class Dataclassish(Protocol):
+    __dataclass_fields__: dict[str, Field[Any]]
 
 # type[TypedDict]
 # https://github.com/microsoft/pyright/pull/6505#issuecomment-1834431725
@@ -72,6 +74,8 @@ class TypeOfTypedDict(Protocol):
 def is_generic(py_type: object) -> TypeGuard[GenericAliasish]:
     return hasattr(py_type, "__origin__") and hasattr(py_type, "__args__")
 
+def is_dataclass(py_type: object) -> TypeGuard[Dataclassish]:
+    return hasattr(py_type, "__dataclass_fields__") and isinstance(cast(Any, py_type).__dataclass_fields__, dict)
 
 TypeReferenceTarget: TypeAlias = type | TypeAliasType | TypeVar | GenericAliasish
 
@@ -276,35 +280,49 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         return PropertyDeclarationNode(name, optional, comment or "", type_annotation)
 
     def declare_type(py_type: object):
-        if is_typeddict(py_type):
-            assert isinstance(py_type, type)
+        if (is_typeddict(py_type) or is_dataclass(py_type)) and isinstance(py_type, type):
+            comment = py_type.__doc__ or ""
+
             type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
             annotated_members = get_type_hints(py_type, include_extras=True)
-            assume_optional = cast(TypeOfTypedDict, py_type).__total__ is False
+            
             raw_but_filtered_bases: list[type] = [
                 base
                 for base in get_original_bases(py_type)
-                if base not in _KNOWN_SPECIAL_BASES and get_origin(base) not in _KNOWN_GENERIC_SPECIAL_FORMS
+                if not(base is object or base in _KNOWN_SPECIAL_BASES or get_origin(base) in _KNOWN_GENERIC_SPECIAL_FORMS)
             ]
-            base_properties: dict[str, set[object]] = {}
+            base_attributes: dict[str, set[object]] = {}
             for base in raw_but_filtered_bases:
-                for prop, annotation in get_type_hints(get_origin(base) or base, include_extras=True).items():
-                    base_properties.setdefault(prop, set()).add(annotation)
-            properties: list[PropertyDeclarationNode | IndexSignatureDeclarationNode] = [
-                declare_property(name, annotation, is_typeddict_attribute=True, optionality_default=assume_optional)
-                for name, annotation in annotated_members.items()
-                # Only keep these in if they're unique or
-                if name not in base_properties or
-                # all bases declare them differently
-                len(base_properties[name]) > 1 or
-                # or the current type declares them differently
-                annotation not in base_properties[name]
-            ]
+                for prop, type_hint in get_type_hints(get_origin(base) or base, include_extras=True).items():
+                    base_attributes.setdefault(prop, set()).add(type_hint)
             bases = [convert_to_type_node(base) for base in raw_but_filtered_bases]
-            return InterfaceDeclarationNode(py_type.__name__, type_params, py_type.__doc__ or "", bases, properties)
+
+            properties: list[PropertyDeclarationNode | IndexSignatureDeclarationNode] = []
+            if is_typeddict(py_type):
+                for attr_name, type_hint in annotated_members.items():
+                    if attribute_identical_in_all_bases(attr_name, type_hint, base_attributes):
+                        continue
+
+                    assume_optional = cast(TypeOfTypedDict, py_type).__total__ is False
+                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=True, optionality_default=assume_optional)
+                    properties.append(prop)
+            else:
+                # When a dataclass is created with no explicit docstring, @dataclass will
+                # generate one for us; however, we don't want these in the default output.
+                cleaned_signature = str(inspect.signature(py_type)).replace(" -> None", "")
+                dataclass_doc = f"{py_type.__name__}{cleaned_signature}"
+                if comment == dataclass_doc:
+                    comment = ""
+
+                for attr_name, field in cast(Dataclassish, py_type).__dataclass_fields__.items():
+                    type_hint = annotated_members[attr_name]
+                    optional = not(field.default is MISSING and field.default_factory is MISSING)
+                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional)
+                    properties.append(prop)
+
+            return InterfaceDeclarationNode(py_type.__name__, type_params, comment, bases, properties)
         if isinstance(py_type, type):
-            # TODO: Everything
-            errors.append("Currently only TypedDict and type alias declarations are supported")
+            errors.append("Currently only TypedDict, dataclass, and type alias declarations are supported in TypeChat.")
             return InterfaceDeclarationNode(py_type.__name__, None, f"Comment for {py_type.__name__}.", None, [])
         if isinstance(py_type, TypeAliasType):
             type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
@@ -317,6 +335,13 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             )
 
         raise RuntimeError(f"Cannot declare type {py_type}.")
+
+    def attribute_identical_in_all_bases(attr_name: str, type_hint: object, base_attributes: dict[str, set[object]]) -> bool:
+        """
+        We typically want to omit attributes with type hints that are
+        identical to those declared in all base types.
+        """
+        return attr_name in base_attributes and len(base_attributes[attr_name]) == 1 and type_hint in base_attributes[attr_name]
 
     def get_type_argument_nodes(py_type: object, count: int, default: TypeNode) -> list[TypeNode]:
         py_type_args = get_args(py_type)
