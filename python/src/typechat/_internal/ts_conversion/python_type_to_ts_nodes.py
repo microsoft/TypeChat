@@ -53,8 +53,14 @@ from typechat._internal.ts_conversion.ts_type_nodes import (
 
 
 class GenericAliasish(Protocol):
-    __origin__: type
-    __args__: tuple[type, ...]
+    __origin__: object
+    __args__: tuple[object, ...]
+
+
+class Annotatedish(Protocol):
+    # NOTE: `__origin__` here refers to `SomeType` in `Annnotated[SomeType, ...]`
+    __origin__: object
+    __metadata__: tuple[object, ...]
 
 
 # type[TypedDict]
@@ -232,26 +238,42 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         errors.append(f"'{py_type}' cannot be used as a type annotation.")
         return AnyTypeReferenceNode
 
-    def declare_property(name: str, py_annotation: type | TypeAliasType, optional: bool):
-        origin: object = py_annotation
-        comments: str = ""
-        while origin := get_origin(origin):
-            if origin is Annotated and hasattr(py_annotation, "__metadata__"):
-                comments = py_annotation.__metadata__[0]
-            elif origin in _KNOWN_GENERIC_SPECIAL_FORMS:
-                nested = get_args(py_annotation)
-                if nested:
-                    nested_origin = get_origin(nested[0])
-                    if nested_origin is Annotated:
-                        comments = nested[0].__metadata__[0]
-            if origin is Required:
-                optional = False
+    def declare_property(name: str, py_annotation: type | TypeAliasType, is_typeddict_attribute: bool, optionality_default: bool):
+        """
+        Declare a property for a given type.
+        If 'optionality_default' is 
+        """
+        current_annotation: object = py_annotation
+        origin: object
+        optional: bool | None = None
+        comment: str | None = None
+        while origin := get_origin(current_annotation):
+            if origin is Annotated and comment is None:
+                # TODO: Handle `Doc` appropriately. https://peps.python.org/pep-0727/
+                current_annotation = cast(Annotatedish, current_annotation)
+                annotation_metadata = current_annotation.__metadata__[0]
+                if isinstance(annotation_metadata, str):
+                    comment = annotation_metadata
+
+                current_annotation = current_annotation.__origin__
+
+            elif origin is Required or origin is NotRequired:
+                if not is_typeddict_attribute:
+                    errors.append(f"Optionality cannot be specified with {origin} outside of TypedDicts.")
+
+                if optional is not None:
+                    errors.append(f"{origin} cannot be used within another optionality annotation.")
+
+                optional = origin is NotRequired
+                current_annotation = get_args(current_annotation)[0]
+            else:
                 break
-            if origin is NotRequired:
-                optional = True
-                break
-        type_annotation = convert_to_type_node(skip_annotations(py_annotation))
-        return PropertyDeclarationNode(name, optional, comments, type_annotation)
+
+        if optional is None:
+            optional = optionality_default
+        
+        type_annotation = convert_to_type_node(skip_annotations(current_annotation))
+        return PropertyDeclarationNode(name, optional, comment or "", type_annotation)
 
     def declare_type(py_type: object):
         if is_typeddict(py_type):
@@ -269,7 +291,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                 for prop, annotation in get_type_hints(get_origin(base) or base, include_extras=True).items():
                     base_properties.setdefault(prop, set()).add(annotation)
             properties: list[PropertyDeclarationNode | IndexSignatureDeclarationNode] = [
-                declare_property(name, annotation, assume_optional)
+                declare_property(name, annotation, is_typeddict_attribute=True, optionality_default=assume_optional)
                 for name, annotation in annotated_members.items()
                 # Only keep these in if they're unique or
                 if name not in base_properties or

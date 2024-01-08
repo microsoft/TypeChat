@@ -15,7 +15,7 @@ type IndirectC = C[int]
 class D(C[str], total=False):
     "This is the definition of the class D."
     tag: Literal["D"]
-    y: Required[Annotated[bool | None, "This is a string."]]
+    y: Required[Annotated[bool | None, "This comes from string metadata\nwithin an Annotated hint."]]
     z: Optional[list[int]]
     other: IndirectC
     non_class: "nonclass"
@@ -38,7 +38,7 @@ type D_or_E = D | E
 
 result = python_type_to_typescript_schema(D_or_E)
 
-print("// Entry point is: '{result.typescript_type_reference}'")
+print(f"// Entry point is: '{result.typescript_type_reference}'")
 print("// TypeScript Schema:\n")
 print(result.typescript_schema_str)
 if result.errors:
