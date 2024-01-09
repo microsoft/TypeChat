@@ -7,7 +7,7 @@ name = "typechat"
 dynamic = ["version"]
 description = 'TypeChat is a library that makes it easy to build natural language interfaces using types.'
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 keywords = []
 authors = [
@@ -16,7 +16,7 @@ authors = [
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
@@ -61,7 +61,7 @@ extra-dependencies = [
 ]
 
 [[tool.hatch.envs.all.matrix]]
-python = ["3.10"]
+python = ["3.11"]
 
 [tool.hatch.envs.lint]
 detached = true
@@ -93,16 +93,16 @@ all = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 untyped_calls_exclude  = ["spotipy"]
 
 [tool.black]
-target-version = ["py310"]
+target-version = ["py311"]
 line-length = 120
 skip-string-normalization = true
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 120
 select = [
   "A",

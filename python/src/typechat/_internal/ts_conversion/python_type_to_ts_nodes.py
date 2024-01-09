@@ -239,19 +239,22 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         comments: str = ""
         while origin := get_origin(origin):
             if origin is Annotated and hasattr(py_annotation, "__metadata__"):
-                if isinstance(py_annotation.__metadata__[0], Doc):
-                    comments =  py_annotation.__metadata__[0].documentation
+                first_doc = next((x for x in py_annotation.__metadata__ if isinstance(x, Doc)), None)
+                if first_doc:
+                    comments =  first_doc.documentation
                 else:
-                    comments = py_annotation.__metadata__[0]
+                    comments = next((x for x in py_annotation.__metadata__ if isinstance(x, str)), "")
+
             elif origin in _KNOWN_GENERIC_SPECIAL_FORMS:
                 nested = get_args(py_annotation)
                 if nested:
                     nested_origin = get_origin(nested[0])
                     if nested_origin is Annotated:
-                        if isinstance(nested[0].__metadata__[0], Doc):
-                            comments = nested[0].__metadata__[0].documentation
+                        first_doc = next((x for x in nested[0].__metadata__ if isinstance(x, Doc)), None)
+                        if first_doc:
+                            comments =  first_doc.documentation
                         else:
-                            comments = nested[0].__metadata__[0]
+                            comments = next((x for x in nested[0].__metadata__ if isinstance(x, str)), "")
             if origin is Required:
                 optional = False
                 break
