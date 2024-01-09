@@ -6,7 +6,7 @@ type ChatMessage = {
 };
 
 export interface TranslatorWithHistory<T extends object> {
-    chatHistory: ChatMessage[];
+    _chatHistory: ChatMessage[];
     _maxPromptLength: number;
     _additionalAgentInstructions: string;
     _translator: TypeChatJsonTranslator<T>;
@@ -14,7 +14,7 @@ export interface TranslatorWithHistory<T extends object> {
 }
 
 export function createHealthDataTranslator<T extends object>(model: TypeChatLanguageModel, schema: string, typename: string, additionalAgentInstructions: string): TranslatorWithHistory<T> {
-    const chatHistory: ChatMessage[] = [];
+    const _chatHistory: ChatMessage[] = [];
     const _maxPromptLength = 2048;
     const _additionalAgentInstructions = additionalAgentInstructions;
     
@@ -22,7 +22,7 @@ export function createHealthDataTranslator<T extends object>(model: TypeChatLang
     _translator.createRequestPrompt = _create_request_prompt;
     
     const customtranslator: TranslatorWithHistory<T> = {
-        chatHistory,
+        _chatHistory,
         _maxPromptLength,
         _additionalAgentInstructions,
         _translator,
@@ -34,14 +34,14 @@ export function createHealthDataTranslator<T extends object>(model: TypeChatLang
     async function translate(request: string): Promise<Result<T>> {
         const response = await _translator.translate(request);
         if (response.success) {
-            chatHistory.push({ source: 'assistant', body: JSON.stringify(response.data) });
+            _chatHistory.push({ source: 'assistant', body: JSON.stringify(response.data) });
         }
         return response;
     }
 
     function _create_request_prompt(intent: string): string {
         // TODO: drop history entries if we exceed the max_prompt_length
-        const historyStr = JSON.stringify(chatHistory, undefined, 2);
+        const historyStr = JSON.stringify(_chatHistory, undefined, 2);
         
         const now = new Date();
 
