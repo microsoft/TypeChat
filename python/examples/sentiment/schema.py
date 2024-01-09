@@ -1,5 +1,4 @@
-from typing import Literal, TypedDict, Annotated
-def Doc(s: str) -> str: return s
+from typing_extensions import Literal, TypedDict, Annotated, Doc
 
 
 class Sentiment(TypedDict):

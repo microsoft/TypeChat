@@ -1,5 +1,5 @@
 from textwrap import dedent, indent
-from typing import Generic, TypeVar
+from typing_extensions import Generic, TypeVar
 
 from typechat._internal.model import TypeChatModel
 from typechat._internal.result import Failure, Result, Success

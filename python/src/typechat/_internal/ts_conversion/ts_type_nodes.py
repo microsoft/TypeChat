@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing_extensions import TypeAlias
 
 TypeNode: TypeAlias = "TypeReferenceNode | UnionTypeNode | LiteralTypeNode | ArrayTypeNode"
 

@@ -1,8 +1,4 @@
-from typing import TypedDict, Annotated, Callable
-
-
-def Doc(s: str) -> str:
-    return s
+from typing_extensions import TypedDict, Annotated, Callable, Doc
 
 
 class MathAPI(TypedDict):

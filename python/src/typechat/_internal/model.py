@@ -1,4 +1,4 @@
-from typing import Protocol, override
+from typing_extensions import Protocol, override
 import os
 import openai
 
