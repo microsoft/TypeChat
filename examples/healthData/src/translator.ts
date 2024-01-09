@@ -46,30 +46,30 @@ export function createHealthDataTranslator<T extends object>(model: TypeChatLang
         const now = new Date();
 
         const prompt = `
-        user: You are a service that translates user requests into JSON objects of type "${typename}" according to the following TypeScript definitions:
-        '''
-        ${schema}
-        '''
+    user: You are a service that translates user requests into JSON objects of type "${typename}" according to the following TypeScript definitions:
+    '''
+    ${schema}
+    '''
 
-        user:
-        Use precise date and times RELATIVE TO CURRENT DATE: ${now.toLocaleDateString()} CURRENT TIME: ${now.toTimeString().split(' ')[0]}
-        Also turn ranges like next week and next month into precise dates
-        
-        user:
-        ${_additionalAgentInstructions}
-        
-        system:
-        IMPORTANT CONTEXT for the user request:
-        ${historyStr}
+    user:
+    Use precise date and times RELATIVE TO CURRENT DATE: ${now.toLocaleDateString()} CURRENT TIME: ${now.toTimeString().split(' ')[0]}
+    Also turn ranges like next week and next month into precise dates
+    
+    user:
+    ${_additionalAgentInstructions}
+    
+    system:
+    IMPORTANT CONTEXT for the user request:
+    ${historyStr}
 
-        user:
-        The following is a user request:
-        '''
-        ${intent}
-        '''
-        The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
-        """
-        `;
+    user:
+    The following is a user request:
+    '''
+    ${intent}
+    '''
+    The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+    """
+    `;
         return prompt;
     }
 }

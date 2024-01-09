@@ -23,7 +23,7 @@ For example, given the following input statement:
 **Input**:
 
 ```console
-💉💊🤧> klaritin
+🤧> I am taking klaritin for my allergies
 
 ```
 

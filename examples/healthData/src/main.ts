@@ -25,7 +25,7 @@ const translator = createHealthDataTranslator<HealthDataResponse>(model, schema,
                         healthInstructions);
 
 // Process requests interactively or from the input file specified on the command line
-processRequests("💉💊🤧> ", process.argv[2], async (request) => {
+processRequests("🤧> ", process.argv[2], async (request) => {
     const response = await translator.translate(request);
     if (!response.success) {
         console.log("Translation Failed ❌");
