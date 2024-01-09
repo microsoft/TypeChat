@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing_extensions import Any, Optional
 from pydantic.dataclasses import dataclass
 import spotipy
 

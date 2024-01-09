@@ -1,8 +1,4 @@
-from typing import TypedDict, Annotated, NotRequired, Literal
-
-
-def Doc(s: str) -> str:
-    return s
+from typing_extensions import TypedDict, Annotated, NotRequired, Literal, Doc
 
 
 class Quantity(TypedDict):
