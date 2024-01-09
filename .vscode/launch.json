@@ -2,24 +2,6 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "sentiment-wsl",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/examples/sentiment/src/main.ts",
-            "stopOnEntry": false,
-            "args": [],
-            "cwd": "${workspaceFolder}/examples/sentiment",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "preLaunchTask": "build-sentiment",
-            "sourceMaps": true,
-            "outFiles": [
-                "${workspaceFolder}/examples/sentiment/dist/**/*.js"
-            ],
-            "console": "integratedTerminal"
-        },
-        {
             "name": "sentiment",
             "type": "node",
             "request": "launch",
@@ -34,24 +16,6 @@
             "sourceMaps": true,
             "outFiles": [
                 "${workspaceFolder}/examples/sentiment/dist/**/*.js"
-            ],
-            "console": "externalTerminal"
-        },
-        {
-            "name": "calendar-wsl",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/examples/calendar/src/main.ts",
-            "stopOnEntry": false,
-            "args": [],
-            "cwd": "${workspaceFolder}/examples/calendar",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "preLaunchTask": "build-calendar",
-            "sourceMaps": true,
-            "outFiles": [
-                "${workspaceFolder}/examples/calendar/dist/**/*.js"
             ],
             "console": "integratedTerminal"
         },
@@ -71,24 +35,6 @@
             "outFiles": [
                 "${workspaceFolder}/examples/calendar/dist/**/*.js"
             ],
-            "console": "externalTerminal"
-        },
-        {
-            "name": "math-wsl",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/examples/math/src/main.ts",
-            "stopOnEntry": false,
-            "args": [],
-            "cwd": "${workspaceFolder}/examples/math",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "preLaunchTask": "build-math",
-            "sourceMaps": true,
-            "outFiles": [
-                "${workspaceFolder}/examples/math/dist/**/*.js"
-            ],
             "console": "integratedTerminal"
         },
         {
@@ -106,24 +52,6 @@
             "sourceMaps": true,
             "outFiles": [
                 "${workspaceFolder}/examples/math/dist/**/*.js"
-            ],
-            "console": "externalTerminal"
-        },
-        {
-            "name": "music-wsl",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/examples/music/src/main.ts",
-            "stopOnEntry": false,
-            "args": [],
-            "cwd": "${workspaceFolder}/examples/music",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "preLaunchTask": "build-music",
-            "sourceMaps": true,
-            "outFiles": [
-                "${workspaceFolder}/examples/music/dist/**/*.js"
             ],
             "console": "integratedTerminal"
         },
@@ -143,24 +71,6 @@
             "outFiles": [
                 "${workspaceFolder}/examples/music/dist/**/*.js"
             ],
-            "console": "externalTerminal"
-        },
-        {
-            "name": "restaurant-wsl",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/examples/restaurant/src/main.ts",
-            "stopOnEntry": false,
-            "args": [],
-            "cwd": "${workspaceFolder}/examples/restaurant",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "preLaunchTask": "build-restaurant",
-            "sourceMaps": true,
-            "outFiles": [
-                "${workspaceFolder}/examples/restaurant/dist/**/*.js"
-            ],
             "console": "integratedTerminal"
         },
         {
@@ -178,24 +88,6 @@
             "sourceMaps": true,
             "outFiles": [
                 "${workspaceFolder}/examples/restaurant/dist/**/*.js"
-            ],
-            "console": "externalTerminal"
-        },
-        {
-            "name": "coffeeShop-wsl",
-            "type": "node",
-            "request": "launch",
-            "program": "${workspaceFolder}/examples/coffeeShop/src/main.ts",
-            "stopOnEntry": false,
-            "args": [],
-            "cwd": "${workspaceFolder}/examples/coffeeShop",
-            "skipFiles": [
-                "<node_internals>/**"
-            ],
-            "preLaunchTask": "build-coffeeShop",
-            "sourceMaps": true,
-            "outFiles": [
-                "${workspaceFolder}/examples/coffeeShop/dist/**/*.js"
             ],
             "console": "integratedTerminal"
         },
@@ -215,26 +107,7 @@
             "outFiles": [
                 "${workspaceFolder}/examples/coffeeShop/dist/**/*.js"
             ],
-            "console": "externalTerminal"
+            "console": "integratedTerminal"
         },
     ],
-    "compounds": [
-        {
-            "name": "Debug All Projects",
-            "configurations": [
-                "sentiment-wsl",
-                "calendar-wsl",
-                "music-wsl",
-                "math-wsl",
-                "restaurant-wsl",
-                "coffeeShop-wsl",
-                "sentiment",
-                "calendar",
-                "music",
-                "math",
-                "restaurant",
-                "coffeeShop",
-            ]
-        }
-    ]
 }
