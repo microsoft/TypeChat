@@ -16,7 +16,7 @@ To run the Sentiment example, follow the instructions in the [examples README](.
 
 ## Usage
 
-Example prompts can be found in [`input.txt`](input.txt).
+Example prompts can be found in [`input.txt`](./src/input.txt).
 
 For example, given the following input statement:
 
