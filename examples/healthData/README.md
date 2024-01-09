@@ -2,9 +2,9 @@
 
 This example requires GPT-4.
 
-Demonstrates a ***strongly typed*** Chat: a natural language interface for entering health information. You work with a Health Data Agent to interactively enter your medications or conditions.
+Demonstrates a ***strongly typed*** chat: a natural language interface for entering health information. You work with a *health data agent* to interactively enter your medications or conditions.
 
-The Health Data Agent shows how strongly typed **Agents with history** could interact with a user to collect information needed for one or more data types ("form filling").
+The Health Data Agent shows how strongly typed **agents with history** could interact with a user to collect information needed for one or more data types ("form filling").
 
 ## Target models
 

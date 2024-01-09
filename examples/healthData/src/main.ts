@@ -8,7 +8,7 @@ import { HealthDataResponse } from "./healthDataSchema";
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const health_instructions:string = `
+const healthInstructions:string = `
                             Help me enter my health data step by step.
                             Ask specific questions to gather required and optional fields
                             I have not already providedStop asking if I don't know the answer
@@ -22,7 +22,7 @@ const health_instructions:string = `
 const model = createLanguageModel(process.env);
 const schema = fs.readFileSync(path.join(__dirname, "healthDataSchema.ts"), "utf8");
 const translator = createHealthDataTranslator<HealthDataResponse>(model, schema, "HealthDataResponse",
-                        health_instructions);
+                        healthInstructions);
 
 // Process requests interactively or from the input file specified on the command line
 processRequests("💉💊🤧> ", process.argv[2], async (request) => {
@@ -38,14 +38,14 @@ processRequests("💉💊🤧> ", process.argv[2], async (request) => {
         console.log(JSON.stringify(healthdata, undefined, 2));
 
         const message = healthdata["message"];
-        const not_translated = healthdata["notTranslated"];
+        const notTranslated = healthdata["notTranslated"];
 
         if (message) {
             console.log(`\n📝: ${message}`);
         }
             
-        if (not_translated) {
-            console.log(`\n🤔: I did not understand\n ${not_translated}`)
+        if (notTranslated) {
+            console.log(`\n🤔: I did not understand\n ${notTranslated}`)
         }
     }
 });
