@@ -13,10 +13,10 @@ export interface TranslatorWithHistory<T extends object> {
     translate(request: string): Promise<Result<T>>;
 }
 
-export function createHealthDataTranslator<T extends object>(model: TypeChatLanguageModel, schema: string, typename: string, additional_agent_instructions: string): TranslatorWithHistory<T> {
+export function createHealthDataTranslator<T extends object>(model: TypeChatLanguageModel, schema: string, typename: string, additionalAgentInstructions: string): TranslatorWithHistory<T> {
     const chatHistory: ChatMessage[] = [];
     const _maxPromptLength = 2048;
-    const _additionalAgentInstructions = additional_agent_instructions;
+    const _additionalAgentInstructions = additionalAgentInstructions;
     
     const _translator = createJsonTranslator<T>(model, schema, typename);
     _translator.createRequestPrompt = _create_request_prompt;

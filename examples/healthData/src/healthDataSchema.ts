@@ -1,4 +1,4 @@
-// The following is a schema definition for ordering lattes.
+// The following is a schema definition for enetring health data.
 
 export interface HealthDataResponse {
     // Return this if JSON has ALL required information. Else ask questions
