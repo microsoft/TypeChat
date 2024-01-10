@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import MISSING, Field, dataclass
-import inspect
 from types import NoneType, UnionType, get_original_bases
-from typing import (
+import inspect
+import typing_extensions
+from dataclasses import MISSING, Field, dataclass
+from types import NoneType, UnionType
+from typing_extensions import (
     Annotated,
     Any,
     ClassVar,
+    Doc,
     Final,
     Generic,
     Literal,
@@ -25,6 +28,7 @@ from typing import (
     cast,
     get_args,
     get_origin,
+    get_original_bases,
     get_type_hints,
     is_typeddict,
 )
@@ -105,7 +109,7 @@ class TypeScriptNodeTranslationResult:
 
 
 # TODO: https://github.com/microsoft/pyright/issues/6587
-_SELF_TYPE = getattr(typing, "Self")
+_SELF_TYPE = getattr(typing_extensions, "Self")
 
 _LIST_TYPES: set[object] = {
     list,
@@ -253,10 +257,11 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         comment: str | None = None
         while origin := get_origin(current_annotation):
             if origin is Annotated and comment is None:
-                # TODO: Handle `Doc` appropriately. https://peps.python.org/pep-0727/
                 current_annotation = cast(Annotatedish, current_annotation)
                 annotation_metadata = current_annotation.__metadata__[0]
-                if isinstance(annotation_metadata, str):
+                if isinstance(annotation_metadata, Doc):
+                    comment = annotation_metadata.documentation
+                elif isinstance(annotation_metadata, str):
                     comment = annotation_metadata
 
                 current_annotation = current_annotation.__origin__
@@ -283,7 +288,11 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         if (is_typeddict(py_type) or is_dataclass(py_type)) and isinstance(py_type, type):
             comment = py_type.__doc__ or ""
 
-            type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
+            if hasattr(py_type, "__type_params__"):
+                type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
+            else:
+                type_params = None
+
             annotated_members = get_type_hints(py_type, include_extras=True)
             
             raw_but_filtered_bases: list[type] = [
