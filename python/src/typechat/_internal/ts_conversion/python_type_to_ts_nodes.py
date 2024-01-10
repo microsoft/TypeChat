@@ -270,10 +270,11 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                 if not is_typeddict_attribute:
                     errors.append(f"Optionality cannot be specified with {origin} outside of TypedDicts.")
 
-                if optional is not None:
+                if optional is None:
+                    optional = origin is NotRequired
+                else:
                     errors.append(f"{origin} cannot be used within another optionality annotation.")
 
-                optional = origin is NotRequired
                 current_annotation = get_args(current_annotation)[0]
             else:
                 break
