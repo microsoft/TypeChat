@@ -5,10 +5,9 @@ examples_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".
 if examples_path not in sys.path:
     sys.path.append(examples_path)
 
-import asyncio
 import json
 
-from typing import TypeVar, Generic
+from typing_extensions import TypeVar, Generic
 from typechat import Failure, TypeChatTranslator, TypeChatValidator, TypeChatModel
 
 import examples.math.schema as math_schema
@@ -91,14 +90,13 @@ class MathAgent:
 class MusicAgent:
     _validator: TypeChatValidator[music_schema.PlayerActions]
     _translator: TypeChatTranslator[music_schema.PlayerActions]
-    _client_context: ClientContext | None
+    _client_context: ClientContext
     _authentication_vals: dict[str,str | None]
 
     def __init__(self, model: TypeChatModel, authentication_vals: dict[str,str | None]):
         super().__init__()
         self._validator = TypeChatValidator(music_schema.PlayerActions)
         self._translator = TypeChatTranslator(model, self._validator, music_schema.PlayerActions)
-        self._client_context = None
         self._authentication_vals = authentication_vals
     
     async def authenticate(self):

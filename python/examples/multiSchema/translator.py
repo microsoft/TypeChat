@@ -1,12 +1,12 @@
 import json
 from textwrap import dedent, indent
-from typing import TypeVar, Any, override, Callable
+from typing_extensions import TypeVar, Any, override, Callable
 
 from typechat import TypeChatValidator, TypeChatModel, TypeChatTranslator
 
 T = TypeVar("T", covariant=True)
 
-from typing import TypedDict, Annotated, Awaitable
+from typing_extensions import TypedDict, Annotated, Awaitable
 
 
 class ClassificationItem(TypedDict):

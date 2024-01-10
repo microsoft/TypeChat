@@ -1,4 +1,4 @@
-from typing import Any, Callable, Awaitable
+from typing_extensions import Any, Callable, Awaitable
 from typechat import Failure, TypeChatValidator, TypeChatModel
 from translator import TextClassiferTranslator, TextClassification, ClassificationItem
 
