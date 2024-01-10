@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing_extensions import Generic, TypeVar
 
 T = TypeVar("T", covariant=True)
 

@@ -142,7 +142,7 @@ async def get_tracks_with_genres(
 def print_tracks(tracks: list[SimplifiedTrackInfo]):
     for track in tracks:
         print(f" {track.name}")
-        print(f"   Artists: {", ".join(track.artistNames)}")
+        print(f"   Artists: {', '.join(track.artistNames)}")
         print(f"   Album: {track.albumName}")
 
 
@@ -243,7 +243,7 @@ async def handle_call(action: PlayerAction, context: ClientContext):
             print("Current Queue: ")
             for track in queue["queue"]:
                 print(f" {track['name']}")
-                print(f"   Artists: {", ".join([a['name'] for a in track['artists']])}")
+                print(f"   Artists: {', '.join([a['name'] for a in track['artists']])}")
                 print(f"   Album: {track['album']['name']}")
             await print_status(context)
         case "pause":

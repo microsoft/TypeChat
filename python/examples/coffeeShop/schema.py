@@ -1,5 +1,4 @@
-from typing import Literal, NotRequired, TypedDict, Annotated
-def Doc(s: str) -> str: return s
+from typing_extensions import Literal, NotRequired, TypedDict, Annotated, Doc
 
 
 class UnknownText(TypedDict):
