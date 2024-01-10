@@ -9,15 +9,15 @@ import { HealthDataResponse } from "./healthDataSchema";
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
 const healthInstructions:string = `
-                            Help me enter my health data step by step.
-                            Ask specific questions to gather required and optional fields
-                            I have not already providedStop asking if I don't know the answer
-                            Automatically fix my spelling mistakes
-                            My health data may be complex: always record and return ALL of it.
-                            Always return a response:
-                            - If you don't understand what I say, ask a question.
-                            - At least respond with an OK message.
-                            `;
+Help me enter my health data step by step.
+Ask specific questions to gather required and optional fields
+I have not already providedStop asking if I don't know the answer
+Automatically fix my spelling mistakes
+My health data may be complex: always record and return ALL of it.
+Always return a response:
+- If you don't understand what I say, ask a question.
+- At least respond with an OK message.
+`;
 
 const model = createLanguageModel(process.env);
 const schema = fs.readFileSync(path.join(__dirname, "healthDataSchema.ts"), "utf8");
