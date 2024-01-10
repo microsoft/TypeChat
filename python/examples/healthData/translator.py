@@ -1,6 +1,6 @@
 import json
 from textwrap import dedent, indent
-from typing import TypeVar, Any, override, TypedDict, Literal
+from typing_extensions import TypeVar, Any, override, TypedDict, Literal
 
 from typechat import TypeChatValidator, TypeChatModel, TypeChatTranslator, Result, Failure
 

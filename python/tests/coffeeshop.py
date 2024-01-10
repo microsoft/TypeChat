@@ -1,7 +1,6 @@
-from typing import Literal, NotRequired, TypedDict, Annotated
+from typing_extensions import Literal, NotRequired, TypedDict, Annotated, Doc
 
 from typechat import python_type_to_typescript_schema
-def Doc(s: str) -> str: return s
 
 
 class UnknownText(TypedDict):
