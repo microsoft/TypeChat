@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import typing
+import typing_extensions
 from dataclasses import dataclass
-from types import NoneType, UnionType, get_original_bases
-from typing import (
+from types import NoneType, UnionType
+from typing_extensions import (
     Annotated,
     Any,
     ClassVar,
+    Doc,
     Final,
     Generic,
     Literal,
@@ -25,6 +26,7 @@ from typing import (
     cast,
     get_args,
     get_origin,
+    get_original_bases,
     get_type_hints,
     is_typeddict,
 )
@@ -95,7 +97,7 @@ class TypeScriptNodeTranslationResult:
 
 
 # TODO: https://github.com/microsoft/pyright/issues/6587
-_SELF_TYPE = getattr(typing, "Self")
+_SELF_TYPE = getattr(typing_extensions, "Self")
 
 _LIST_TYPES: set[object] = {
     list,
@@ -237,13 +239,22 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         comments: str = ""
         while origin := get_origin(origin):
             if origin is Annotated and hasattr(py_annotation, "__metadata__"):
-                comments = py_annotation.__metadata__[0]
+                first_doc = next((x for x in py_annotation.__metadata__ if isinstance(x, Doc)), None)
+                if first_doc:
+                    comments =  first_doc.documentation
+                else:
+                    comments = next((x for x in py_annotation.__metadata__ if isinstance(x, str)), "")
+
             elif origin in _KNOWN_GENERIC_SPECIAL_FORMS:
                 nested = get_args(py_annotation)
                 if nested:
                     nested_origin = get_origin(nested[0])
                     if nested_origin is Annotated:
-                        comments = nested[0].__metadata__[0]
+                        first_doc = next((x for x in nested[0].__metadata__ if isinstance(x, Doc)), None)
+                        if first_doc:
+                            comments =  first_doc.documentation
+                        else:
+                            comments = next((x for x in nested[0].__metadata__ if isinstance(x, str)), "")
             if origin is Required:
                 optional = False
                 break
@@ -256,7 +267,11 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
     def declare_type(py_type: object):
         if is_typeddict(py_type):
             assert isinstance(py_type, type)
-            type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
+            if hasattr(py_type, "__type_params__"):
+                type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
+            else:
+                type_params = None
+
             annotated_members = get_type_hints(py_type, include_extras=True)
             assume_optional = cast(TypeOfTypedDict, py_type).__total__ is False
             raw_but_filtered_bases: list[type] = [
