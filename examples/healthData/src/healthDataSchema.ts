@@ -1,7 +1,8 @@
 // The following is a schema definition for enetring health data.
 
 export interface HealthDataResponse {
-    // Return this if JSON has ALL required information. Else ask questions
+    // ONLY present when ALL required information is known.
+    // Otherwise, use 'message' to keep asking questions.
     data?: HealthData;
     // Use this to ask questions and give pertinent responses
     message?: string;
