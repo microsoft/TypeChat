@@ -62,6 +62,6 @@ export interface ApproxDatetime {
 export interface Quantity {
     // Exact number
     value: number;
-    // UNITS include mg, kg, cm, pounds, liter, ml, tablet, pill, cup, per-day, per-week..ETC
+    // Units like mg, kg, cm, pounds, liter, ml, tablet, pill, cup, per-day, per-week, etc.
     units: string;
 }
