@@ -48,7 +48,7 @@ export interface OtherHealthData {
 export interface ApproxQuantity {
     // Default: Unknown. Required
     displayText: string;
-    // Optional: only if precise quantities are available
+    // Only specify if precise quantities are available
     quantity?: Quantity;
 }
 
