@@ -5,7 +5,7 @@ export interface HealthDataResponse {
     data?: HealthData;
     // Use this to ask questions and give pertinent responses
     message?: string;
-    // Use this parts of the user request not translateed, off topic, etc
+    // Use this parts of the user request not translated, off topic, etc.
     notTranslated?: string;
 }
 
