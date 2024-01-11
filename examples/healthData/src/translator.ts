@@ -34,7 +34,7 @@ export function createHealthDataTranslator<T extends object>(model: TypeChatLang
     async function translate(request: string): Promise<Result<T>> {
         const response = await _translator.translate(request);
         if (response.success) {
-            _chatHistory.push({ source: 'assistant', body: JSON.stringify(response.data) });
+            _chatHistory.push({ source: "assistant", body: response.data });
         }
         return response;
     }
