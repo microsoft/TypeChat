@@ -8,7 +8,7 @@ import { HealthDataResponse } from "./healthDataSchema";
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
-const healthInstructions:string = `
+const healthInstructions = `
 Help me enter my health data step by step.
 Ask specific questions to gather required and optional fields
 I have not already providedStop asking if I don't know the answer
