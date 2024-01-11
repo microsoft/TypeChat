@@ -31,7 +31,7 @@ export interface Medication {
 export interface Condition {
     // Fix any spelling mistakes, especially phonetic spelling
     name: string;
-    // When the condition started? Required
+    // When the condition started.
     startDate: ApproxDatetime;
     // Always ask for current status of the condition
     status: "active" | "recurrence" | "relapse" | "inactive" | "remission" | "resolved" | "unknown";
