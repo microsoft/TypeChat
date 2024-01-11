@@ -53,7 +53,7 @@ export interface ApproxQuantity {
 }
 
 export interface ApproxDatetime {
-    // Default: Unknown. Required
+    // Default: "unknown"
     displayText: string;
     // If precise timestamp can be set
     timestamp?: string;
