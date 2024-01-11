@@ -32,13 +32,13 @@ processRequests("🤧> ", process.argv[2], async (request) => {
         console.log(`Context: ${response.message}`);
     }
     else {
-        const healthdata = response.data;
+        const healthData = response.data;
         console.log("Translation Succeeded! ✅\n");
         console.log("JSON View");
-        console.log(JSON.stringify(healthdata, undefined, 2));
+        console.log(JSON.stringify(healthData, undefined, 2));
 
-        const message = healthdata["message"];
-        const notTranslated = healthdata["notTranslated"];
+        const message = healthData.message;
+        const notTranslated = healthData.notTranslated;
 
         if (message) {
             console.log(`\n📝: ${message}`);
