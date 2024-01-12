@@ -91,14 +91,14 @@ class MusicAgent:
     _validator: TypeChatValidator[music_schema.PlayerActions]
     _translator: TypeChatTranslator[music_schema.PlayerActions]
     _client_context: ClientContext
-    _authentication_vals: dict[str,str | None]
+    _authentication_vals: dict[str, str | None]
 
-    def __init__(self, model: TypeChatModel, authentication_vals: dict[str,str | None]):
+    def __init__(self, model: TypeChatModel, authentication_vals: dict[str, str | None]):
         super().__init__()
         self._validator = TypeChatValidator(music_schema.PlayerActions)
         self._translator = TypeChatTranslator(model, self._validator, music_schema.PlayerActions)
         self._authentication_vals = authentication_vals
-    
+
     async def authenticate(self):
         self._client_context = await get_client_context(self._authentication_vals)
 
