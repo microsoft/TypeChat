@@ -258,7 +258,9 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         while origin := get_origin(current_annotation):
             if origin is Annotated and comment is None:
                 current_annotation = cast(Annotatedish, current_annotation)
-                annotation_metadata = current_annotation.__metadata__[0]
+                all_supported_metadata = (m for m in current_annotation.__metadata__ if isinstance(m, (str, Doc)))
+                annotation_metadata = next(all_supported_metadata, None)
+                
                 if isinstance(annotation_metadata, Doc):
                     comment = annotation_metadata.documentation
                 elif isinstance(annotation_metadata, str):

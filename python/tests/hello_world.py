@@ -20,6 +20,7 @@ class D(C[str], total=False):
     other: IndirectC
     non_class: "nonclass"
 
+    multiple_metadata: Annotated[str, None, str, "This comes from later metadata.", int]
 
 nonclass = TypedDict("NonClass", {
     "a": int,
