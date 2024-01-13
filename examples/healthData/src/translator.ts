@@ -2,7 +2,7 @@ import {Result, TypeChatLanguageModel, createJsonTranslator, TypeChatJsonTransla
 
 type ChatMessage = {
     source: "system" | "user" | "assistant";
-    body: string;
+    body: object;
 };
 
 export interface TranslatorWithHistory<T extends object> {
@@ -34,9 +34,10 @@ export function createHealthDataTranslator<T extends object>(model: TypeChatLang
     async function translate(request: string): Promise<Result<T>> {
         const response = await _translator.translate(request);
         if (response.success) {
-            _chatHistory.push({ source: "assistant", body: JSON.stringify(response.data) });
+            _chatHistory.push({ source: "assistant", body: response.data });
         }
         return response;
+
     }
 
     function createRequestPrompt(intent: string): string {
