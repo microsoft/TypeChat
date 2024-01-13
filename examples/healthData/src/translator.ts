@@ -19,7 +19,7 @@ export function createHealthDataTranslator<T extends object>(model: TypeChatLang
     const _additionalAgentInstructions = additionalAgentInstructions;
     
     const _translator = createJsonTranslator<T>(model, schema, typename);
-    _translator.createRequestPrompt = _create_request_prompt;
+    _translator.createRequestPrompt = createRequestPrompt;
     
     const customtranslator: TranslatorWithHistory<T> = {
         _chatHistory,
@@ -39,7 +39,7 @@ export function createHealthDataTranslator<T extends object>(model: TypeChatLang
         return response;
     }
 
-    function _create_request_prompt(intent: string): string {
+    function createRequestPrompt(intent: string): string {
         // TODO: drop history entries if we exceed the max_prompt_length
         const historyStr = JSON.stringify(_chatHistory, undefined, 2);
         
