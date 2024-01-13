@@ -67,7 +67,7 @@ async def main():
     )
 
     # register a handler for unknown results
-    router.register_agent(name="No Match", description="None of the others matched", handler=handle_unknown)
+    router.register_agent(name="No Match", description="Handles all unrecognized requests", handler=handle_unknown)
 
     print("🔀> ", end="", flush=True)
     for line in sys.stdin:
