@@ -10,7 +10,6 @@ dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
 const model = createLanguageModel(process.env);
 
-
 const taskClassificationSchema = fs.readFileSync(path.join(__dirname, "classificationSchema.ts"), "utf8");
 const router = createAgentRouter(model, taskClassificationSchema, "TaskClassificationResponse")
 
@@ -20,7 +19,7 @@ const sentimentAgent = createJsonPrintAgent
     "Statements with sentiments, emotions, feelings, impressions about places, things, the surroundings",
     model, sentimentSchema, "SentimentResponse"
 );
-router.registerAgent("Sentiment", sentimentAgent)
+router.registerAgent("Sentiment", sentimentAgent);
 
 const coffeeShopSchema  = fs.readFileSync(path.join(__dirname, "coffeeShopSchema.ts"), "utf8");
 const coffeeShopAgent = createJsonPrintAgent(
@@ -28,7 +27,7 @@ const coffeeShopAgent = createJsonPrintAgent(
     "Order Coffee Drinks (Italian names included) and Baked Goods",
     model, coffeeShopSchema, "Cart"
 );
-router.registerAgent("CoffeeShop", coffeeShopAgent)
+router.registerAgent("CoffeeShop", coffeeShopAgent);
 
 const calendarSchema  = fs.readFileSync(path.join(__dirname, "calendarActionsSchema.ts"), "utf8");
 const calendarAgent = createJsonPrintAgent(
@@ -36,7 +35,15 @@ const calendarAgent = createJsonPrintAgent(
     "Actions related to calendars, appointments, meetings, schedules",
     model, calendarSchema, "CalendarActions"
 );
-router.registerAgent("Calendar", calendarAgent)
+router.registerAgent("Calendar", calendarAgent);
+
+const orderSchema  = fs.readFileSync(path.join(__dirname, "foodOrderViewSchema.ts"), "utf8");
+const restaurantOrderAgent = createJsonPrintAgent(
+    "Restaurant",
+    "Order pizza, beer and salads",
+    model, orderSchema, "Order"
+);
+router.registerAgent("Restaurant", restaurantOrderAgent);
 
 
 // Process requests interactively or from the input file specified on the command line

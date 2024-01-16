@@ -54,7 +54,6 @@ ${initClasses}\n`;
                 await agent.handleMessage(request);
             }
             else {
-                console.log(`Context: ${response.data.taskType}`)
                 router._handlerUnknownTask(request);
             }
         }
