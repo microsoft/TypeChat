@@ -9,7 +9,6 @@ import { createAgentRouter } from "./router";
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
 
 const model = createLanguageModel(process.env);
-
 const taskClassificationSchema = fs.readFileSync(path.join(__dirname, "classificationSchema.ts"), "utf8");
 const router = createAgentRouter(model, taskClassificationSchema, "TaskClassificationResponse")
 
@@ -52,7 +51,6 @@ const mathAgent = createJsonMathAgent(
     model, mathSchema
 );
 router.registerAgent("Math", mathAgent);
-
 
 // Process requests interactively or from the input file specified on the command line
 processRequests("🔀> ", process.argv[2], async (request) => {
