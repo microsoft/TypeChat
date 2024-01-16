@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
-import { createJsonPrintAgent } from "./agent";
+import { createJsonMathAgent, createJsonPrintAgent } from "./agent";
 import {createLanguageModel, processRequests } from "typechat";
 import { createAgentRouter } from "./router";
 
@@ -44,6 +44,14 @@ const restaurantOrderAgent = createJsonPrintAgent(
     model, orderSchema, "Order"
 );
 router.registerAgent("Restaurant", restaurantOrderAgent);
+
+const mathSchema  = fs.readFileSync(path.join(__dirname, "mathSchema.ts"), "utf8");
+const mathAgent = createJsonMathAgent(
+    "Math",
+    "Calculations using the four basic math operations",
+    model, mathSchema
+);
+router.registerAgent("Math", mathAgent);
 
 
 // Process requests interactively or from the input file specified on the command line
