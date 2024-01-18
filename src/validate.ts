@@ -73,9 +73,9 @@ export function createJsonValidator<T extends object = object>(schema: string, t
     return validator;
 
     function validate(jsonText: string) {
-        let jsonObject;
+        let jsonObject: { [key: string]: unknown };
         try {
-            jsonObject = JSON.parse(jsonText) as object;
+            jsonObject = JSON.parse(jsonText);
         }
         catch (e) {
             return error(e instanceof SyntaxError ? e.message : "JSON parse error");
@@ -131,7 +131,7 @@ export function createJsonValidator<T extends object = object>(schema: string, t
  * circular references in the object.
  * @param obj The object in which to strip null valued properties.
  */
-function stripNulls(obj: any) {
+function stripNulls(obj: { [key: string]: any }): void {
     let keysToDelete: string[] | undefined;
     for (const k in obj) {
         const value = obj[k];
