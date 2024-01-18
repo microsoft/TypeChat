@@ -110,7 +110,9 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             if (!response.success) {
                 return response;
             }
-            const responseText = response.data;
+
+            const { api, data: responseText } = response;
+
             const startIndex = responseText.indexOf("{");
             const endIndex = responseText.lastIndexOf("}");
             if (!(startIndex >= 0 && endIndex > startIndex)) {
@@ -120,7 +122,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             const schemaValidation = validator.validate(jsonText);
             const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
             if (validation.success) {
-                return validation;
+                return api ? { ...validation, api } : validation;
             }
             if (!attemptRepair) {
                 return error(`JSON validation failed: ${validation.message}\n${jsonText}`);
