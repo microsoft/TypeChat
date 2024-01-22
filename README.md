@@ -27,6 +27,8 @@ npm install typechat
 You can also build TypeChat from source:
 
 ```
+git clone https://github.com/microsoft/TypeChat
+cd TypeChat
 npm run build
 ```
 
