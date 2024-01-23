@@ -1,12 +1,12 @@
 {
-  "name": "math",
+  "name": "sentiment-zod",
   "version": "0.0.1",
   "private": true,
   "description": "",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p src",
-    "postbuild": "copyfiles -u 1 src/**/*Schema.ts src/**/*.txt dist"
+    "postbuild": "copyfiles -u 1 src/**/*.txt dist"
   },
   "author": "",
   "license": "MIT",
