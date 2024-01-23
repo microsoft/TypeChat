@@ -7,12 +7,14 @@ import dotenv from "dotenv";
 import * as Filter from "./trackFilter";
 import {
     createLanguageModel,
+    getData,
+} from "typechat";
+import {
     createProgramTranslator,
     Program,
     createModuleTextFromProgram,
     evaluateJsonProgram,
-    getData,
-} from "typechat";
+} from "typechat/ts";
 import {
     AlbumTrackCollection,
     ITrackCollection,
