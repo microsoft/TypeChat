@@ -1,5 +1,6 @@
 // TypeScript file for TypeChat agents.
-import { Result, getData, TypeChatLanguageModel, createJsonTranslator, TypeChatJsonTranslator, Program, createProgramTranslator, evaluateJsonProgram, success } from "typechat";
+import { Result, TypeChatJsonTranslator, TypeChatLanguageModel, createJsonTranslator, getData, success } from "typechat";
+import { Program, createModuleTextFromProgram, createProgramTranslator, createTypeScriptJsonValidator, evaluateJsonProgram } from "typechat/ts";
 
 export type AgentInfo = {
     name: string;
@@ -20,20 +21,23 @@ interface JsonPrintAgent<T extends object> extends Agent<T> {
     _translator: TypeChatJsonTranslator<T>;
 }
 
-export function createJsonPrintAgent<T extends object>
-    (name: string, description: string,
-     model: TypeChatLanguageModel,
-     schema: string, typename: string): JsonPrintAgent<T>
-{
-    const _translator = createJsonTranslator<T>(model, schema, typename);
-    const josnPrintAgent: JsonPrintAgent<T> = {
+export function createJsonPrintAgent<T extends object>(
+    name: string,
+    description: string,
+    model: TypeChatLanguageModel,
+    schema: string,
+    typeName: string
+): JsonPrintAgent<T> {
+    const validator = createTypeScriptJsonValidator<T>(schema, typeName)
+    const _translator = createJsonTranslator<T>(model, validator);
+    const jsonPrintAgent: JsonPrintAgent<T> = {
         _translator,
         name: name,
         description: description,
         handleMessage: _handleMessage,
     };
 
-    return josnPrintAgent;
+    return jsonPrintAgent;
 
     async function _handleMessage(request: string): Promise<Result<T>> {
         const response = await _translator.translate(request);
@@ -98,7 +102,7 @@ export function createJsonMathAgent<T extends object>
         }
 
         const program = response.data;
-        console.log(getData(_translator.validator.createModuleTextFromJson(program)));
+        console.log(getData(createModuleTextFromProgram(program)));
         console.log("Running program:");
         const result = await evaluateJsonProgram(program, _handleCall);
         console.log(`Result: ${typeof result === "number" ? result : "Error"}`);
