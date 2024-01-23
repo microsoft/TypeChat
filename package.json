@@ -39,8 +39,15 @@
     "SECURITY.md"
   ],
   "dependencies": {
-    "typescript": "^5.3.3",
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
     "zod": "^3.22.4"
+  },
+  "peerDependenciesMeta": {
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^20.10.4"
