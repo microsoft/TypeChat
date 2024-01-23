@@ -1,5 +1,4 @@
 import json
-from textwrap import indent
 from typing_extensions import Any, Callable, Awaitable, TypedDict, Annotated
 from typechat import Failure, TypeChatValidator, TypeChatModel, TypeChatTranslator
 
@@ -31,14 +30,13 @@ class TextRequestRouter:
 
     async def route_request(self, line: str):
         classes_str = json.dumps(self._current_agents, indent=2, default=lambda o: None, allow_nan=False)
-        classes_str = indent(classes_str, "            ")
 
         prompt_fragment = F"""
-            Classify ""{line}"" using the following classification table:
-            '''
-            {classes_str}
-            '''
-            """
+Classify ""{line}"" using the following classification table:
+'''
+{classes_str}
+'''
+"""
 
         result = await self._translator.translate(prompt_fragment)
         if isinstance(result, Failure):

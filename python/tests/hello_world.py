@@ -15,7 +15,7 @@ type IndirectC = C[int]
 class D(C[str], total=False):
     "This is the definition of the class D."
     tag: Literal["D"]
-    y: Required[Annotated[bool | None, "This is a string."]]
+    y: Required[Annotated[bool | None, "'y' is annotated with a string."]]
     z: Optional[list[int]]
     other: IndirectC
     non_class: "nonclass"
