@@ -12,5 +12,8 @@
     "noUnusedParameters": true,
     "exactOptionalPropertyTypes": true,
     "inlineSourceMap": true
-  }
+  },
+  "references": [
+    { "path": "../../music/src" }
+  ]
 }

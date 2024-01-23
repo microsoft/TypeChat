@@ -10,5 +10,7 @@
     "strict": true,
     "noUnusedLocals": true,
     "inlineSourceMap": true,
+    "declaration": true,
+    "composite": true
   }
 }
