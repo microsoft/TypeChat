@@ -1,4 +1,3 @@
-from textwrap import dedent, indent
 from typing_extensions import Generic, TypeVar
 
 from typechat._internal.model import TypeChatModel
@@ -51,28 +50,25 @@ class TypeChatTranslator(Generic[T]):
             request = f"{text_response}\n{self._create_repair_prompt(error_message)}"
 
     def _create_request_prompt(self, intent: str) -> str:
-        decl_str = indent(self._schema_str, "            ")
-        prompt = F"""
-            You are a service that translates user requests into JSON objects of type "{self._type_name}" according to the following TypeScript definitions:
-            ```
-            {decl_str}
-            ```
-            The following is a user request:
-            '''
-            {intent}
-            '''
-            The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
-            """
-        prompt = dedent(prompt)
+        prompt = f"""
+You are a service that translates user requests into JSON objects of type "{self._type_name}" according to the following TypeScript definitions:
+```
+{self._schema_str}
+```
+The following is a user request:
+'''
+{intent}
+'''
+The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+"""
         return prompt
 
     def _create_repair_prompt(self, validation_error: str) -> str:
-        validation_error = indent(validation_error, "            ")
-        prompt = F"""
-            The above JSON object is invalid for the following reason:
-            '''
-            {validation_error}
-            '''
-            The following is a revised JSON object:
-            """
-        return dedent(prompt)
+        prompt = f"""
+The above JSON object is invalid for the following reason:
+'''
+{validation_error}
+'''
+The following is a revised JSON object:
+"""
+        return prompt

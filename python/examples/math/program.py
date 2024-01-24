@@ -1,8 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
-from textwrap import dedent, indent
-from typing_extensions import TypeVar, Any, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override, Sequence, Doc
+from typing_extensions import TypeVar, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override, Sequence, Doc
 
 from typechat import (
     Failure,
@@ -63,7 +62,7 @@ FunctionCall = TypedDict(
 JsonValue = str | int | float | bool | None | dict[str, "Expression"] | list["Expression"]
 Expression = JsonValue | FunctionCall | ResultReference
 
-JsonProgram = TypedDict("Program", {"@steps": list[FunctionCall]})
+JsonProgram = TypedDict("JsonProgram", {"@steps": list[FunctionCall]})
 
 
 async def evaluate_json_program(program: JsonProgram, onCall: Callable[[str, Sequence[Expression]], Awaitable[Expression]]) -> Expression | Sequence[Expression]:
@@ -105,7 +104,7 @@ async def evaluate_json_program(program: JsonProgram, onCall: Callable[[str, Seq
 class TypeChatProgramValidator(TypeChatValidator[T]):
     def __init__(self, py_type: type[T]):
         # the base class init method creates a typeAdapter for T. This operation fails for the JsonProgram type
-        super().__init__(py_type=Any)
+        super().__init__(py_type=py_type)
 
     @override
     def validate(self, json_text: str) -> Result[T]:
@@ -123,40 +122,37 @@ class TypeChatProgramTranslator(TypeChatTranslator[T]):
     _api_declaration_str: str
 
     def __init__(self, model: TypeChatModel, validator: TypeChatProgramValidator[T], api_type: type):
-        super().__init__(model=model, validator=validator, target_type=Any)
+        super().__init__(model=model, validator=validator, target_type=api_type)
         conversion_result = python_type_to_typescript_schema(api_type)
         self._api_declaration_str = conversion_result.typescript_schema_str
 
     @override
     def _create_request_prompt(self, intent: str) -> str:
-        api_decl_str = indent(self._api_declaration_str, "            ")
 
         prompt = F"""
-            You are a service that translates user requests into programs represented as JSON using the following TypeScript definitions:
-            ```
-            {program_schema_text}
-            ```
-            The programs can call functions from the API defined in the following TypeScript definitions:
-            ```
-            {api_decl_str}
-            ```
-            The following is a user request:
-            '''
-            {intent}
-            '''
-            The following is the user request translated into a JSON program object with 2 spaces of indentation and no properties with the value undefined:
-            """
-        prompt = dedent(prompt)
+You are a service that translates user requests into programs represented as JSON using the following TypeScript definitions:
+```
+{program_schema_text}
+```
+The programs can call functions from the API defined in the following TypeScript definitions:
+```
+{self._api_declaration_str}
+```
+The following is a user request:
+'''
+{intent}
+'''
+The following is the user request translated into a JSON program object with 2 spaces of indentation and no properties with the value undefined:
+"""
         return prompt
 
     @override
     def _create_repair_prompt(self, validation_error: str) -> str:
-        validation_error = indent(validation_error, "            ")
         prompt = F"""
-            The JSON program object is invalid for the following reason:
-            '''
-            {validation_error}
-            '''
-            The following is a revised JSON program object:
-            """
-        return dedent(prompt)
+The JSON program object is invalid for the following reason:
+'''
+{validation_error}
+'''
+The following is a revised JSON program object:
+"""
+        return prompt
