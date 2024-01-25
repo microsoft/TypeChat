@@ -1,5 +1,4 @@
 import json
-from textwrap import dedent, indent
 from typing_extensions import TypeVar, Any, override, TypedDict, Literal
 
 from typechat import TypeChatValidator, TypeChatModel, TypeChatTranslator, Result, Failure
@@ -38,37 +37,31 @@ class TranslatorWithHistory(TypeChatTranslator[T]):
     def _create_request_prompt(self, intent: str) -> str:
         # TODO: drop history entries if we exceed the max_prompt_length
         history_str = json.dumps(self._chat_history, indent=2, default=lambda o: None, allow_nan=False)
-        history_str = indent(history_str, "            ")
-
-        schema_str = indent(self._schema_str, "            ")
-
-        instructions_str = indent(self._additional_agent_instructions, "            ")
 
         now = datetime.now()
 
         prompt = F"""
-            user: You are a service that translates user requests into JSON objects of type  "{self._type_name}" according to the following TypeScript definitions:
-            '''
-            {schema_str}
-            '''
+user: You are a service that translates user requests into JSON objects of type  "{self._type_name}" according to the following TypeScript definitions:
+'''
+{self._schema_str}
+'''
 
-            user:
-            Use precise date and times RELATIVE TO CURRENT DATE: {now.strftime('%A, %m %d, %Y')} CURRENT TIME: {now.strftime("%H:%M:%S")}
-            Also turn ranges like next week and next month into precise dates
-            
-            user:
-            {instructions_str}
-            
-            system:
-            IMPORTANT CONTEXT for the user request:
-            {history_str}
+user:
+Use precise date and times RELATIVE TO CURRENT DATE: {now.strftime('%A, %m %d, %Y')} CURRENT TIME: {now.strftime("%H:%M:%S")}
+Also turn ranges like next week and next month into precise dates
 
-            user:
-            The following is a user request:
-            '''
-            {intent}
-            '''
-             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
-            """
-        prompt = dedent(prompt)
+user:
+{self._additional_agent_instructions}
+
+system:
+IMPORTANT CONTEXT for the user request:
+{history_str}
+
+user:
+The following is a user request:
+'''
+{intent}
+'''
+    The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+"""
         return prompt
