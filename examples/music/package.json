@@ -8,6 +8,9 @@
     "build": "tsc -p src",
     "postbuild": "copyfiles -u 1 src/**/*Schema.ts src/**/*.txt src/**/*.html dist"
   },
+  "exports": {
+    "./*": ["./dist/*.js"]
+  },
   "author": "",
   "license": "MIT",
   "dependencies": {
