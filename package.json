@@ -1,4 +1,5 @@
 {
+  "type": "module",
   "name": "typechat",
   "author": "Microsoft",
   "version": "0.1.0",

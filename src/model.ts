@@ -1,4 +1,4 @@
-import { Result, success, error } from './result';
+import { Result, success, error } from './result.js';
 
 /**
  * Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for

@@ -1,6 +1,6 @@
 import ts from 'typescript';
-import { Result, success, error } from '../result';
-import { TypeChatJsonValidator } from "../typechat";
+import { Result, success, error } from '../result.js';
+import { TypeChatJsonValidator } from '../typechat.js';
 
 const libText = `interface Array<T> { length: number, [n: number]: T }
 interface Object { toString(): string }

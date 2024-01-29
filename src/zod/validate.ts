@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { success, error } from '../result';
-import { TypeChatJsonValidator } from '../typechat';
+import { success, error } from '../result.js';
+import { TypeChatJsonValidator } from '../typechat.js';
 
 /**
  * Returns a JSON validator for a given Zod schema. The schema is supplied as an object where each property provides
