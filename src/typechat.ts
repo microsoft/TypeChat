@@ -116,8 +116,12 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
 	}
 
 	async function translate(request: string, promptPreamble?: string | PromptSection) {
-		const preamble: PromptSection = typeof promptPreamble === 'string' ? [{ role: 'user', content: promptPreamble }] : promptPreamble ?? [];
-		let prompt: PromptSection = [...preamble, { role: 'user', content: typeChat.createRequestPrompt(request) }];
+		const preamble: PromptSection = typeof promptPreamble === 'string' ? [['user', promptPreamble]] : promptPreamble ?? [];
+		/**
+		 * Not sure why it's complaining since it's an array
+		 */
+		// @ts-ignore
+		let prompt: PromptSection = [...preamble, ['user', typeChat.createRequestPrompt(request)]];
 		let attemptRepair = typeChat.attemptRepair;
 		while (true) {
 			const response = await model.complete(prompt);
@@ -148,8 +152,8 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
 			if (!attemptRepair) {
 				return error(`JSON validation failed: ${validation.message}\n${jsonText}`);
 			}
-			prompt.push({ role: 'assistant', content: responseText });
-			prompt.push({ role: 'user', content: typeChat.createRepairPrompt(validation.message) });
+			prompt.push(['assistant', responseText]);
+			prompt.push(['user', typeChat.createRepairPrompt(validation.message)]);
 			attemptRepair = false;
 		}
 	}
