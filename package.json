@@ -40,6 +40,9 @@
     "SECURITY.md"
   ],
   "dependencies": {
+    "@langchain/community": "^0.0.21",
+    "@langchain/core": "^0.1.18",
+    "@langchain/openai": "^0.0.13",
     "typescript": "^5.3.3",
     "zod": "^3.22.4"
   },
