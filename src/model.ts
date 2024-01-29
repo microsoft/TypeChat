@@ -1,20 +1,16 @@
 import { Result, success, error } from './result.js';
+import { ChatOpenAI } from '@langchain/openai';
+import type { Runnable } from '@langchain/core/runnables';
+import type { BaseFunctionCallOptions, BaseLanguageModelInput } from '@langchain/core/language_models/base';
+import type { BaseMessageChunk } from '@langchain/core/messages';
+import { StringOutputParser } from '@langchain/core/output_parsers';
 
 /**
  * Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for
  * prompts it generates and the "assistant" role for previous LLM responses (which will be part of
  * the prompt in repair attempts). TypeChat currently doesn't use the "system" role.
  */
-export interface PromptSection {
-	/**
-	 * Specifies the role of this section.
-	 */
-	role: 'system' | 'user' | 'assistant';
-	/**
-	 * Specifies the content of this section.
-	 */
-	content: string;
-}
+export type PromptSection = Parameters<Runnable<BaseLanguageModelInput, BaseMessageChunk, BaseFunctionCallOptions>['invoke']>[0];
 
 /**
  * Represents a AI language model that can complete prompts. TypeChat uses an implementation of this
@@ -36,7 +32,7 @@ export interface TypeChatLanguageModel {
 	 * @param prompt A prompt string or an array of prompt sections. If a string is specified,
 	 *   it is converted into a single "user" role prompt section.
 	 */
-	complete(prompt: string | PromptSection[]): Promise<Result<string>>;
+	complete(prompt: string | PromptSection): Promise<Result<string>>;
 }
 
 /**
@@ -54,92 +50,47 @@ export interface TypeChatLanguageModel {
  * If none of these key variables are defined, an exception is thrown.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createLanguageModel(env: Record<string, string | undefined>): TypeChatLanguageModel {
-	if (env.OPENAI_API_KEY) {
-		const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable('OPENAI_API_KEY');
-		const model = env.OPENAI_MODEL ?? missingEnvironmentVariable('OPENAI_MODEL');
-		const endPoint = env.OPENAI_ENDPOINT ?? 'https://api.openai.com/v1/chat/completions';
-		const org = env.OPENAI_ORGANIZATION ?? '';
-		return createOpenAILanguageModel(apiKey, model, endPoint, org);
+export function createLanguageModel(chatModel: Runnable<BaseLanguageModelInput, BaseMessageChunk, BaseFunctionCallOptions>): TypeChatLanguageModel {
+	if (chatModel) {
+		if (chatModel instanceof ChatOpenAI) {
+			chatModel = (chatModel as ChatOpenAI).bind({
+				response_format: { type: 'json_object' },
+			});
+		}
+		return createLangchianLanguageModel(chatModel);
+	} else {
+		throw new Error('Missing langchain model');
 	}
-	if (env.AZURE_OPENAI_API_KEY) {
-		const apiKey = env.AZURE_OPENAI_API_KEY ?? missingEnvironmentVariable('AZURE_OPENAI_API_KEY');
-		const endPoint = env.AZURE_OPENAI_ENDPOINT ?? missingEnvironmentVariable('AZURE_OPENAI_ENDPOINT');
-		return createAzureOpenAILanguageModel(apiKey, endPoint);
-	}
-	missingEnvironmentVariable('OPENAI_API_KEY or AZURE_OPENAI_API_KEY');
-}
-
-/**
- * Creates a language model encapsulation of an OpenAI REST API endpoint.
- * @param apiKey The OpenAI API key.
- * @param model The model name.
- * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to "https://api.openai.com/v1/chat/completions".
- * @param org The OpenAI organization id.
- * @returns An instance of `TypeChatLanguageModel`.
- */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = 'https://api.openai.com/v1/chat/completions', org = ''): TypeChatLanguageModel {
-	const headers = {
-		Authorization: `Bearer ${apiKey}`,
-		'OpenAI-Organization': org,
-	};
-	return createFetchLanguageModel(endPoint, headers, { model });
-}
-
-/**
- * Creates a language model encapsulation of an Azure OpenAI REST API endpoint.
- * @param endPoint The URL of the OpenAI REST API endpoint. The URL must be in the format
- *   "https://{your-resource-name}.openai.azure.com/openai/deployments/{your-deployment-name}/chat/completions?api-version={API-version}".
- *   Example deployment names are "gpt-35-turbo" and "gpt-4". An example API versions is "2023-05-15".
- * @param apiKey The Azure OpenAI API key.
- * @returns An instance of `TypeChatLanguageModel`.
- */
-export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string): TypeChatLanguageModel {
-	const headers = {
-		// Needed when using managed identity
-		Authorization: `Bearer ${apiKey}`,
-		// Needed when using regular API key
-		'api-key': apiKey,
-	};
-	return createFetchLanguageModel(endPoint, headers, {});
 }
 
 /**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
-function createFetchLanguageModel(url: string, headers: object, defaultParams: object) {
+function createLangchianLanguageModel(chatModel: Runnable<BaseLanguageModelInput, BaseMessageChunk, BaseFunctionCallOptions>) {
 	const model: TypeChatLanguageModel = {
 		complete,
 	};
 	return model;
 
-	async function complete(prompt: string | PromptSection[]) {
+	async function complete(prompt: string | PromptSection) {
 		let retryCount = 0;
 		const retryMaxAttempts = model.retryMaxAttempts ?? 3;
 		const retryPauseMs = model.retryPauseMs ?? 1000;
-		const messages = typeof prompt === 'string' ? [{ role: 'user', content: prompt }] : prompt;
+		const messages: typeof prompt = typeof prompt === 'string' ? [['user', prompt]] : prompt;
+
 		while (true) {
-			const options = {
-				method: 'POST',
-				body: JSON.stringify({
-					...defaultParams,
-					messages,
-					temperature: 0,
-					n: 1,
-				}),
-				headers: {
-					'content-type': 'application/json',
-					...headers,
-				},
-			};
-			const response = await fetch(url, options);
-			if (response.ok) {
-				const json = (await response.json()) as { choices: { message: PromptSection }[] };
-				return success(json.choices[0].message.content ?? '');
+			const outputParser = new StringOutputParser();
+
+			try {
+				const response = await chatModel.pipe(outputParser).invoke(messages);
+
+				return success(response ?? '');
+			} catch (err) {
+				if (retryCount >= retryMaxAttempts) {
+					return error(`API error ${err}`);
+				}
 			}
-			if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
-				return error(`REST API error ${response.status}: ${response.statusText}`);
-			}
+
 			await sleep(retryPauseMs);
 			retryCount++;
 		}
@@ -147,30 +98,8 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
 }
 
 /**
- * Returns true of the given HTTP status code represents a transient error.
- */
-function isTransientHttpError(code: number): boolean {
-	switch (code) {
-		case 429: // TooManyRequests
-		case 500: // InternalServerError
-		case 502: // BadGateway
-		case 503: // ServiceUnavailable
-		case 504: // GatewayTimeout
-			return true;
-	}
-	return false;
-}
-
-/**
  * Sleeps for the given number of milliseconds.
  */
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Throws an exception for a missing environment variable.
- */
-function missingEnvironmentVariable(name: string): never {
-	throw new Error(`Missing environment variable: ${name}`);
 }
