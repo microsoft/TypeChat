@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from types import NoneType, UnionType, get_original_bases
 import inspect
+import typing
 import typing_extensions
 from dataclasses import MISSING, Field, dataclass
 from types import NoneType, UnionType
@@ -20,8 +20,7 @@ from typing_extensions import (
     Protocol,
     Required,
     TypeAlias,
-    TypeAliasType,
-    TypedDict,
+    TypeAliasType,    
     TypeGuard,
     TypeVar,
     Union,
@@ -99,7 +98,7 @@ _KNOWN_GENERIC_SPECIAL_FORMS: frozenset[Any] = frozenset(
     ]
 )
 
-_KNOWN_SPECIAL_BASES: frozenset[Any] = frozenset([TypedDict, Protocol])
+_KNOWN_SPECIAL_BASES: frozenset[Any] = frozenset([typing.TypedDict, typing_extensions.TypedDict, Protocol])
 
 
 @dataclass
