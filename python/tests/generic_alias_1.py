@@ -20,7 +20,7 @@ FirstOrSecond = TypeAliasType("FirstOrSecond", First[T] | Second[T], type_params
 
 result = python_type_to_typescript_schema(FirstOrSecond)
 
-print("// Entry point is: '{result.typescript_type_reference}'")
+print(f"// Entry point is: '{result.typescript_type_reference}'")
 print("// TypeScript Schema:\n")
 print(result.typescript_schema_str)
 if result.errors:

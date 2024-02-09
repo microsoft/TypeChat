@@ -25,7 +25,7 @@ class Nested(TypedDict):
 
 result = python_type_to_typescript_schema(Nested)
 
-print("// Entry point is: '{result.typescript_type_reference}'")
+print(f"// Entry point is: '{result.typescript_type_reference}'")
 print("// TypeScript Schema:\n")
 print(result.typescript_schema_str)
 if result.errors:
