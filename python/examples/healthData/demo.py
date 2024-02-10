@@ -3,7 +3,7 @@ import json
 import sys
 from dotenv import dotenv_values
 import schema as health
-from typechat import Failure, TypeChatValidator, create_language_model
+from typechat import Failure, TypeChatValidator, create_language_model, process_requests
 from translator import TranslatorWithHistory
 
 health_instructions = """
@@ -16,37 +16,35 @@ Always return a response:
 - At least respond with an OK message.
 
 """
+vals = dotenv_values()
+model = create_language_model(vals)
+validator = TypeChatValidator(health.HealthDataResponse)
+translator = TranslatorWithHistory(
+    model, validator, health.HealthDataResponse, additional_agent_instructions=health_instructions
+)
+
+
+async def request_handler(message: str):
+    result = await translator.translate(message)
+    if isinstance(result, Failure):
+        print(result.message)
+    else:
+        result = result.value
+        print(json.dumps(result, indent=2))
+
+        agent_message = result.get("message", "None")
+        not_translated = result.get("notTranslated", None)
+
+        if agent_message:
+            print(f"\n📝: {agent_message}")
+
+        if not_translated:
+            print(f"\n🤔: I did not understand\n {not_translated}")
 
 
 async def main():
-    vals = dotenv_values()
-    model = create_language_model(vals)
-    validator = TypeChatValidator(health.HealthDataResponse)
-    translator = TranslatorWithHistory(
-        model, validator, health.HealthDataResponse, additional_agent_instructions=health_instructions
-    )
-    print("💉💊🤧> ", end="", flush=True)
-    for line in sys.stdin:
-        result = await translator.translate(line)
-        if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
-        else:
-            result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
-            print(json.dumps(result, indent=2))
-
-            message = result.get("message", None)
-            not_translated = result.get("notTranslated", None)
-
-            if message:
-                print(f"\n📝: {message}" )
-                
-            if not_translated:
-                print(f"\n🤔: I did not understand\n {not_translated}" )
-
-        print("\n💉💊🤧> ", end="", flush=True)
+    file_path = sys.argv[1] if len(sys.argv) == 2 else None
+    await process_requests("💉💊🤧> ", file_path, request_handler)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 from __future__ import annotations
 import asyncio
 import json
-from typing_extensions import TypeVar, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override, Sequence, Doc
+from typing_extensions import TypeVar, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override, Sequence, Doc, Any
 
 from typechat import (
     Failure,
@@ -104,7 +104,7 @@ async def evaluate_json_program(program: JsonProgram, onCall: Callable[[str, Seq
 class TypeChatProgramValidator(TypeChatValidator[T]):
     def __init__(self, py_type: type[T]):
         # the base class init method creates a typeAdapter for T. This operation fails for the JsonProgram type
-        super().__init__(py_type=py_type)
+        super().__init__(py_type=Any) # type: ignore
 
     @override
     def validate(self, json_text: str) -> Result[T]:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from types import NoneType, UnionType, get_original_bases
+from types import NoneType, UnionType
 import inspect
 import typing_extensions
 from dataclasses import MISSING, Field, dataclass
