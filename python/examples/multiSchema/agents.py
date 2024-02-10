@@ -14,7 +14,7 @@ import examples.math.schema as math_schema
 from examples.math.program import (
     TypeChatProgramTranslator,
     TypeChatProgramValidator,
-    evaluate_json_program,
+    evaluate_json_program, # type: ignore
     JsonProgram,
 )
 
@@ -36,12 +36,9 @@ class JsonPrintAgent(Generic[T]):
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
+            print(result.message)
         else:
             result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
             print(json.dumps(result, indent=2))
 
 
@@ -75,15 +72,12 @@ class MathAgent:
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
+            print(result.message)
         else:
             result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
             print(json.dumps(result, indent=2))
 
-            math_result = await evaluate_json_program(result, self._handle_json_program_call)
+            math_result = await evaluate_json_program(result, self._handle_json_program_call) # type: ignore
             print(f"Math Result: {math_result}")
 
 
@@ -108,12 +102,9 @@ class MusicAgent:
 
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
+            print(result.message)
         else:
             result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
             print(json.dumps(result, indent=2))
 
             try:
