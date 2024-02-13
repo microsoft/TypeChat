@@ -25,7 +25,7 @@ We recommend reading each example in the following order.
 
 You can experiment with these TypeChat examples on your local machine.
 
-You will need [Python 3.11](https://www.python.org/downloads/release/python-3110/) and [hatch](https://hatch.pypa.io/1.6/install/).
+You will need [Python >=3.11](https://www.python.org/downloads/) and [hatch](https://hatch.pypa.io/1.6/install/).
 
 ```
 git clone https://github.com/microsoft/TypeChat
