@@ -131,10 +131,10 @@ async def get_tracks_with_genres(
         artist = await context.service.artist(artist_id)
         genre_lookup[artist_id] = [g.casefold() for g in artist["genres"]]
     for track in tracks:
-        track_genres = set() # type: ignore
+        track_genres:set[str] = set()
         for artist_id in track.artistUris:
-            track_genres += set(genre_lookup[artist_id])  # type: ignore
-        track.genres = list(track_genres) # type: ignore
+            track_genres.update(set(genre_lookup[artist_id]))
+        track.genres = list(track_genres)
 
     return tracks
 

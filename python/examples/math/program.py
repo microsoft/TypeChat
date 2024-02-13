@@ -1,12 +1,11 @@
 from __future__ import annotations
 import asyncio
 import json
-from typing import no_type_check
+from typing import TypedDict, no_type_check
 from typing_extensions import (
     TypeVar,
     Callable,
     Awaitable,
-    TypedDict,
     Annotated,
     NotRequired,
     override,
@@ -72,10 +71,9 @@ FunctionCall = TypedDict(
 )
 
 JsonValue = str | int | float | bool | None | dict[str, "Expression"] | list["Expression"]
-Expression = JsonValue | FunctionCall | ResultReference  # type: ignore
+Expression = JsonValue | FunctionCall | ResultReference # type: ignore
 
 JsonProgram = TypedDict("JsonProgram", {"@steps": list[FunctionCall]})
-
 
 @no_type_check
 async def evaluate_json_program(
