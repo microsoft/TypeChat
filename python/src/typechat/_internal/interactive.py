@@ -6,7 +6,7 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
         with open(input_file_name, "r") as file:
             lines = filter(str.rstrip, file)
             for line in lines:
-                if(line.startswith("# ")):
+                if line.startswith("# "):
                     continue
                 print(interactive_prompt + line)
                 await process_request(line)
