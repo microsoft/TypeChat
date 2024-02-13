@@ -13,7 +13,8 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
     else:
         print(interactive_prompt, end="", flush=True)
         for line in sys.stdin:
-            if (line.lower() == "quit" or line.lower() == "exit"):  
+            lower_line = line.lower()
+            if lower_line == "quit" or lower_line == "exit":
                 break
             else:
                 await process_request(line)
