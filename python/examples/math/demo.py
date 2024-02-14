@@ -3,11 +3,16 @@ import json
 import sys
 from dotenv import dotenv_values
 import schema as math
-from typechat import Failure, create_language_model
-from program import TypeChatProgramTranslator, TypeChatProgramValidator, JsonProgram, evaluate_json_program
+from typechat import Failure, create_language_model, process_requests
+from program import TypeChatProgramTranslator, TypeChatProgramValidator, JsonProgram, evaluate_json_program  # type: ignore
+
+vals = dotenv_values()
+model = create_language_model(vals)
+validator = TypeChatProgramValidator(JsonProgram)
+translator = TypeChatProgramTranslator(model, validator, math.MathAPI)
 
 
-async def handle_call(func: str, args: list[int | float]) -> int | float:
+async def apply_operations(func: str, args: list[int | float]) -> int | float:
     print(f"{func}({json.dumps(args)}) ")
     match func:
         case "add":
@@ -26,26 +31,20 @@ async def handle_call(func: str, args: list[int | float]) -> int | float:
             raise ValueError(f'Unexpected function name {func}')
 
 
-async def main():
-    vals = dotenv_values()
-    model = create_language_model(vals)
-    validator = TypeChatProgramValidator(JsonProgram)
-    translator = TypeChatProgramTranslator(model, validator, math.MathAPI)
-    print("🧮> ", end="", flush=True)
-    for line in sys.stdin:
-        result = await translator.translate(line)
-        if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
-        else:
-            result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
-            print(json.dumps(result, indent=2))
-            math_result = await evaluate_json_program(result, handle_call) # type: ignore
-            print(f"Math Result: {math_result}")
+async def request_handler(message: str):
+    result = await translator.translate(message)
+    if isinstance(result, Failure):
+        print(result.message)
+    else:
+        result = result.value
+        print(json.dumps(result, indent=2))
+        math_result = await evaluate_json_program(result, apply_operations)  # type: ignore
+        print(f"Math Result: {math_result}")
 
-        print("\n🧮> ", end="", flush=True)
+
+async def main():
+    file_path = sys.argv[1] if len(sys.argv) == 2 else None
+    await process_requests("🧮> ", file_path, request_handler)
 
 
 if __name__ == "__main__":

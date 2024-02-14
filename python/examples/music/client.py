@@ -9,7 +9,7 @@ import math
 from typing import Any, Optional
 
 from pydantic.dataclasses import dataclass
-import spotipy
+import spotipy # type: ignore
 
 from schema import PlayerAction
 from spotipyWrapper import SimplifiedTrackInfo, SimplifiedPlaylistInfo, AsyncSpotipy
@@ -50,9 +50,9 @@ async def get_client_context(vals: dict[str, str | None]) -> ClientContext:
     scopes_str = " ".join(scopes)
 
     auth_manager = spotipy.SpotifyOAuth(
-        client_id=vals.get("SPOTIPY_CLIENT_ID", None),
-        client_secret=vals.get("SPOTIPY_CLIENT_SECRET", None),
-        redirect_uri=vals.get("SPOTIPY_REDIRECT_URI", None),
+        client_id=vals.get("SPOTIFY_APP_CLI", None),
+        client_secret=vals.get("SPOTIFY_APP_CLISEC", None),
+        redirect_uri=f"http://localhost:{vals.get('SPOTIFY_APP_PORT', 80)}/callback",
         scope=scopes_str,
     )
 
@@ -131,9 +131,9 @@ async def get_tracks_with_genres(
         artist = await context.service.artist(artist_id)
         genre_lookup[artist_id] = [g.casefold() for g in artist["genres"]]
     for track in tracks:
-        track_genres = set()
+        track_genres:set[str] = set()
         for artist_id in track.artistUris:
-            track_genres += set(genre_lookup[artist_id])  # type: ignore
+            track_genres.update(set(genre_lookup[artist_id]))
         track.genres = list(track_genres)
 
     return tracks
@@ -267,11 +267,11 @@ async def handle_call(action: PlayerAction, context: ClientContext):
             deviceKeyword = action["parameters"]["keyword"].lower()
             devices = await context.service.devices()
             target_device = next(
-                (d for d in devices if d.name.lower() == deviceKeyword or d.type.lower() == deviceKeyword), None
+                (d for d in devices if d.name.lower() == deviceKeyword or d.type.lower() == deviceKeyword), None # type: ignore
             )
             if target_device:
-                await context.service.transfer_playback(device_id=target_device.id)
-                print(f"Selected device {target_device.name} of type {target_device.type}")
+                await context.service.transfer_playback(device_id=target_device.id) # type: ignore
+                print(f"Selected device {target_device.name} of type {target_device.type}") # type: ignore
         case "setVolume":
             new_volume = action["parameters"].get("newVolumeLevel", None)
             new_volume = max(0, min(new_volume, 100))
@@ -374,5 +374,5 @@ async def handle_call(action: PlayerAction, context: ClientContext):
                 if target_playlist:
                     await context.service.current_user_unfollow_playlist(playlist_id=target_playlist.id)
                     print(f"Playlist {name} deleted")
-        case "unknown":
+        case "Unknown":
             print(f"Text not understood in this context: {action.get('text', None)}")

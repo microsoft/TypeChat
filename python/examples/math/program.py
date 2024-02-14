@@ -1,7 +1,18 @@
 from __future__ import annotations
 import asyncio
 import json
-from typing_extensions import TypeVar, Callable, Awaitable, TypedDict, Annotated,  NotRequired, override, Sequence, Doc
+from typing import TypedDict, no_type_check
+from typing_extensions import (
+    TypeVar,
+    Callable,
+    Awaitable,
+    Annotated,
+    NotRequired,
+    override,
+    Sequence,
+    Doc,
+    Any,
+)
 
 from typechat import (
     Failure,
@@ -60,17 +71,21 @@ FunctionCall = TypedDict(
 )
 
 JsonValue = str | int | float | bool | None | dict[str, "Expression"] | list["Expression"]
-Expression = JsonValue | FunctionCall | ResultReference
+Expression = JsonValue | FunctionCall | ResultReference # type: ignore
 
 JsonProgram = TypedDict("JsonProgram", {"@steps": list[FunctionCall]})
 
-
-async def evaluate_json_program(program: JsonProgram, onCall: Callable[[str, Sequence[Expression]], Awaitable[Expression]]) -> Expression | Sequence[Expression]:
+@no_type_check
+async def evaluate_json_program(
+    program: JsonProgram, onCall: Callable[[str, Sequence[Expression]], Awaitable[Expression]]
+) -> Expression | Sequence[Expression]:
     results: list[Expression] | Expression = []
 
+    @no_type_check
     async def evaluate_array(array: Sequence[Expression]) -> Sequence[Expression]:
-        return await asyncio.gather(*[evaluate_call(e) for e in array]) # type: ignore
+        return await asyncio.gather(*[evaluate_call(e) for e in array])
 
+    @no_type_check
     async def evaluate_object(expr: FunctionCall):
         if "@ref" in expr:
             index = expr["@ref"]
@@ -87,13 +102,14 @@ async def evaluate_json_program(program: JsonProgram, onCall: Callable[[str, Seq
         else:
             raise ValueError("This condition should never hit")
 
+    @no_type_check
     async def evaluate_call(expr: FunctionCall) -> Expression | Sequence[Expression]:
         if isinstance(expr, int) or isinstance(expr, float) or isinstance(expr, str):
             return expr
         return await evaluate_object(expr)
 
     for step in program["@steps"]:
-        results.append(await evaluate_call(step)) # type: ignore
+        results.append(await evaluate_call(step))
 
     if len(results) > 0:
         return results[-1]
@@ -104,7 +120,7 @@ async def evaluate_json_program(program: JsonProgram, onCall: Callable[[str, Seq
 class TypeChatProgramValidator(TypeChatValidator[T]):
     def __init__(self, py_type: type[T]):
         # the base class init method creates a typeAdapter for T. This operation fails for the JsonProgram type
-        super().__init__(py_type=py_type)
+        super().__init__(py_type=Any)  # type: ignore
 
     @override
     def validate(self, json_text: str) -> Result[T]:

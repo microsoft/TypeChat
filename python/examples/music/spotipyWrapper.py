@@ -1,6 +1,6 @@
-from typing_extensions import Any, Optional
-from pydantic.dataclasses import dataclass
-import spotipy
+from typing_extensions import Any
+from pydantic.dataclasses import dataclass, field
+import spotipy # type: ignore
 
 # The spotipy library does not provide type hints or async methods. This file has some wrappers and stubs 
 # to give just-enough typing for the demo
@@ -13,7 +13,7 @@ class SimplifiedTrackInfo:
     artistNames: list[str]
     artistUris: list[str]
     albumName: str
-    genres: Optional[list[str]] = None
+    genres: list[str] = field(default_factory=list)
 
 # This class holds the Playlist info needed for our use
 @dataclass
