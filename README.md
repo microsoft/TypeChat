@@ -31,7 +31,101 @@ git clone https://github.com/microsoft/TypeChat
 cd TypeChat
 npm run build
 ```
+There are two main ways to get started with TypeChat:
 
+1.Using Interfaces:
+
+The traditional approach to building natural language interfaces is to use interfaces. Interfaces define the expected inputs and outputs of your application's functions. TypeChat can automatically generate prompts for large language models (LLMs) based on your interfaces, and then validate the LLM's responses to ensure they conform to the interface. This can help to make your applications more robust and reliable.
+
+Here's an example of how to use an interface with TypeChat:
+
+```
+from typechat import Schema, Union
+
+class Sentiment(Schema):
+    text: str
+    sentiment: Union["Positive", "Negative", "Neutral"]
+
+class Positive(Schema):
+    pass
+
+class Negative(Schema):
+    pass
+
+class Neutral(Schema):
+    pass
+
+# Use the Sentiment schema to generate a prompt for the LLM
+prompt = typechat.generate_prompt(Sentiment)
+
+# Get the LLM's response
+response = llm.query(prompt)
+
+# Validate the response against the Sentiment schema
+validated_response = typechat.validate(response, Sentiment)
+
+# Use the validated response in your application
+if validated_response.sentiment == "Positive":
+    print("The user's sentiment is positive!")
+else:
+    print("The user's sentiment is not positive.")
+
+```
+
+2.Using Types:
+
+TypeChat can also be used with types, which are simpler than interfaces but can still be used to define the expected inputs and outputs of your application's functions. Types can be used to specify the data types of the inputs and outputs, as well as any constraints that they must meet.
+
+Here's an example of how to use types with TypeChat:
+```
+from typechat import Schema, String, Int
+
+class Sentiment(Schema):
+    text: String
+    sentiment: str
+
+# Use the Sentiment schema to generate a prompt for the LLM
+prompt = typechat.generate_prompt(Sentiment)
+
+# Get the LLM's response
+response = llm.query(prompt)
+
+# Validate the response against the Sentiment schema
+validated_response = typechat.validate(response, Sentiment)
+
+# Use the validated response in your application
+if validated_response.sentiment == "positive":
+    print("The user's sentiment is positive!")
+else:
+    print("The user's sentiment is not positive.")
+
+```
+
+## TypeChat -JsonTranslator
+
+This TypeScript module provides a way to translate natural language requests into JSON objects of a specified type, using a language model and schema validation.
+
+Key Features:
+
+- Schema-based validation
+- Repair attempts
+- Customizable prompts
+- Additional validation
+
+## TypeChat -LanguageModel
+
+The TypeChatLanguageModel provides a valuable abstraction layer for developers working with OpenAI and Azure OpenAI language models. Its strengths lie in its simplicity, flexibility, and reliability, making it a compelling choice for building applications that leverage natural language processing capabilities.
+
+Key Features:
+
+- Abstract Interface: It defines a clear contract for interacting with language models, making it adaptable to different providers and implementations.
+- API Abstraction: It encapsulates communication with language model APIs, handling requests, responses, and potential errors.
+- Environment-Based Configuration: It seamlessly supports OpenAI or Azure OpenAI models, with configuration driven by environment variables.
+- Retry Logic: It incorporates automatic retries for transient errors, enhancing reliability and robustness.
+- Customizable Prompt Handling: It supports both simple string prompts and more complex prompt sections with designated roles, enabling tailored interactions.
+- Asynchronous Operations: It utilizes Promises for asynchronous completion requests, promoting non-blocking code and efficient execution.
+
+  
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](./examples). You can try them on your local machine or in a GitHub Codespace.
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
