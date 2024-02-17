@@ -36,7 +36,7 @@ Or NuGet
 
 -->
 
-You can also run TypeChat from source for:
+You can also work with TypeChat from source for:
 
 * [Python](./python/README.md)
 * [TypeScript](./typescript/README.md)
