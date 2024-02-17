@@ -21,7 +21,7 @@ jobs:
       with:
         node-version: 18.x
         cache: 'npm'
-        cache-directory-path: "site/package-lock.json"
+        cache-dependency-path: "site/package-lock.json"
     - name: Build site
       run: |
         cd site
