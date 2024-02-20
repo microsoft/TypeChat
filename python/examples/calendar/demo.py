@@ -4,26 +4,31 @@ import json
 import sys
 from dotenv import dotenv_values
 import schema as calendar
-from typechat import Failure, TypeChatTranslator, TypeChatValidator, create_language_model
+from typechat import Failure, TypeChatTranslator, TypeChatValidator, create_language_model, process_requests
+
+vals = dotenv_values()
+model = create_language_model(vals)
+validator = TypeChatValidator(calendar.CalendarActions)
+translator = TypeChatTranslator(model, validator, calendar.CalendarActions)
+
+
+async def request_handler(message: str):
+    result = await translator.translate(message)
+    if isinstance(result, Failure):
+        print(result.message)
+    else:
+        result = result.value
+        print(json.dumps(result, indent=2))
+        if any(item["actionType"] == "Unknown" for item in result["actions"]):
+            print("I did not understand the following")
+            for item in result["actions"]:
+                if item["actionType"] == "Unknown":
+                    print(item["text"])
 
 
 async def main():
-    vals = dotenv_values()
-    model = create_language_model(vals)
-    validator = TypeChatValidator(calendar.CalendarActions)
-    translator = TypeChatTranslator(model, validator, calendar.CalendarActions)
-    print("📅> ", end="", flush=True)
-    for line in sys.stdin:
-        result = await translator.translate(line)
-        if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
-        else:
-            result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
-            print(json.dumps(result, indent=2))
-        print("\n📅> ", end="", flush=True)
+    file_path = sys.argv[1] if len(sys.argv) == 2 else None
+    await process_requests("📅> ", file_path, request_handler)
 
 
 if __name__ == "__main__":

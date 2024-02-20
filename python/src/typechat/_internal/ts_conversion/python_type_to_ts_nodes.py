@@ -292,7 +292,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             comment = py_type.__doc__ or ""
 
             if hasattr(py_type, "__type_params__"):
-                type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
+                type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__] # type: ignore
             elif hasattr(py_type, "__parameters__"):
                 type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__parameters__]
             else:

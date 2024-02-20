@@ -10,7 +10,7 @@ class UnknownAction(TypedDict):
     Use this action for requests that weren't understood
     """
 
-    actionName: Literal["unknown"]
+    actionName: Literal["Unknown"]
     text: unknownActionParameters
 
 

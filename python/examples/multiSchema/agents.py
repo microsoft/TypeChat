@@ -14,7 +14,7 @@ import examples.math.schema as math_schema
 from examples.math.program import (
     TypeChatProgramTranslator,
     TypeChatProgramValidator,
-    evaluate_json_program,
+    evaluate_json_program,  # type: ignore
     JsonProgram,
 )
 
@@ -36,12 +36,9 @@ class JsonPrintAgent(Generic[T]):
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
+            print(result.message)
         else:
             result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
             print(json.dumps(result, indent=2))
 
 
@@ -75,12 +72,9 @@ class MathAgent:
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
+            print(result.message)
         else:
             result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
             print(json.dumps(result, indent=2))
 
             math_result = await evaluate_json_program(result, self._handle_json_program_call)
@@ -90,7 +84,7 @@ class MathAgent:
 class MusicAgent:
     _validator: TypeChatValidator[music_schema.PlayerActions]
     _translator: TypeChatTranslator[music_schema.PlayerActions]
-    _client_context: ClientContext
+    _client_context: ClientContext | None
     _authentication_vals: dict[str, str | None]
 
     def __init__(self, model: TypeChatModel, authentication_vals: dict[str, str | None]):
@@ -98,6 +92,7 @@ class MusicAgent:
         self._validator = TypeChatValidator(music_schema.PlayerActions)
         self._translator = TypeChatTranslator(model, self._validator, music_schema.PlayerActions)
         self._authentication_vals = authentication_vals
+        self._client_context = None
 
     async def authenticate(self):
         self._client_context = await get_client_context(self._authentication_vals)
@@ -106,14 +101,12 @@ class MusicAgent:
         if not self._client_context:
             await self.authenticate()
 
+        assert self._client_context
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
+            print(result.message)
         else:
             result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
             print(json.dumps(result, indent=2))
 
             try:
