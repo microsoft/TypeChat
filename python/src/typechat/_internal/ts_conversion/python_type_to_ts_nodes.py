@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from types import NoneType, UnionType
 import inspect
+import typing
 import typing_extensions
 from dataclasses import MISSING, Field, dataclass
 from types import NoneType, UnionType
@@ -20,8 +20,7 @@ from typing_extensions import (
     Protocol,
     Required,
     TypeAlias,
-    TypeAliasType,
-    TypedDict,
+    TypeAliasType,    
     TypeGuard,
     TypeVar,
     Union,
@@ -99,7 +98,7 @@ _KNOWN_GENERIC_SPECIAL_FORMS: frozenset[Any] = frozenset(
     ]
 )
 
-_KNOWN_SPECIAL_BASES: frozenset[Any] = frozenset([TypedDict, Protocol])
+_KNOWN_SPECIAL_BASES: frozenset[Any] = frozenset([typing.TypedDict, typing_extensions.TypedDict, Protocol])
 
 
 @dataclass
@@ -294,6 +293,8 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
             if hasattr(py_type, "__type_params__"):
                 type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__] # type: ignore
+            elif hasattr(py_type, "__parameters__"):
+                type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__parameters__]
             else:
                 type_params = None
 

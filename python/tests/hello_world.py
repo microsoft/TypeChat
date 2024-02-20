@@ -1,15 +1,17 @@
-from typing import Annotated, Literal, NotRequired, Optional, Required, Self, TypedDict
-
+from typing import Annotated, Literal, NotRequired, Optional, Required, Self, TypedDict, TypeVar, Generic
+from typing_extensions import TypeAliasType
 from typechat import python_type_to_typescript_schema
 
+T = TypeVar("T", covariant=True)
 
-class C[T](TypedDict):
+
+class C(Generic[T], TypedDict):
     "This is a generic class named C."
     x: NotRequired[T]
     c: "C[int | float | None]"
 
 
-type IndirectC = C[int]
+IndirectC = TypeAliasType("IndirectC", C[int])
 
 
 class D(C[str], total=False):
@@ -22,10 +24,8 @@ class D(C[str], total=False):
 
     multiple_metadata: Annotated[str, None, str, "This comes from later metadata.", int]
 
-nonclass = TypedDict("NonClass", {
-    "a": int,
-    "my-dict": dict[str, int]
-})
+
+nonclass = TypedDict("NonClass", {"a": int, "my-dict": dict[str, int]})
 
 
 class E(C[str]):
@@ -34,7 +34,7 @@ class E(C[str]):
     next: Self | None
 
 
-type D_or_E = D | E
+D_or_E = TypeAliasType("D_or_E", D | E)
 
 
 result = python_type_to_typescript_schema(D_or_E)
