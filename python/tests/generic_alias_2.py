@@ -22,13 +22,3 @@ FirstOrSecond = TypeAliasType("FirstOrSecond", First[T] | Second[T], type_params
 class Nested(TypedDict):
     item: FirstOrSecond[str]
 
-
-result = python_type_to_typescript_schema(Nested)
-
-print(f"// Entry point is: '{result.typescript_type_reference}'")
-print("// TypeScript Schema:\n")
-print(result.typescript_schema_str)
-if result.errors:
-    print("// Errors:")
-    for err in result.errors:
-        print(f"// - {err}\n")

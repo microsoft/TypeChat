@@ -35,14 +35,3 @@ class E(C[str]):
 
 
 D_or_E = TypeAliasType("D_or_E", D | E)
-
-
-result = python_type_to_typescript_schema(D_or_E)
-
-print(f"// Entry point is: '{result.typescript_type_reference}'")
-print("// TypeScript Schema:\n")
-print(result.typescript_schema_str)
-if result.errors:
-    print("// Errors:")
-    for err in result.errors:
-        print(f"// - {err}\n")
