@@ -3,35 +3,27 @@
 {
 	"name": "Ubuntu",
 	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
-	"image": "mcr.microsoft.com/devcontainers/base:jammy",
+	"image": "mcr.microsoft.com/devcontainers/python:1-3.12",
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
 		"ghcr.io/devcontainers/features/node:1": {
 			"nodeGypDependencies": true,
 			"version": "lts",
 			"nvmVersion": "latest"
 		},
-		"ghcr.io/devcontainers/features/python:1": {
-			"installTools": true,
-			"version": "3.12.2",
-			"useOryxIfAvailable": "false"
-		},
-		"ghcr.io/devcontainers-contrib/features/hatch:2": {}
+		"ghcr.io/devcontainers-contrib/features/hatch:2": {
+			"version": "latest"
+		}
 	},
 
-	// Features to add to the dev container. More info: https://containers.dev/features.
-	// "features": {},
-
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
-	// "forwardPorts": [],
-
-	// Use 'postCreateCommand' to run commands after the container is created.
-	// "postCreateCommand": "uname -a",
+	"forwardPorts": [7860, 7861, 7862, 7863, 7864, 7865, 7866, 7867, 7868, 7869, 7870],
 
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
 			"extensions": [
-				"ms-python.python",
 				"ms-python.black-formatter"
 			],
 			"settings": {
@@ -40,6 +32,7 @@
 		}
 	},
 
+	// Use 'postCreateCommand' to run commands after the container is created.
     "postCreateCommand": "cd python; hatch config set dirs.env.virtual .hatch; hatch config update; hatch env create"
 
 	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
