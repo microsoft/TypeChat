@@ -1,10 +1,12 @@
 import asyncio
+from collections.abc import Sequence
 import json
 import sys
+from typing import cast
 from dotenv import dotenv_values
 import schema as math
 from typechat import Failure, create_language_model, process_requests
-from program import TypeChatProgramTranslator, TypeChatProgramValidator, JsonProgram, evaluate_json_program  # type: ignore
+from program import TypeChatProgramTranslator, TypeChatProgramValidator, JsonProgram, evaluate_json_program
 
 vals = dotenv_values()
 model = create_language_model(vals)
@@ -12,8 +14,15 @@ validator = TypeChatProgramValidator(JsonProgram)
 translator = TypeChatProgramTranslator(model, validator, math.MathAPI)
 
 
-async def apply_operations(func: str, args: list[int | float]) -> int | float:
+async def apply_operations(func: str, args: Sequence[object]) -> int | float:
     print(f"{func}({json.dumps(args)}) ")
+
+    for arg in args:
+        if not isinstance(arg, (int, float)):
+            raise ValueError("All arguments are expected to be numeric.")
+
+    args = cast(Sequence[int | float], args)
+
     match func:
         case "add":
             return args[0] + args[1]
@@ -38,7 +47,7 @@ async def request_handler(message: str):
     else:
         result = result.value
         print(json.dumps(result, indent=2))
-        math_result = await evaluate_json_program(result, apply_operations)  # type: ignore
+        math_result = await evaluate_json_program(result, apply_operations)
         print(f"Math Result: {math_result}")
 
 

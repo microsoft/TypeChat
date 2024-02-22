@@ -1,7 +1,8 @@
 from __future__ import annotations
 import asyncio
+from collections.abc import Sequence
 import json
-from typing import TypedDict, no_type_check
+from typing import TypeAlias, TypedDict, cast
 from typing_extensions import (
     TypeVar,
     Callable,
@@ -9,9 +10,7 @@ from typing_extensions import (
     Annotated,
     NotRequired,
     override,
-    Sequence,
     Doc,
-    Any,
 )
 
 from typechat import (
@@ -23,7 +22,6 @@ from typechat import (
     TypeChatTranslator,
     python_type_to_typescript_schema,
 )
-import collections.abc
 
 T = TypeVar("T", covariant=True)
 
@@ -70,46 +68,56 @@ FunctionCall = TypedDict(
     },
 )
 
-JsonValue = str | int | float | bool | None | dict[str, "Expression"] | list["Expression"]
-Expression = JsonValue | FunctionCall | ResultReference # type: ignore
+JsonValue: TypeAlias = str | int | float | bool | None | dict[str, "Expression"] | list["Expression"]
+Expression: TypeAlias = JsonValue | FunctionCall | ResultReference
 
 JsonProgram = TypedDict("JsonProgram", {"@steps": list[FunctionCall]})
 
-@no_type_check
 async def evaluate_json_program(
-    program: JsonProgram, onCall: Callable[[str, Sequence[Expression]], Awaitable[Expression]]
-) -> Expression | Sequence[Expression]:
-    results: list[Expression] | Expression = []
+    program: JsonProgram,
+    onCall: Callable[[str, Sequence[object]], Awaitable[JsonValue]]
+) -> Expression:
+    results: list[JsonValue] = []
 
-    @no_type_check
-    async def evaluate_array(array: Sequence[Expression]) -> Sequence[Expression]:
-        return await asyncio.gather(*[evaluate_call(e) for e in array])
+    def evaluate_array(array: list[Expression]) -> Awaitable[list[Expression]]:
+        return asyncio.gather(*[evaluate_expression(e) for e in array])
 
-    @no_type_check
-    async def evaluate_object(expr: FunctionCall):
-        if "@ref" in expr:
-            index = expr["@ref"]
-            if index < len(results):
-                return results[index]
+    async def evaluate_expression(expr: Expression) -> JsonValue:
+        match expr:
+            case bool() | int() | float() | str() | None:
+                return expr
 
-        elif "@func" in expr and "@args" in expr:
-            function_name = expr["@func"]
-            return await onCall(function_name, await evaluate_array(expr["@args"]))
+            case { "@ref": int(index) } if not isinstance(index, bool):
+                if 0 <= index < len(results):
+                    return results[index]
+                
+                raise ValueError(f"Index {index} is out of range [0, {len(results)})")
 
-        elif isinstance(expr, collections.abc.Sequence):
-            return await evaluate_array(expr)
+            case { "@ref": ref_value }:
+                raise ValueError(f"'ref' value must be an integer, but was ${ref_value}")
 
-        else:
-            raise ValueError("This condition should never hit")
+            case { "@func": str(function_name) }:
+                args: list[Expression]
+                match expr:
+                    case { "@args": None }:
+                        args = []
+                    case { "@args": list() }:
+                        args = cast(list[Expression], expr["@args"]) # TODO
+                    case { "@args": _ }:
+                        raise ValueError("Given an invalid value for '@args'.")
+                    case _:
+                        args = []
 
-    @no_type_check
-    async def evaluate_call(expr: FunctionCall) -> Expression | Sequence[Expression]:
-        if isinstance(expr, int) or isinstance(expr, float) or isinstance(expr, str):
-            return expr
-        return await evaluate_object(expr)
+                return await onCall(function_name, await evaluate_array(args))
+            
+            case list(array_expression_elements):
+                return await evaluate_array(array_expression_elements)    
+
+            case _:
+                raise ValueError("This condition should never hit")
 
     for step in program["@steps"]:
-        results.append(await evaluate_call(step))
+        results.append(await evaluate_expression(step))
 
     if len(results) > 0:
         return results[-1]
@@ -120,7 +128,7 @@ async def evaluate_json_program(
 class TypeChatProgramValidator(TypeChatValidator[T]):
     def __init__(self, py_type: type[T]):
         # the base class init method creates a typeAdapter for T. This operation fails for the JsonProgram type
-        super().__init__(py_type=Any)  # type: ignore
+        super().__init__(py_type=py_type)
 
     @override
     def validate(self, json_text: str) -> Result[T]:
@@ -128,7 +136,7 @@ class TypeChatProgramValidator(TypeChatValidator[T]):
         # For JsonProgram, simply validate that it has a non-zero number of @steps
         # TODO: extend validations
         typed_dict = json.loads(json_text)
-        if "@steps" in typed_dict and isinstance(typed_dict["@steps"], collections.abc.Sequence):
+        if "@steps" in typed_dict and isinstance(typed_dict["@steps"], Sequence):
             return Success(typed_dict)
         else:
             return Failure("This is not a valid program. The program must have an array of @steps")
