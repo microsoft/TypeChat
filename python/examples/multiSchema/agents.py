@@ -17,7 +17,6 @@ from examples.math.program import (
     TypeChatProgramTranslator,
     TypeChatProgramValidator,
     evaluate_json_program,
-    JsonProgram,
 )
 
 import examples.music.schema as music_schema
@@ -45,8 +44,8 @@ class JsonPrintAgent(Generic[T]):
 
 
 class MathAgent:
-    _validator: TypeChatProgramValidator[JsonProgram]
-    _translator: TypeChatProgramTranslator[JsonProgram]
+    _validator: TypeChatProgramValidator
+    _translator: TypeChatProgramTranslator
 
     def __init__(self, model: TypeChatModel):
         super().__init__()
