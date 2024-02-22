@@ -50,7 +50,7 @@ class MathAgent:
 
     def __init__(self, model: TypeChatModel):
         super().__init__()
-        self._validator = TypeChatProgramValidator(JsonProgram)
+        self._validator = TypeChatProgramValidator()
         self._translator = TypeChatProgramTranslator(model, self._validator, math_schema.MathAPI)
 
     async def _handle_json_program_call(self, func: str, args: Sequence[object]) -> int | float:

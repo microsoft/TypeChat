@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
 import json
-from typing import TypeAlias, TypedDict, cast
+from typing import Any, TypeAlias, TypedDict, cast
 from typing_extensions import (
     TypeVar,
     Callable,
@@ -126,14 +126,18 @@ async def evaluate_json_program(
 
 
 class TypeChatProgramValidator(TypeChatValidator[T]):
-    def __init__(self, py_type: type[T]):
-        # the base class init method creates a typeAdapter for T. This operation fails for the JsonProgram type
-        super().__init__(py_type=py_type)
+    def __init__(self):
+        # TODO: This example should eventually be updated to use Python 3.12 type aliases
+        # Passing in `JsonProgram` for `py_type` would cause issues because
+        # Pydantic's `TypeAdapter` ends up trying to eagerly construct an
+        # anonymous recursive type. Even a NewType does not work here.
+        # For now, we just 
+        super().__init__(py_type=Any)
 
     @override
     def validate(self, json_text: str) -> Result[T]:
         # Pydantic is not able to validate JsonProgram instances. It fails with a recursion error.
-        # For JsonProgram, simply validate that it has a non-zero number of @steps
+        # For JsonProgram, so we simply validate that it has a non-zero number of `@steps`.
         # TODO: extend validations
         typed_dict = json.loads(json_text)
         if "@steps" in typed_dict and isinstance(typed_dict["@steps"], Sequence):
@@ -147,6 +151,7 @@ class TypeChatProgramTranslator(TypeChatTranslator[T]):
 
     def __init__(self, model: TypeChatModel, validator: TypeChatProgramValidator[T], api_type: type):
         super().__init__(model=model, validator=validator, target_type=api_type)
+        # TODO: the conversion result here has errors!
         conversion_result = python_type_to_typescript_schema(api_type)
         self._api_declaration_str = conversion_result.typescript_schema_str
 

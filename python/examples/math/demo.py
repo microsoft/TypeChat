@@ -6,11 +6,11 @@ from typing import cast
 from dotenv import dotenv_values
 import schema as math
 from typechat import Failure, create_language_model, process_requests
-from program import TypeChatProgramTranslator, TypeChatProgramValidator, JsonProgram, evaluate_json_program
+from program import TypeChatProgramTranslator, TypeChatProgramValidator, evaluate_json_program
 
 vals = dotenv_values()
 model = create_language_model(vals)
-validator = TypeChatProgramValidator(JsonProgram)
+validator = TypeChatProgramValidator()
 translator = TypeChatProgramTranslator(model, validator, math.MathAPI)
 
 
