@@ -10,7 +10,6 @@ from typechat._internal.validator import TypeChatValidator
 from typechat._internal.interactive import process_requests
 
 __all__ = [
-    "DefaultOpenAIModel",
     "TypeChatModel",
     "TypeChatTranslator",
     "TypeChatValidator",
