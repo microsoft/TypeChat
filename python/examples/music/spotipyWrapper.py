@@ -1,6 +1,6 @@
 from typing_extensions import Any
 from pydantic.dataclasses import dataclass, field
-import spotipy
+import spotipy # type: ignore
 
 # The spotipy library does not provide type hints or async methods. This file has some wrappers and stubs 
 # to give just-enough typing for the demo
