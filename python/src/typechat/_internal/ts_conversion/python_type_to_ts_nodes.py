@@ -54,6 +54,9 @@ from typechat._internal.ts_conversion.ts_type_nodes import (
     UnionTypeNode,
 )
 
+class GenericDeclarationish(Protocol):
+    __parameters__: list[TypeVar]
+    __type_params__: list[TypeVar] # NOTE: may not be present unless running in 3.12
 
 class GenericAliasish(Protocol):
     __origin__: object
@@ -283,7 +286,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
         if optional is None:
             optional = optionality_default
-        
+
         type_annotation = convert_to_type_node(skip_annotations(current_annotation))
         return PropertyDeclarationNode(name, optional, comment or "", type_annotation)
 
@@ -292,14 +295,20 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             comment = py_type.__doc__ or ""
 
             if hasattr(py_type, "__type_params__"):
-                type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__] # type: ignore
+                type_params = [
+                    TypeParameterDeclarationNode(type_param.__name__)
+                    for type_param in cast(GenericDeclarationish, py_type).__type_params__
+                ]
             elif hasattr(py_type, "__parameters__"):
-                type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__parameters__]
+                type_params = [
+                    TypeParameterDeclarationNode(type_param.__name__)
+                    for type_param in cast(GenericDeclarationish, py_type).__parameters__
+                ]
             else:
                 type_params = None
 
             annotated_members = get_type_hints(py_type, include_extras=True)
-            
+
             raw_but_filtered_bases: list[type] = [
                 base
                 for base in get_original_bases(py_type)
