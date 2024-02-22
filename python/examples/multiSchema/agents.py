@@ -1,5 +1,7 @@
+from collections.abc import Sequence
 import os
 import sys
+from typing import cast
 
 examples_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if examples_path not in sys.path:
@@ -14,7 +16,7 @@ import examples.math.schema as math_schema
 from examples.math.program import (
     TypeChatProgramTranslator,
     TypeChatProgramValidator,
-    evaluate_json_program,  # type: ignore
+    evaluate_json_program,
     JsonProgram,
 )
 
@@ -51,8 +53,15 @@ class MathAgent:
         self._validator = TypeChatProgramValidator(JsonProgram)
         self._translator = TypeChatProgramTranslator(model, self._validator, math_schema.MathAPI)
 
-    async def _handle_json_program_call(self, func: str, args: list[int | float]) -> int | float:
+    async def _handle_json_program_call(self, func: str, args: Sequence[object]) -> int | float:
         print(f"{func}({json.dumps(args)}) ")
+        
+        for arg in args:
+            if not isinstance(arg, (int, float)):
+                raise ValueError("All arguments are expected to be numeric.")
+
+        args = cast(Sequence[int | float], args)
+
         match func:
             case "add":
                 return args[0] + args[1]

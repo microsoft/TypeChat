@@ -79,7 +79,7 @@ async def evaluate_json_program(
 ) -> Expression:
     results: list[JsonValue] = []
 
-    def evaluate_array(array: list[Expression]) -> Awaitable[list[Expression]]:
+    def evaluate_array(array: Sequence[Expression]) -> Awaitable[list[Expression]]:
         return asyncio.gather(*[evaluate_expression(e) for e in array])
 
     async def evaluate_expression(expr: Expression) -> JsonValue:
