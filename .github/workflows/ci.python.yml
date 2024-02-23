@@ -14,7 +14,7 @@ defaults:
     working-directory: ./python
 
 jobs:
-  test:
+  pyright:
     strategy:
       fail-fast: false
       matrix:
