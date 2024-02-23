@@ -1,0 +1,61 @@
+name: Python CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+defaults:
+  run:
+    shell: bash
+    working-directory: ./python
+
+jobs:
+  pyright:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+        python-version:
+          - '3.11'
+          - '3.12'
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Hatch
+        run: |
+          python -m pip install --upgrade pip
+          pip install hatch
+
+      - name: Set up Hatch Environment
+        run: |
+          hatch env create
+          HATCH_ENV=$(hatch env find)
+          echo $HATCH_ENV
+          echo "$HATCH_ENV/bin" >> $GITHUB_PATH
+
+      - name: Get Pyright Version
+        id: pyright-version
+        run: |
+          PYRIGHT_VERSION=$(jq -r '.devDependencies.pyright' < package.json)
+          echo $PYRIGHT_VERSION
+          echo "version=$PYRIGHT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Run pyright ${{ steps.pyright-version.outputs.version }}
+        uses: jakebailey/pyright-action@v2
+        with:
+          version: ${{ steps.pyright-version.outputs.version }}
+          no-comments: ${{ matrix.python-version != '3.12' || matrix.os != 'ubuntu-latest' }} # Only let one build post comments.
+          working-directory: ./python
