@@ -17,6 +17,7 @@ classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
@@ -41,8 +42,10 @@ dependencies = [
   "openai>=1.3.6",
   "python-dotenv>=1.0.0",
   "pytest",
+  "spotipy", # for examples
   "typing_extensions",
 ]
+
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
 test-cov = "coverage run -m pytest {args:tests}"
@@ -53,11 +56,6 @@ cov-report = [
 cov = [
   "test-cov",
   "cov-report",
-]
-
-[tool.hatch.envs.examples]
-extra-dependencies = [
-  "spotipy",
 ]
 
 [[tool.hatch.envs.all.matrix]]
