@@ -42,7 +42,9 @@ jobs:
       - name: Set up Hatch Environment
         run: |
           hatch env create
-          echo "$(hatch env find)/bin" >> $GITHUB_PATH
+          HATCH_ENV=$(hatch env find)
+          echo $HATCH_ENV
+          echo "$HATCH_ENV/bin" >> $GITHUB_PATH
 
       - name: Get Pyright Version
         id: pyright-version
@@ -51,7 +53,8 @@ jobs:
           echo $PYRIGHT_VERSION
           echo "version=$PYRIGHT_VERSION" >> $GITHUB_OUTPUT
 
-      - uses: jakebailey/pyright-action@v2
+      - name: Run pyright ${{ steps.pyright-version.outputs.version }}
+        uses: jakebailey/pyright-action@v2
         with:
           version: ${{ steps.pyright-version.outputs.version }}
           no-comments: ${{ matrix.python-version != '3.12' || matrix.os != 'ubuntu-latest' }} # Only let one build post comments.
