@@ -28,7 +28,8 @@ You can also build TypeChat from source:
 
 ```
 git clone https://github.com/microsoft/TypeChat
-cd typescript/TypeChat
+cd TypeChat/typescript
+npm install
 npm run build
 ```
 
