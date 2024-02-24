@@ -61,6 +61,7 @@ class GenericDeclarationish(Protocol):
 class GenericAliasish(Protocol):
     __origin__: object
     __args__: tuple[object, ...]
+    __name__: str
 
 
 class Annotatedish(Protocol):
@@ -135,7 +136,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
     # TODO: handle conflicting names
 
     declared_types: dict[object, TopLevelDeclarationNode | None] = {}
-    undeclared_types = {root_py_type}
+    undeclared_types: set[object] = {root_py_type}
     errors: list[str] = []
 
     def skip_annotations(py_type: object) -> object:

@@ -8,6 +8,10 @@ from typechat._internal.validator import TypeChatValidator
 T = TypeVar("T", covariant=True)
 
 class TypeChatTranslator(Generic[T]):
+    """
+    Represents an object that can translate natural language requests in JSON objects of the given type.
+    """
+
     model: TypeChatModel
     validator: TypeChatValidator[T]
     target_type: type[T]
@@ -16,15 +20,34 @@ class TypeChatTranslator(Generic[T]):
     _max_repair_attempts = 1
 
     def __init__(self, model: TypeChatModel, validator: TypeChatValidator[T], target_type: type[T]):
+        """
+        Args:
+            model: The associated `TypeChatLanguageModel`.
+            validator: The associated `TypeChatValidator[T]`.
+            target_type: A runtime type object describing `T` - the expected shape of JSON data.
+        """
         super().__init__()
         self.model = model
-        self.target_type = target_type
         self.validator = validator
+        self.target_type = target_type
+
         conversion_result = python_type_to_typescript_schema(target_type)
+        # TODO: Examples may not work here!
+        # if conversion_result.errors:
+        #     raise ValueError(f"Could not convert Python type to TypeScript schema: {conversion_result.errors}")
         self._type_name = conversion_result.typescript_type_reference
         self._schema_str = conversion_result.typescript_schema_str
 
     async def translate(self, request: str) -> Result[T]:
+        """
+        Translates a natural language request into an object of type `T`. If the JSON object returned by
+        the language model fails to validate, repair attempts will be made up until `_max_repair_attempts`.
+        The prompt for the subsequent attempts will include the diagnostics produced for the prior attempt.
+        This often helps produce a valid instance.
+
+        Args:
+            request: A natural language request.
+        """
         request = self._create_request_prompt(request)
         num_repairs_attempted = 0
         while True:

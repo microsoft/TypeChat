@@ -8,15 +8,28 @@ from typechat._internal.result import Failure, Result, Success
 T = TypeVar("T", covariant=True)
 
 class TypeChatValidator(Generic[T]):
+    """
+    Validates JSON text against a given Python type.
+    """
     _type: type[T]
     _adapted_type: pydantic.TypeAdapter[T]
 
     def __init__(self, py_type: type[T]):
+        """
+        Args:
+        
+            py_type: The schema type to validate against.
+        """
         super().__init__()
         self._type = py_type
         self._adapted_type = pydantic.TypeAdapter(py_type)
 
     def validate(self, json_text: str) -> Result[T]:
+        """
+        Validates the given JSON object according to the associated TypeScript schema. Returns a
+        `Success[T]` object containing the JSON object if validation was successful. Otherwise, returns
+        a `Failure` object with a `message` property describing the error.
+        """
         try:
             typed_dict = self._adapted_type.validate_json(json_text, strict=True)
             return Success(typed_dict)
