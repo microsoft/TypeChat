@@ -1,6 +1,6 @@
 from typing_extensions import Generic, TypeVar
 
-from typechat._internal.model import TypeChatModel
+from typechat._internal.model import TypeChatLanguageModel
 from typechat._internal.result import Failure, Result, Success
 from typechat._internal.ts_conversion import python_type_to_typescript_schema
 from typechat._internal.validator import TypeChatValidator
@@ -12,14 +12,14 @@ class TypeChatTranslator(Generic[T]):
     Represents an object that can translate natural language requests in JSON objects of the given type.
     """
 
-    model: TypeChatModel
+    model: TypeChatLanguageModel
     validator: TypeChatValidator[T]
     target_type: type[T]
     _type_name: str
     _schema_str: str
     _max_repair_attempts = 1
 
-    def __init__(self, model: TypeChatModel, validator: TypeChatValidator[T], target_type: type[T]):
+    def __init__(self, model: TypeChatLanguageModel, validator: TypeChatValidator[T], target_type: type[T]):
         """
         Args:
             model: The associated `TypeChatLanguageModel`.

@@ -10,7 +10,7 @@ if examples_path not in sys.path:
 import json
 
 from typing_extensions import TypeVar, Generic
-from typechat import Failure, TypeChatTranslator, TypeChatValidator, TypeChatModel
+from typechat import Failure, TypeChatTranslator, TypeChatValidator, TypeChatLanguageModel
 
 import examples.math.schema as math_schema
 from examples.math.program import (
@@ -29,7 +29,7 @@ class JsonPrintAgent(Generic[T]):
     _validator: TypeChatValidator[T]
     _translator: TypeChatTranslator[T]
 
-    def __init__(self, model: TypeChatModel, target_type: type[T]):
+    def __init__(self, model: TypeChatLanguageModel, target_type: type[T]):
         super().__init__()
         self._validator = TypeChatValidator(target_type)
         self._translator = TypeChatTranslator(model, self._validator, target_type)
@@ -47,7 +47,7 @@ class MathAgent:
     _validator: TypeChatProgramValidator
     _translator: TypeChatProgramTranslator
 
-    def __init__(self, model: TypeChatModel):
+    def __init__(self, model: TypeChatLanguageModel):
         super().__init__()
         self._validator = TypeChatProgramValidator()
         self._translator = TypeChatProgramTranslator(model, self._validator, math_schema.MathAPI)
@@ -95,7 +95,7 @@ class MusicAgent:
     _client_context: ClientContext | None
     _authentication_vals: dict[str, str | None]
 
-    def __init__(self, model: TypeChatModel, authentication_vals: dict[str, str | None]):
+    def __init__(self, model: TypeChatLanguageModel, authentication_vals: dict[str, str | None]):
         super().__init__()
         self._validator = TypeChatValidator(music_schema.PlayerActions)
         self._translator = TypeChatTranslator(model, self._validator, music_schema.PlayerActions)

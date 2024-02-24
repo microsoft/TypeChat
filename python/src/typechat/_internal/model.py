@@ -4,7 +4,7 @@ import openai
 from typechat._internal.result import Failure, Result, Success
 
 
-class TypeChatModel(Protocol):
+class TypeChatLanguageModel(Protocol):
     async def complete(self, input: str) -> Result[str]:
         """
         Represents a AI language model that can complete prompts.
@@ -17,7 +17,7 @@ class TypeChatModel(Protocol):
         ...
 
 
-class DefaultOpenAIModel(TypeChatModel):
+class DefaultOpenAIModel(TypeChatLanguageModel):
     model_name: str
     client: openai.AsyncOpenAI | openai.AsyncAzureOpenAI
 
@@ -41,7 +41,7 @@ class DefaultOpenAIModel(TypeChatModel):
         except Exception as e:
             return Failure(str(e))
 
-def create_language_model(vals: dict[str, str | None]) -> TypeChatModel:
+def create_language_model(vals: dict[str, str | None]) -> TypeChatLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
     chosen by a dictionary of variables (typically just `os.environ`).
@@ -58,7 +58,7 @@ def create_language_model(vals: dict[str, str | None]) -> TypeChatModel:
     Args:
         vals: A dictionary of variables. Typically just `os.environ`.
     """
-    model: TypeChatModel
+    model: TypeChatLanguageModel
     client: openai.AsyncOpenAI | openai.AsyncAzureOpenAI
 
     def required_var(name: str) -> str:

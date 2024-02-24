@@ -17,7 +17,7 @@ from typechat import (
     Failure,
     Result,
     Success,
-    TypeChatModel,
+    TypeChatLanguageModel,
     TypeChatValidator,
     TypeChatTranslator,
     python_type_to_typescript_schema,
@@ -149,7 +149,7 @@ class TypeChatProgramValidator(TypeChatValidator[JsonProgram]):
 class TypeChatProgramTranslator(TypeChatTranslator[JsonProgram]):
     _api_declaration_str: str
 
-    def __init__(self, model: TypeChatModel, validator: TypeChatProgramValidator, api_type: type):
+    def __init__(self, model: TypeChatLanguageModel, validator: TypeChatProgramValidator, api_type: type):
         super().__init__(model=model, validator=validator, target_type=api_type)
         # TODO: the conversion result here has errors!
         conversion_result = python_type_to_typescript_schema(api_type)
