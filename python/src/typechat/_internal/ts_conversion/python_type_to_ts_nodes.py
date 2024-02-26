@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 import inspect
 import typing
 import typing_extensions
@@ -135,8 +136,8 @@ _LIST_TYPES: set[object] = {
 def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTranslationResult:
     # TODO: handle conflicting names
 
-    declared_types: dict[object, TopLevelDeclarationNode | None] = {}
-    undeclared_types: set[object] = {root_py_type}
+    declared_types: OrderedDict[object, TopLevelDeclarationNode | None] = OrderedDict()
+    undeclared_types: OrderedDict[object, object] = OrderedDict({root_py_type: root_py_type}) # just a set, really
     errors: list[str] = []
 
     def skip_annotations(py_type: object) -> object:
@@ -158,7 +159,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
         if py_type_to_declare not in declared_types:
             if is_python_type_or_alias(py_type_to_declare):
-                undeclared_types.add(py_type_to_declare)
+                undeclared_types[py_type_to_declare] = py_type_to_declare
             elif not isinstance(py_type, TypeVar):
                 errors.append(f"Invalid usage of '{py_type}' as a type annotation.")
                 return AnyTypeReferenceNode
@@ -315,7 +316,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                 for base in get_original_bases(py_type)
                 if not(base is object or base in _KNOWN_SPECIAL_BASES or get_origin(base) in _KNOWN_GENERIC_SPECIAL_FORMS)
             ]
-            base_attributes: dict[str, set[object]] = {}
+            base_attributes: OrderedDict[str, set[object]] = OrderedDict()
             for base in raw_but_filtered_bases:
                 for prop, type_hint in get_type_hints(get_origin(base) or base, include_extras=True).items():
                     base_attributes.setdefault(prop, set()).add(type_hint)
@@ -381,7 +382,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         return result
 
     while undeclared_types:
-        py_type = undeclared_types.pop()
+        py_type = undeclared_types.popitem()[0]
         declared_types[py_type] = None
         declared_types[py_type] = declare_type(py_type)
 
