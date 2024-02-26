@@ -1,6 +1,4 @@
 from typing_extensions import Literal, NotRequired, TypedDict, Annotated, Doc
-from typechat import python_type_to_typescript_schema
-
 
 class UnknownText(TypedDict):
     """
