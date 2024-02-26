@@ -1,6 +1,5 @@
 
 from typing import Annotated
-
 from dataclasses import dataclass, field
 
 @dataclass

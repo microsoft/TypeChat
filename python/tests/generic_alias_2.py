@@ -1,6 +1,4 @@
 from typing import Literal, TypedDict, Generic, TypeVar
-
-from typechat import python_type_to_typescript_schema
 from typing_extensions import TypeAliasType
 
 T = TypeVar("T", covariant=True)
