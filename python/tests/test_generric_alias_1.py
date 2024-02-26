@@ -18,5 +18,5 @@ class Second(Generic[T], TypedDict):
 FirstOrSecond = TypeAliasType("FirstOrSecond", First[T] | Second[T], type_params=(T,))
 
 
-def test_generic_alias1(snapshot : Any):
+def test_generic_alias1(snapshot: Any):
     assert(python_type_to_typescript_schema(FirstOrSecond) == snapshot)

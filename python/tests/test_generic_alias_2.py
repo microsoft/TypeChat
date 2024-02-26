@@ -22,6 +22,6 @@ class Nested(TypedDict):
 
 
 
-def test_generic_alias1(snapshot : Any):
+def test_generic_alias1(snapshot: Any):
     assert(python_type_to_typescript_schema(Nested) == snapshot)
     
