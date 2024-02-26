@@ -1,6 +1,6 @@
 import json
 from typing_extensions import Any, Callable, Awaitable, TypedDict, Annotated
-from typechat import Failure, TypeChatValidator, TypeChatModel, TypeChatTranslator
+from typechat import Failure, TypeChatValidator, TypeChatLanguageModel, TypeChatTranslator
 
 
 class AgentInfo(TypedDict):
@@ -18,7 +18,7 @@ class TextRequestRouter:
     _validator: TypeChatValidator[TaskClassification]
     _translator: TypeChatTranslator[TaskClassification]
 
-    def __init__(self, model: TypeChatModel):
+    def __init__(self, model: TypeChatLanguageModel):
         super().__init__()
         self._validator = TypeChatValidator(TaskClassification)
         self._translator = TypeChatTranslator(model, self._validator, TaskClassification)

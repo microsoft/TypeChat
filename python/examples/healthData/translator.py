@@ -1,7 +1,7 @@
 import json
 from typing_extensions import TypeVar, Any, override, TypedDict, Literal
 
-from typechat import TypeChatValidator, TypeChatModel, TypeChatTranslator, Result, Failure
+from typechat import TypeChatValidator, TypeChatLanguageModel, TypeChatTranslator, Result, Failure
 
 from datetime import datetime
 
@@ -19,7 +19,7 @@ class TranslatorWithHistory(TypeChatTranslator[T]):
     _additional_agent_instructions: str
 
     def __init__(
-        self, model: TypeChatModel, validator: TypeChatValidator[T], target_type: type[T], additional_agent_instructions: str
+        self, model: TypeChatLanguageModel, validator: TypeChatValidator[T], target_type: type[T], additional_agent_instructions: str
     ):
         super().__init__(model=model, validator=validator, target_type=target_type)
         self._chat_history = []

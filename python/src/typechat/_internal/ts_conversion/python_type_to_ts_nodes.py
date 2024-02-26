@@ -62,6 +62,7 @@ class GenericDeclarationish(Protocol):
 class GenericAliasish(Protocol):
     __origin__: object
     __args__: tuple[object, ...]
+    __name__: str
 
 
 class Annotatedish(Protocol):
