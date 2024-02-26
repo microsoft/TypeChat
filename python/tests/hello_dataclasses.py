@@ -1,6 +1,5 @@
 
 from typing import Annotated
-from typechat import python_type_to_typescript_schema
 
 from dataclasses import dataclass, field
 
