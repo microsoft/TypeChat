@@ -48,6 +48,7 @@ from typechat._internal.ts_conversion.ts_type_nodes import (
     StringTypeReferenceNode,
     ThisTypeReferenceNode,
     TopLevelDeclarationNode,
+    TupleTypeNode,
     TypeAliasDeclarationNode,
     TypeNode,
     TypeParameterDeclarationNode,
@@ -225,8 +226,30 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                 if key_type_arg is not NumberTypeReferenceNode:
                     key_type_arg = StringTypeReferenceNode
                 return TypeReferenceNode(IdentifierNode("Record"), [key_type_arg, value_type_arg])
+            
+            if origin is tuple:
+                # Note that when the type is `tuple[()]`,
+                # `type_args` will be an empty tuple.
+                # Which is nice, because we don't have to special-case anything!
+                type_args = get_args(py_type)
 
-            # TODO: tuple
+                if Ellipsis in type_args:
+                    if len(type_args) != 2:
+                        errors.append(
+                            f"The tuple type '{py_type}' is ill-formed. Tuples with an ellipsis can only take the form 'tuple[SomeType, ...]'."
+                        )
+                        return ArrayTypeNode(AnyTypeReferenceNode)
+
+                    ellipsis_index = type_args.index(Ellipsis)
+                    if ellipsis_index != 1:
+                        errors.append(
+                            f"The tuple type '{py_type}' is ill-formed because the ellipsis (...) cannot be the first element."
+                        )
+                        return ArrayTypeNode(AnyTypeReferenceNode)
+                        
+                    return ArrayTypeNode(convert_to_type_node(type_args[0]))
+                    
+                return TupleTypeNode([convert_to_type_node(py_type_arg) for py_type_arg in type_args])
 
             if origin is Union or origin is UnionType:
                 type_node = [convert_to_type_node(py_type_arg) for py_type_arg in get_args(py_type)]
@@ -249,7 +272,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
         errors.append(f"'{py_type}' cannot be used as a type annotation.")
         return AnyTypeReferenceNode
-
+    
     def declare_property(name: str, py_annotation: type | TypeAliasType, is_typeddict_attribute: bool, optionality_default: bool):
         """
         Declare a property for a given type.
