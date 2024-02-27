@@ -26,34 +26,9 @@ from typechat import (
 T = TypeVar("T", covariant=True)
 
 
-program_schema_text = '''
-// A program consists of a sequence of function calls that are evaluated in order.
-export type Program = {
-    "@steps": FunctionCall[];
-}
+Expression: TypeAlias = "str | int | float | bool | None | dict[str, Expression] | list[Expression] | FunctionCall | ResultReference"
 
-// A function call specifies a function name and a list of argument expressions. Arguments may contain
-// nested function calls and result references.
-export type FunctionCall = {
-    // Name of the function
-    "@func": string;
-    // Arguments for the function, if any
-    "@args"?: Expression[];
-};
-
-// An expression is a JSON value, a function call, or a reference to the result of a preceding expression.
-export type Expression = JsonValue | FunctionCall | ResultReference;
-
-// A JSON value is a string, a number, a boolean, null, an object, or an array. Function calls and result
-// references can be nested in objects and arrays.
-export type JsonValue = string | number | boolean | null | { [x: string]: Expression } | Expression[];
-
-// A result reference represents the value of an expression from a preceding step.
-export type ResultReference = {
-    // Index of the previous expression in the "@steps" array
-    "@ref": number;
-};
-'''
+JsonProgram = TypedDict("JsonProgram", {"@steps": list["FunctionCall"]})
 
 
 ResultReference = TypedDict(
@@ -64,25 +39,27 @@ FunctionCall = TypedDict(
     "FunctionCall",
     {
         "@func": Annotated[str, Doc("Name of the function")],
-        "@args": NotRequired[Annotated[list["Expression"], Doc("Arguments for the function, if any")]],
+        "@args": NotRequired[Annotated[list[Expression], Doc("Arguments for the function, if any")]],
     },
 )
 
-JsonValue: TypeAlias = str | int | float | bool | None | dict[str, "Expression"] | list["Expression"]
-Expression: TypeAlias = JsonValue | FunctionCall | ResultReference
+translation_result = python_type_to_typescript_schema(JsonProgram)
+program_schema_text = translation_result.typescript_schema_str
+print(program_schema_text)
+print(translation_result.errors)
 
-JsonProgram = TypedDict("JsonProgram", {"@steps": list[FunctionCall]})
+JsonValue = str | int | float | bool | None | dict[str, "JsonValue"] | list["JsonValue"]
 
 async def evaluate_json_program(
     program: JsonProgram,
-    onCall: Callable[[str, Sequence[object]], Awaitable[JsonValue]]
-) -> Expression:
+    onCall: Callable[[str, Sequence[JsonValue]], Awaitable[JsonValue]]
+) -> JsonValue:
     results: list[JsonValue] = []
 
-    def evaluate_array(array: Sequence[Expression]) -> Awaitable[list[Expression]]:
+    def evaluate_array(array: Sequence[JsonValue]) -> Awaitable[list[JsonValue]]:
         return asyncio.gather(*[evaluate_expression(e) for e in array])
 
-    async def evaluate_expression(expr: Expression) -> JsonValue:
+    async def evaluate_expression(expr: JsonValue) -> JsonValue:
         match expr:
             case bool() | int() | float() | str() | None:
                 return expr
@@ -97,12 +74,12 @@ async def evaluate_json_program(
                 raise ValueError(f"'ref' value must be an integer, but was ${ref_value}")
 
             case { "@func": str(function_name) }:
-                args: list[Expression]
+                args: list[JsonValue]
                 match expr:
                     case { "@args": None }:
                         args = []
                     case { "@args": list() }:
-                        args = cast(list[Expression], expr["@args"]) # TODO
+                        args = cast(list[JsonValue], expr["@args"]) # TODO
                     case { "@args": _ }:
                         raise ValueError("Given an invalid value for '@args'.")
                     case _:
@@ -117,7 +94,7 @@ async def evaluate_json_program(
                 raise ValueError("This condition should never hit")
 
     for step in program["@steps"]:
-        results.append(await evaluate_expression(step))
+        results.append(await evaluate_expression(cast(JsonValue, step)))
 
     if len(results) > 0:
         return results[-1]
