@@ -19,12 +19,12 @@ class D(C[str], total=False):
     y: Required[Annotated[bool | None, "This comes from string metadata\nwithin an Annotated hint."]]
     z: Optional[list[int]]
     other: IndirectC
-    non_class: "nonclass"
+    non_class: "NonClass"
 
     multiple_metadata: Annotated[str, None, str, "This comes from later metadata.", int]
 
 
-nonclass = TypedDict("NonClass", {"a": int, "my-dict": dict[str, int]})
+NonClass = TypedDict("NonClass", {"a": int, "my-dict": dict[str, int]})
 
 
 class E(C[str]):
