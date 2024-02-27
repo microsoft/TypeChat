@@ -10,7 +10,6 @@
     "reportUninitializedInstanceVariable": "error",
     "reportUnnecessaryTypeIgnoreComment": "error",
     "reportUnusedCallResult": "none",
-    "pythonVersion": "3.11",
     "include": [
         "**/*",
     ],
