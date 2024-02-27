@@ -1,59 +1,78 @@
-import {Result, TypeChatLanguageModel, createJsonTranslator, TypeChatJsonTranslator} from "typechat";
+import {
+  Result,
+  TypeChatLanguageModel,
+  createJsonTranslator,
+  TypeChatJsonTranslator,
+} from "typechat";
+
+import { createTypeScriptJsonValidator } from "typechat/ts";
+import { HealthDataResponse } from "./healthDataSchema";
 
 type ChatMessage = {
-    source: "system" | "user" | "assistant";
-    body: object;
+  source: "system" | "user" | "assistant";
+  body: object;
 };
 
-export interface TranslatorWithHistory<T extends object> {
-    _chatHistory: ChatMessage[];
-    _maxPromptLength: number;
-    _additionalAgentInstructions: string;
-    _translator: TypeChatJsonTranslator<T>;
-    translate(request: string): Promise<Result<T>>;
+export interface TranslatorWithHistory {
+  _chatHistory: ChatMessage[];
+  _maxPromptLength: number;
+  _additionalAgentInstructions: string;
+  _translator: TypeChatJsonTranslator<HealthDataResponse>;
+  translate(request: string): Promise<Result<HealthDataResponse>>;
 }
 
-export function createHealthDataTranslator<T extends object>(model: TypeChatLanguageModel, schema: string, typename: string, additionalAgentInstructions: string): TranslatorWithHistory<T> {
-    const _chatHistory: ChatMessage[] = [];
-    const _maxPromptLength = 2048;
-    const _additionalAgentInstructions = additionalAgentInstructions;
-    
-    const _translator = createJsonTranslator<T>(model, schema, typename);
-    _translator.createRequestPrompt = createRequestPrompt;
-    
-    const customtranslator: TranslatorWithHistory<T> = {
-        _chatHistory,
-        _maxPromptLength,
-        _additionalAgentInstructions,
-        _translator,
-        translate,
-    };
+export function createHealthDataTranslator(
+  model: TypeChatLanguageModel,
+  schema: string,
+  typename: string,
+  additionalAgentInstructions: string
+): TranslatorWithHistory {
+  const _chatHistory: ChatMessage[] = [];
+  const _maxPromptLength = 2048;
+  const _additionalAgentInstructions = additionalAgentInstructions;
+  const validator = createTypeScriptJsonValidator<HealthDataResponse>(
+    schema,
+    "HealthDataResponse"
+  );
+  const _translator = createJsonTranslator(model, validator);
+  _translator.createRequestPrompt = createRequestPrompt;
 
-    return customtranslator;
+  const customtranslator: TranslatorWithHistory = {
+    _chatHistory,
+    _maxPromptLength,
+    _additionalAgentInstructions,
+    _translator,
+    translate,
+  };
 
-    async function translate(request: string): Promise<Result<T>> {
-        const response = await _translator.translate(request);
-        if (response.success) {
-            _chatHistory.push({ source: "assistant", body: response.data });
-        }
-        return response;
+  return customtranslator;
 
+  async function translate(
+    request: string
+  ): Promise<Result<HealthDataResponse>> {
+    const response = await _translator.translate(request);
+    if (response.success) {
+      _chatHistory.push({ source: "assistant", body: response.data });
     }
+    return response;
+  }
 
-    function createRequestPrompt(intent: string): string {
-        // TODO: drop history entries if we exceed the max_prompt_length
-        const historyStr = JSON.stringify(_chatHistory, undefined, 2);
-        
-        const now = new Date();
+  function createRequestPrompt(intent: string): string {
+    // TODO: drop history entries if we exceed the max_prompt_length
+    const historyStr = JSON.stringify(_chatHistory, undefined, 2);
 
-        const prompt = `
+    const now = new Date();
+
+    const prompt = `
 user: You are a service that translates user requests into JSON objects of type "${typename}" according to the following TypeScript definitions:
 '''
 ${schema}
 '''
 
 user:
-Use precise date and times RELATIVE TO CURRENT DATE: ${now.toLocaleDateString()} CURRENT TIME: ${now.toTimeString().split(' ')[0]}
+Use precise date and times RELATIVE TO CURRENT DATE: ${now.toLocaleDateString()} CURRENT TIME: ${
+      now.toTimeString().split(" ")[0]
+    }
 Also turn ranges like next week and next month into precise dates
 
 user:
@@ -71,6 +90,6 @@ ${intent}
 The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
 """
 `;
-        return prompt;
-    }
+    return prompt;
+  }
 }

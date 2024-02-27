@@ -3,7 +3,6 @@ import path from "path";
 import dotenv from "dotenv";
 import { createHealthDataTranslator } from "./translator";
 import { createLanguageModel, processRequests } from "typechat";
-import { HealthDataResponse } from "./healthDataSchema";
 
 // TODO: use local .env file.
 dotenv.config({ path: path.join(__dirname, "../../../.env") });
@@ -20,32 +19,38 @@ Always return a response:
 `;
 
 const model = createLanguageModel(process.env);
-const schema = fs.readFileSync(path.join(__dirname, "healthDataSchema.ts"), "utf8");
-const translator = createHealthDataTranslator<HealthDataResponse>(model, schema, "HealthDataResponse",
-                        healthInstructions);
+const schema = fs.readFileSync(
+  path.join(__dirname, "healthDataSchema.ts"),
+  "utf8"
+);
+const translator = createHealthDataTranslator(
+  model,
+  schema,
+  "HealthDataResponse",
+  healthInstructions
+);
 
 // Process requests interactively or from the input file specified on the command line
 processRequests("🤧> ", process.argv[2], async (request) => {
-    const response = await translator.translate(request);
-    if (!response.success) {
-        console.log("Translation Failed ❌");
-        console.log(`Context: ${response.message}`);
-    }
-    else {
-        const healthData = response.data;
-        console.log("Translation Succeeded! ✅\n");
-        console.log("JSON View");
-        console.log(JSON.stringify(healthData, undefined, 2));
+  const response = await translator.translate(request);
+  if (!response.success) {
+    console.log("Translation Failed ❌");
+    console.log(`Context: ${response.message}`);
+  } else {
+    const healthData = response.data;
+    console.log("Translation Succeeded! ✅\n");
+    console.log("JSON View");
+    console.log(JSON.stringify(healthData, undefined, 2));
 
-        const message = healthData.message;
-        const notTranslated = healthData.notTranslated;
+    const message = healthData.message;
+    const notTranslated = healthData.notTranslated;
 
-        if (message) {
-            console.log(`\n📝: ${message}`);
-        }
-            
-        if (notTranslated) {
-            console.log(`\n🤔: I did not understand\n ${notTranslated}`)
-        }
+    if (message) {
+      console.log(`\n📝: ${message}`);
     }
+
+    if (notTranslated) {
+      console.log(`\n🤔: I did not understand\n ${notTranslated}`);
+    }
+  }
 });
