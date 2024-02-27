@@ -1,9 +1,8 @@
-from typing import Annotated, Literal, NotRequired, Optional, Required, Self, TypedDict, TypeVar, Generic
+from typing import Annotated, Literal, NotRequired, Optional, Required, Self, TypedDict, TypeVar, Generic, Any
 from typing_extensions import TypeAliasType
 from typechat import python_type_to_typescript_schema
 
 T = TypeVar("T", covariant=True)
-
 
 class C(Generic[T], TypedDict):
     "This is a generic class named C."
@@ -37,12 +36,5 @@ class E(C[str]):
 D_or_E = TypeAliasType("D_or_E", D | E)
 
 
-result = python_type_to_typescript_schema(D_or_E)
-
-print(f"// Entry point is: '{result.typescript_type_reference}'")
-print("// TypeScript Schema:\n")
-print(result.typescript_schema_str)
-if result.errors:
-    print("// Errors:")
-    for err in result.errors:
-        print(f"// - {err}\n")
+def test_generic_alias1(snapshot: Any):
+    assert(python_type_to_typescript_schema(D_or_E) == snapshot)

@@ -44,6 +44,7 @@ dependencies = [
   "pytest",
   "spotipy", # for examples
   "typing_extensions",
+  "syrupy",
 ]
 
 [tool.hatch.envs.default.scripts]

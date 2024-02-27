@@ -1,8 +1,7 @@
-
+from typing_extensions import Any
 from typing import Annotated
-from typechat import python_type_to_typescript_schema
-
 from dataclasses import dataclass, field
+from typechat import python_type_to_typescript_schema
 
 @dataclass
 class Options:
@@ -26,12 +25,5 @@ class Response:
         print(f"{self.attr_1=}")
 
 
-result = python_type_to_typescript_schema(Response)
-
-print(f"// Entry point is: '{result.typescript_type_reference}'")
-print("// TypeScript Schema:\n")
-print(result.typescript_schema_str)
-if result.errors:
-    print("// Errors:")
-    for err in result.errors:
-        print(f"// - {err}\n")
+def test_data_classes(snapshot: Any):
+    assert(python_type_to_typescript_schema(Response) == snapshot)

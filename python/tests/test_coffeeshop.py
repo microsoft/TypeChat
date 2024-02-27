@@ -1,7 +1,5 @@
-from typing_extensions import Literal, NotRequired, TypedDict, Annotated, Doc
-
+from typing_extensions import Literal, NotRequired, TypedDict, Annotated, Doc, Any
 from typechat import python_type_to_typescript_schema
-
 
 class UnknownText(TypedDict):
     """
@@ -141,12 +139,6 @@ class Cart(TypedDict):
     type: Literal["Cart"]
     items: list[LineItem | UnknownText]
 
-result = python_type_to_typescript_schema(Cart)
 
-print(f"// Entry point is: '{result.typescript_type_reference}'")
-print("// TypeScript Schema:\n")
-print(result.typescript_schema_str)
-if result.errors:
-    print("// Errors:")
-    for err in result.errors:
-        print(f"// - {err}\n")
+def test_coffeeshop_schema(snapshot: Any):
+    assert(python_type_to_typescript_schema(Cart) == snapshot)

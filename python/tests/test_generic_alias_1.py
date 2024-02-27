@@ -1,6 +1,5 @@
+from typing_extensions import TypeAliasType, Any
 from typing import Literal, TypedDict, TypeVar, Generic
-from typing_extensions import TypeAliasType
-
 from typechat import python_type_to_typescript_schema
 
 T = TypeVar("T", covariant=True)
@@ -18,12 +17,6 @@ class Second(Generic[T], TypedDict):
 
 FirstOrSecond = TypeAliasType("FirstOrSecond", First[T] | Second[T], type_params=(T,))
 
-result = python_type_to_typescript_schema(FirstOrSecond)
 
-print(f"// Entry point is: '{result.typescript_type_reference}'")
-print("// TypeScript Schema:\n")
-print(result.typescript_schema_str)
-if result.errors:
-    print("// Errors:")
-    for err in result.errors:
-        print(f"// - {err}\n")
+def test_generic_alias1(snapshot: Any):
+    assert(python_type_to_typescript_schema(FirstOrSecond) == snapshot)
