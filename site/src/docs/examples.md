@@ -3,7 +3,7 @@ layout: doc-page
 title: Examples
 ---
 
-To see TypeChat in action, check out the examples found in [`/examples`](https://github.com/microsoft/TypeChat/tree/main/examples).
+To see TypeChat in action, check out the examples found in [`/typescript/examples`](https://github.com/microsoft/TypeChat/tree/main/typescript/examples).
 
 Each example shows how TypeChat handles natural language input, and maps to validated JSON as output. Most example inputs run on both GPT 3.5 and GPT 4.
 We are working to reproduce outputs with other models.
@@ -13,12 +13,12 @@ We recommend reading each example in the following order.
 
 | Name | Description |
 | ---- | ----------- |
-| [Sentiment](https://github.com/microsoft/TypeChat/tree/main/examples/sentiment) | A sentiment classifier which categorizes user input as negative, neutral, or positive. This is TypeChat's "hello world!" |
-| [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/examples/coffeeShop) | An intelligent agent for a coffee shop. This sample translates user intent into a list of coffee order items.
-| [Calendar](https://github.com/microsoft/TypeChat/tree/main/examples/calendar) | An intelligent scheduler. This sample translates user intent into a sequence of actions to modify a calendar. |
-| [Restaurant](https://github.com/microsoft/TypeChat/tree/main/examples/restaurant) | An intelligent agent for taking orders at a restaurant. Similar to the coffee shop example, but uses a more complex schema to model more complex linguistic input. The prose files illustrate the line between simpler and more advanced language models in handling compound sentences, distractions, and corrections. This example also shows how we can use TypeScript to provide a user intent summary. |
-| [Math](https://github.com/microsoft/TypeChat/tree/main/examples/math) | Translate calculations into simple programs given an API that can perform the 4 basic mathematical operators. This example highlights TypeChat's program generation capabilities. |
-| [Music](https://github.com/microsoft/TypeChat/tree/main/examples/music) | An app for playing music, creating playlists, etc. on Spotify through natural language. Each user intent is translated into a series of actions in JSON which correspond to a simple dataflow program, where each step can consume data produced from previous step. |
+| [Sentiment](https://github.com/microsoft/TypeChat/tree/main/typescript/examples/sentiment) | A sentiment classifier which categorizes user input as negative, neutral, or positive. This is TypeChat's "hello world!" |
+| [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/typescript/examples/coffeeShop) | An intelligent agent for a coffee shop. This sample translates user intent into a list of coffee order items.
+| [Calendar](https://github.com/microsoft/TypeChat/tree/main/typescript/examples/calendar) | An intelligent scheduler. This sample translates user intent into a sequence of actions to modify a calendar. |
+| [Restaurant](https://github.com/microsoft/TypeChat/tree/main/typescript/examples/restaurant) | An intelligent agent for taking orders at a restaurant. Similar to the coffee shop example, but uses a more complex schema to model more complex linguistic input. The prose files illustrate the line between simpler and more advanced language models in handling compound sentences, distractions, and corrections. This example also shows how we can use TypeScript to provide a user intent summary. |
+| [Math](https://github.com/microsoft/TypeChat/tree/main/typescript/examples/math) | Translate calculations into simple programs given an API that can perform the 4 basic mathematical operators. This example highlights TypeChat's program generation capabilities. |
+| [Music](https://github.com/microsoft/TypeChat/tree/main/typescript/examples/music) | An app for playing music, creating playlists, etc. on Spotify through natural language. Each user intent is translated into a series of actions in JSON which correspond to a simple dataflow program, where each step can consume data produced from previous step. |
 
 ## Step 1: Configure development environment
 
@@ -94,7 +94,7 @@ AZURE_OPENAI_API_KEY=...
 
 ## Step 4: Run the examples
 
-Examples can be found in the `examples` directory.
+Examples can be found in the `typescript/examples` directory.
 
 To run an example interactively, type `node ./dist/main.js` from the example's directory and enter requests when prompted. Type `quit` or `exit` to end the session. You can also open in VS Code the selected example's directory and press <kbd>F5</kbd> to launch it in debug mode.
 
