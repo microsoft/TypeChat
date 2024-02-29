@@ -47,7 +47,7 @@ export interface TypeChatJsonTranslator<T extends object> {
      * `Success<T>` for the given instance, but an application can assign a new function that implements any
      * additional validation.
      * @param instance The instance to validate.
-     * @returns A `Success<T>` with the final validated instance, or an `Error` explaning the validation failure.
+     * @returns A `Success<T>` with the final validated instance, or an `Error` explaining the validation failure.
      */
     validateInstance(instance: T): Result<T>;
     /**
