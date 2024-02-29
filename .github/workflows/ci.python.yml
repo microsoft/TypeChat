@@ -57,5 +57,6 @@ jobs:
         uses: jakebailey/pyright-action@v2
         with:
           version: ${{ steps.pyright-version.outputs.version }}
+          python-version: ${{ matrix.python-version}}
           annotate: ${{ matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest' }} # Only let one build post comments.
           working-directory: ./python
