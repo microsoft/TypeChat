@@ -1,11 +1,10 @@
 import asyncio
 from types import TracebackType
-from typing_extensions import AsyncContextManager, Literal, Protocol, Self, TypedDict, cast
-
-import httpx
+from typing_extensions import AsyncContextManager, Literal, Protocol, Self, TypedDict, cast, override
 
 from typechat._internal.result import Failure, Result, Success
 
+import httpx
 
 class TypeChatLanguageModel(Protocol):
     async def complete(self, prompt: str) -> Result[str]:
@@ -50,6 +49,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         self.default_params = default_params
         self._async_client = httpx.AsyncClient()
 
+    @override
     async def complete(self, prompt: str) -> Success[str] | Failure:
         headers = {
             "Content-Type": "application/json",
