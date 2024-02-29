@@ -20,5 +20,3 @@ __all__ = [
     "create_language_model",
     "process_requests"
 ]
-
-type Test = int
