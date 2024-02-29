@@ -44,6 +44,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
     _retry_pause_seconds: float = 1.0
 
     def __init__(self, url: str, headers: dict[str, str], default_params: dict[str, str]):
+        super().__init__()
         self.url = url
         self.headers = headers
         self.default_params = default_params
@@ -86,9 +87,11 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
             await asyncio.sleep(self._retry_pause_seconds)
             retry_count += 1
 
+    @override
     async def __aenter__(self) -> Self:
         return self
 
+    @override
     async def __aexit__(self, __exc_type: type[BaseException] | None, __exc_value: BaseException | None, __traceback: TracebackType | None) -> bool | None:
         await self._async_client.aclose()
 
