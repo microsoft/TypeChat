@@ -1,6 +1,6 @@
 from typing_extensions import Generic, TypeVar
 
-from typechat._internal.model import TypeChatLanguageModel
+from typechat._internal.model import PromptSection, TypeChatLanguageModel
 from typechat._internal.result import Failure, Result, Success
 from typechat._internal.ts_conversion import python_type_to_typescript_schema
 from typechat._internal.validator import TypeChatValidator
@@ -43,10 +43,11 @@ class TypeChatTranslator(Generic[T]):
         if _raise_on_schema_errors and conversion_result.errors:
             error_text = "".join(f"\n- {error}" for error in conversion_result.errors)
             raise ValueError(f"Could not convert Python type to TypeScript schema: \n{error_text}")
+
         self._type_name = conversion_result.typescript_type_reference
         self._schema_str = conversion_result.typescript_schema_str
 
-    async def translate(self, request: str) -> Result[T]:
+    async def translate(self, request: str, *, prompt_preamble: str | list[PromptSection] | None = None) -> Result[T]:
         """
         Translates a natural language request into an object of type `T`. If the JSON object returned by
         the language model fails to validate, repair attempts will be made up until `_max_repair_attempts`.
@@ -55,11 +56,22 @@ class TypeChatTranslator(Generic[T]):
 
         Args:
             request: A natural language request.
+            prompt_preamble: An optional string or list of prompt sections to prepend to the generated prompt.\
+                             If a string is given, it is converted to a single "user" role prompt section.
         """
         request = self._create_request_prompt(request)
+
+        prompt: str | list[PromptSection]
+        if prompt_preamble is None:
+            prompt = request
+        else:
+            if isinstance(prompt_preamble, str):
+                prompt_preamble = [{"role": "user", "content": prompt_preamble}]
+            prompt = [*prompt_preamble, {"role": "user", "content": request}]
+
         num_repairs_attempted = 0
         while True:
-            completion_response = await self.model.complete(request)
+            completion_response = await self.model.complete(prompt)
             if isinstance(completion_response, Failure):
                 return completion_response
 
