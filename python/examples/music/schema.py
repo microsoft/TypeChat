@@ -109,7 +109,7 @@ class ListDevicesAction(TypedDict):
     parameters: EmptyParameters
 
 
-class SelectDecviceActionParameters(TypedDict):
+class SelectDeviceActionParameters(TypedDict):
     keyword: Annotated[str, Doc("keyword to match against device name")]
 
 
@@ -119,7 +119,7 @@ class SelectDeviceAction(TypedDict):
     """
 
     actionName: Literal["selectDevice"]
-    parameters: SelectDecviceActionParameters
+    parameters: SelectDeviceActionParameters
 
 
 class SelectVolumeActionParameters(TypedDict):

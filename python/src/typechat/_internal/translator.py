@@ -19,7 +19,14 @@ class TypeChatTranslator(Generic[T]):
     _schema_str: str
     _max_repair_attempts = 1
 
-    def __init__(self, model: TypeChatLanguageModel, validator: TypeChatValidator[T], target_type: type[T]):
+    def __init__(
+        self,
+        model: TypeChatLanguageModel,
+        validator: TypeChatValidator[T],
+        target_type: type[T],
+        *, # keyword-only parameters follow
+        _raise_on_schema_errors: bool = True,
+    ):
         """
         Args:
             model: The associated `TypeChatLanguageModel`.
@@ -32,9 +39,10 @@ class TypeChatTranslator(Generic[T]):
         self.target_type = target_type
 
         conversion_result = python_type_to_typescript_schema(target_type)
-        # TODO: Examples may not work here!
-        # if conversion_result.errors:
-        #     raise ValueError(f"Could not convert Python type to TypeScript schema: {conversion_result.errors}")
+
+        if _raise_on_schema_errors and conversion_result.errors:
+            error_text = "".join(f"\n- {error}" for error in conversion_result.errors)
+            raise ValueError(f"Could not convert Python type to TypeScript schema: \n{error_text}")
         self._type_name = conversion_result.typescript_type_reference
         self._schema_str = conversion_result.typescript_schema_str
 
