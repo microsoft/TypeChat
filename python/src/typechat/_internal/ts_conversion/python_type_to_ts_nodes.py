@@ -139,6 +139,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
     declared_types: OrderedDict[object, TopLevelDeclarationNode | None] = OrderedDict()
     undeclared_types: OrderedDict[object, object] = OrderedDict({root_py_type: root_py_type}) # just a set, really
+    used_names: dict[str, type | TypeAliasType] = {}
     errors: list[str] = []
 
     def skip_annotations(py_type: object) -> object:
@@ -226,7 +227,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                 if key_type_arg is not NumberTypeReferenceNode:
                     key_type_arg = StringTypeReferenceNode
                 return TypeReferenceNode(IdentifierNode("Record"), [key_type_arg, value_type_arg])
-            
+
             if origin is tuple:
                 # Note that when the type is `tuple[()]`,
                 # `type_args` will be an empty tuple.
@@ -246,9 +247,9 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                             f"The tuple type '{py_type}' is ill-formed because the ellipsis (...) cannot be the first element."
                         )
                         return ArrayTypeNode(AnyTypeReferenceNode)
-                        
+
                     return ArrayTypeNode(convert_to_type_node(type_args[0]))
-                    
+
                 return TupleTypeNode([convert_to_type_node(py_type_arg) for py_type_arg in type_args])
 
             if origin is Union or origin is UnionType:
@@ -272,7 +273,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
         errors.append(f"'{py_type}' cannot be used as a type annotation.")
         return AnyTypeReferenceNode
-    
+
     def declare_property(name: str, py_annotation: type | TypeAliasType, is_typeddict_attribute: bool, optionality_default: bool):
         """
         Declare a property for a given type.
@@ -314,6 +315,13 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
         type_annotation = convert_to_type_node(skip_annotations(current_annotation))
         return PropertyDeclarationNode(name, optional, comment or "", type_annotation)
+
+    def reserve_name(val: type | TypeAliasType):
+        type_name = val.__name__
+        if type_name in used_names:
+            errors.append(f"Cannot create a schema using two types with the same name. {type_name} conflicts between {val} and {used_names[type_name]}")
+        else:
+            used_names[type_name] = val
 
     def declare_type(py_type: object):
         if (is_typeddict(py_type) or is_dataclass(py_type)) and isinstance(py_type, type):
@@ -368,12 +376,18 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                     prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional)
                     properties.append(prop)
 
+            reserve_name(py_type)
             return InterfaceDeclarationNode(py_type.__name__, type_params, comment, bases, properties)
         if isinstance(py_type, type):
-            errors.append("Currently only TypedDict, dataclass, and type alias declarations are supported in TypeChat.")
-            return InterfaceDeclarationNode(py_type.__name__, None, f"Comment for {py_type.__name__}.", None, [])
+            errors.append(f"{py_type.__name__} was not a TypedDict, dataclass, or type alias, and cannot be translated.")
+
+            reserve_name(py_type)
+
+            return InterfaceDeclarationNode(py_type.__name__, None, "", None, [])
         if isinstance(py_type, TypeAliasType):
             type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
+
+            reserve_name(py_type)
 
             return TypeAliasDeclarationNode(
                 py_type.__name__,
