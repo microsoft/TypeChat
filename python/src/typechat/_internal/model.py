@@ -6,8 +6,17 @@ from typechat._internal.result import Failure, Result, Success
 
 import httpx
 
+class PromptSection(TypedDict):
+    """
+    Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for
+    prompts it generates and the "assistant" role for previous LLM responses (which will be part of
+    the prompt in repair attempts). TypeChat currently doesn't use the "system" role.
+    """
+    role: Literal["system", "user", "assistant"]
+    content: str
+
 class TypeChatLanguageModel(Protocol):
-    async def complete(self, prompt: str) -> Result[str]:
+    async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
         """
         Represents a AI language model that can complete prompts.
         
@@ -17,15 +26,6 @@ class TypeChatLanguageModel(Protocol):
         The `create_language_model` function can create an instance.
         """
         ...
-
-class _PromptSection(TypedDict):
-    """
-    Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for
-    prompts it generates and the "assistant" role for previous LLM responses (which will be part of
-    the prompt in repair attempts). TypeChat currently doesn't use the "system" role.
-    """
-    role: Literal["system", "user", "assistant"]
-    content: str
 
 _TRANSIENT_ERROR_CODES = [
     429,
@@ -51,15 +51,18 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         self._async_client = httpx.AsyncClient()
 
     @override
-    async def complete(self, prompt: str) -> Success[str] | Failure:
+    async def complete(self, prompt: str | list[PromptSection]) -> Success[str] | Failure:
         headers = {
             "Content-Type": "application/json",
             **self.headers,
         }
-        messages = [{"role": "user", "content": prompt}]
+
+        if isinstance(prompt, str):
+            prompt = [{"role": "user", "content": prompt}]
+
         body = {
             **self.default_params,
-            "messages": messages,
+            "messages": prompt,
             "temperature": 0.0,
             "n": 1,
         }
@@ -73,7 +76,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                 )
                 if response.is_success:
                     json_result = cast(
-                        dict[Literal["choices"], list[dict[Literal["message"], _PromptSection]]],
+                        dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
                         response.json()
                     )
                     return Success(json_result["choices"][0]["message"]["content"] or "")
