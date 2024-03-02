@@ -1,4 +1,5 @@
 import {Result, TypeChatLanguageModel, createJsonTranslator, TypeChatJsonTranslator} from "typechat";
+import { createTypeScriptJsonValidator } from "../../../dist/ts";
 
 type ChatMessage = {
     source: "system" | "user" | "assistant";
@@ -18,7 +19,8 @@ export function createHealthDataTranslator<T extends object>(model: TypeChatLang
     const _maxPromptLength = 2048;
     const _additionalAgentInstructions = additionalAgentInstructions;
     
-    const _translator = createJsonTranslator<T>(model, schema, typename);
+    const validator = createTypeScriptJsonValidator<T>(schema, typename);
+    const _translator = createJsonTranslator(model, validator);
     _translator.createRequestPrompt = createRequestPrompt;
     
     const customtranslator: TranslatorWithHistory<T> = {
