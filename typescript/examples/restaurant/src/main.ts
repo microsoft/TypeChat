@@ -1,9 +1,11 @@
+import assert from "assert";
+import dotenv from "dotenv";
+import findConfig from "find-config";
 import fs from "fs";
 import path from "path";
-import dotenv from "dotenv";
 import {
-  createLanguageModel,
   createJsonTranslator,
+  createLanguageModel,
   processRequests,
 } from "typechat";
 import {
@@ -11,8 +13,9 @@ import {
 } from "typechat/ts";
 import { Order } from "./foodOrderViewSchema";
 
-// TODO: use local .env file.
-dotenv.config({ path: path.join(__dirname, "../../../.env") });
+const dotEnvPath = findConfig(".env");
+assert(dotEnvPath, ".env file not found!");
+dotenv.config({ path: dotEnvPath });
 
 const model = createLanguageModel(process.env);
 const viewSchema = fs.readFileSync(
