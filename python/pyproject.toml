@@ -46,7 +46,7 @@ path = "../.venv"
 dependencies = [
   "coverage[toml]>=6.5",
   "python-dotenv>=1.0.0",
-  "pytest>=8.1.0",
+  "pytest>=8.0.2",
   "syrupy>=4.6.1",
   "spotipy", # for examples
 ]
