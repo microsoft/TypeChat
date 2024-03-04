@@ -81,7 +81,7 @@ class TypeChatTranslator(Generic[T]):
             error_message: str
             if 0 <= first_curly < last_curly:
                 trimmed_response = text_response[first_curly:last_curly]
-                result = self.validator.validate(trimmed_response)
+                result = self.validator.validate_json_text(trimmed_response)
                 if isinstance(result, Success):
                     return result
                 error_message = result.message
