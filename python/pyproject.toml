@@ -36,6 +36,12 @@ Source = "https://github.com/microsoft/TypeChat"
 path = "src/typechat/__about__.py"
 
 [tool.hatch.envs.default]
+# While users can always look up the virtual environment
+# to select the right interpreter for their editor, often editors can
+# automatically pick up on a local `.venv` or at least hint towards using it.
+# The only catch is that this tends to only kick in at the workspace root.
+type = "virtual"
+path = "../.venv"
 
 dependencies = [
   "coverage[toml]>=6.5",
