@@ -39,7 +39,7 @@
     // Use 'postCreateCommand' to run commands after the container is created.
     "postCreateCommand": {
         "typescript - npm": "cd typescript; npm ci",
-        "python - hatch": "cd python; hatch config set dirs.env.virtual .hatch; hatch config update; hatch env create; npm ci",
+        "python - hatch": "cd python; hatch config set dirs.env.virtual .hatch; hatch config update; hatch env create",
         "python - npm": "cd python; npm ci"
     }
 
