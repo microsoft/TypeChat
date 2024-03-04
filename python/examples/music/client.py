@@ -266,12 +266,13 @@ async def handle_call(action: PlayerAction, context: ClientContext):
         case "selectDevice":
             deviceKeyword = action["parameters"]["keyword"].lower()
             devices = await context.service.devices()
+            devices = devices["devices"]
             target_device = next(
-                (d for d in devices if d.name.lower() == deviceKeyword or d.type.lower() == deviceKeyword), None # type: ignore
+                (d for d in devices if d["name"].lower() == deviceKeyword or d["type"].lower() == deviceKeyword), None
             )
             if target_device:
-                await context.service.transfer_playback(device_id=target_device.id) # type: ignore
-                print(f"Selected device {target_device.name} of type {target_device.type}") # type: ignore
+                await context.service.transfer_playback(device_id=target_device)
+                print(f"Selected device {target_device}")
         case "setVolume":
             new_volume = action["parameters"].get("newVolumeLevel", None)
             new_volume = max(0, min(new_volume, 100))

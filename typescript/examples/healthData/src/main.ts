@@ -1,12 +1,15 @@
+import assert from "assert";
+import dotenv from "dotenv";
+import findConfig from "find-config";
 import fs from "fs";
 import path from "path";
-import dotenv from "dotenv";
-import { createHealthDataTranslator } from "./translator";
 import { createLanguageModel, processRequests } from "typechat";
 import { HealthDataResponse } from "./healthDataSchema";
+import { createHealthDataTranslator } from "./translator";
 
-// TODO: use local .env file.
-dotenv.config({ path: path.join(__dirname, "../../../.env") });
+const dotEnvPath = findConfig(".env");
+assert(dotEnvPath, ".env file not found!");
+dotenv.config({ path: dotEnvPath });
 
 const healthInstructions = `
 Help me enter my health data step by step.

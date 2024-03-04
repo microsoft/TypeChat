@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-from typechat._internal.model import TypeChatLanguageModel, create_language_model
+from typechat._internal.model import PromptSection, TypeChatLanguageModel, create_language_model, create_openai_language_model, create_azure_openai_language_model
 from typechat._internal.result import Failure, Result, Success
 from typechat._internal.translator import TypeChatTranslator
 from typechat._internal.ts_conversion import python_type_to_typescript_schema
@@ -17,6 +17,9 @@ __all__ = [
     "Failure",
     "Result",
     "python_type_to_typescript_schema",
+    "PromptSection",
     "create_language_model",
-    "process_requests"
+    "create_openai_language_model",
+    "create_azure_openai_language_model",
+    "process_requests",
 ]

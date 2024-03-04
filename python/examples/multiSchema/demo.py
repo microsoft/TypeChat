@@ -17,23 +17,21 @@ import examples.coffeeShop.schema as coffeeShop
 import examples.sentiment.schema as sentiment
 
 
-async def handle_unknown(line: str):
+async def handle_unknown(_line: str):
     print("The input did not match any registered agents")
 
-
-vals = dotenv_values()
-model = create_language_model(vals)
-router = TextRequestRouter(model=model)
-
-
 async def main():
+    env_vals = dotenv_values()
+    model = create_language_model(env_vals)
+    router = TextRequestRouter(model=model)
+
     # register agents
     math_agent = MathAgent(model=model)
     router.register_agent(
         name="Math", description="Calculations using the four basic math operations", handler=math_agent.handle_request
     )
 
-    music_agent = MusicAgent(model=model, authentication_vals=vals)
+    music_agent = MusicAgent(model=model, authentication_vals=env_vals)
     await music_agent.authenticate()
     router.register_agent(
         name="Music Player",

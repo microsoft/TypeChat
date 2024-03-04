@@ -20,4 +20,4 @@ Sub-apps like HealthData and Plugins work best with GPT-4.
 
 # Usage
 
-Example prompts can be found in [`input.txt`](input.txt).
+Example prompts can be found in [`src/input.txt`](src/input.txt).

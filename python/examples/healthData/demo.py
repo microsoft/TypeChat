@@ -16,33 +16,33 @@ Always return a response:
 - At least respond with an OK message.
 
 """
-vals = dotenv_values()
-model = create_language_model(vals)
-validator = TypeChatValidator(health.HealthDataResponse)
-translator = TranslatorWithHistory(
-    model, validator, health.HealthDataResponse, additional_agent_instructions=health_instructions
-)
-
-
-async def request_handler(message: str):
-    result = await translator.translate(message)
-    if isinstance(result, Failure):
-        print(result.message)
-    else:
-        result = result.value
-        print(json.dumps(result, indent=2))
-
-        agent_message = result.get("message", "None")
-        not_translated = result.get("notTranslated", None)
-
-        if agent_message:
-            print(f"\n📝: {agent_message}")
-
-        if not_translated:
-            print(f"\n🤔: I did not understand\n {not_translated}")
-
 
 async def main():
+    env_vals = dotenv_values()
+    model = create_language_model(env_vals)
+    validator = TypeChatValidator(health.HealthDataResponse)
+    translator = TranslatorWithHistory(
+        model, validator, health.HealthDataResponse, additional_agent_instructions=health_instructions
+    )
+
+    async def request_handler(message: str):
+        result = await translator.translate(message)
+        if isinstance(result, Failure):
+            print(result.message)
+        else:
+            result = result.value
+            print(json.dumps(result, indent=2))
+
+            agent_message = result.get("message", "None")
+            not_translated = result.get("notTranslated", None)
+
+            if agent_message:
+                print(f"\n📝: {agent_message}")
+
+            if not_translated:
+                print(f"\n🤔: I did not understand\n {not_translated}")
+
+
     file_path = sys.argv[1] if len(sys.argv) == 2 else None
     await process_requests("💉💊🤧> ", file_path, request_handler)
 

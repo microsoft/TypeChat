@@ -1,12 +1,14 @@
-import path from "path";
+import assert from "assert";
 import dotenv from "dotenv";
-import { z } from "zod";
-import { createLanguageModel, createJsonTranslator, processRequests } from "typechat";
+import findConfig from "find-config";
+import { createJsonTranslator, createLanguageModel, processRequests } from "typechat";
 import { createZodJsonValidator } from "typechat/zod";
+import { z } from "zod";
 import { CoffeeShopSchema } from "./coffeeShopSchema";
 
-// TODO: use local .env file.
-dotenv.config({ path: path.join(__dirname, "../../../.env") });
+const dotEnvPath = findConfig(".env");
+assert(dotEnvPath, ".env file not found!");
+dotenv.config({ path: dotEnvPath });
 
 const model = createLanguageModel(process.env);
 const validator = createZodJsonValidator(CoffeeShopSchema, "Cart");

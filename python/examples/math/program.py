@@ -45,8 +45,7 @@ FunctionCall = TypedDict(
 
 translation_result = python_type_to_typescript_schema(JsonProgram)
 program_schema_text = translation_result.typescript_schema_str
-print(program_schema_text)
-print(translation_result.errors)
+
 
 JsonValue = str | int | float | bool | None | dict[str, "JsonValue"] | list["JsonValue"]
 
@@ -135,7 +134,7 @@ class TypeChatProgramTranslator(TypeChatTranslator[JsonProgram]):
     _api_declaration_str: str
 
     def __init__(self, model: TypeChatLanguageModel, validator: TypeChatProgramValidator, api_type: type):
-        super().__init__(model=model, validator=validator, target_type=api_type)
+        super().__init__(model=model, validator=validator, target_type=api_type, _raise_on_schema_errors = False)
         # TODO: the conversion result here has errors!
         conversion_result = python_type_to_typescript_schema(api_type)
         self._api_declaration_str = conversion_result.typescript_schema_str
