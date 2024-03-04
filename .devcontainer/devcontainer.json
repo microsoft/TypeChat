@@ -28,7 +28,7 @@
             ],
             "settings": {
                 // Force the editor to pick up on the right environment and interpreter.
-                "python.defaultInterpreterPath": "/workspaces/TypeChat/python/.hatch/typechat/bin/python3.12",
+                "python.defaultInterpreterPath": "/workspaces/TypeChat/.venv",
 
                 // Respect the paths of the interpreter.
                 "python.analysis.autoSearchPaths": false
@@ -40,7 +40,7 @@
     "postCreateCommand": {
         "site - npm": "cd site; npm ci",
         "typescript - npm": "cd typescript; npm ci",
-        "python - hatch": "cd python; hatch config set dirs.env.virtual .hatch; hatch config update; hatch env create",
+        "python - hatch": "cd python; hatch env create",
         "python - npm": "cd python; npm ci"
     }
 

@@ -24,6 +24,7 @@ classifiers = [
 dependencies = [
   "pydantic>=2.5.2",
   "httpx>=0.27.0",
+  "typing_extensions>=4.10.0",
 ]
 
 [project.urls]
@@ -35,14 +36,19 @@ Source = "https://github.com/microsoft/TypeChat"
 path = "src/typechat/__about__.py"
 
 [tool.hatch.envs.default]
+# While users can always look up the virtual environment
+# to select the right interpreter for their editor, often editors can
+# automatically pick up on a local `.venv` or at least hint towards using it.
+# The only catch is that this tends to only kick in at the workspace root.
+type = "virtual"
+path = "../.venv"
 
 dependencies = [
   "coverage[toml]>=6.5",
   "python-dotenv>=1.0.0",
-  "pytest",
+  "pytest>=8.0.2",
+  "syrupy>=4.6.1",
   "spotipy", # for examples
-  "typing_extensions",
-  "syrupy",
 ]
 
 [tool.hatch.envs.default.scripts]
