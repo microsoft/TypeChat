@@ -10,7 +10,7 @@ if examples_path not in sys.path:
 import json
 
 from typing_extensions import TypeVar, Generic
-from typechat import Failure, TypeChatTranslator, TypeChatValidator, TypeChatLanguageModel
+from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, TypeChatLanguageModel
 
 import examples.math.schema as math_schema
 from examples.math.program import (
@@ -27,12 +27,12 @@ T = TypeVar("T", covariant=True)
 
 class JsonPrintAgent(Generic[T]):
     _validator: TypeChatValidator[T]
-    _translator: TypeChatTranslator[T]
+    _translator: TypeChatJsonTranslator[T]
 
     def __init__(self, model: TypeChatLanguageModel, target_type: type[T]):
         super().__init__()
         self._validator = TypeChatValidator(target_type)
-        self._translator = TypeChatTranslator(model, self._validator, target_type)
+        self._translator = TypeChatJsonTranslator(model, self._validator, target_type)
 
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)
@@ -91,14 +91,14 @@ class MathAgent:
 
 class MusicAgent:
     _validator: TypeChatValidator[music_schema.PlayerActions]
-    _translator: TypeChatTranslator[music_schema.PlayerActions]
+    _translator: TypeChatJsonTranslator[music_schema.PlayerActions]
     _client_context: ClientContext | None
     _authentication_vals: dict[str, str | None]
 
     def __init__(self, model: TypeChatLanguageModel, authentication_vals: dict[str, str | None]):
         super().__init__()
         self._validator = TypeChatValidator(music_schema.PlayerActions)
-        self._translator = TypeChatTranslator(model, self._validator, music_schema.PlayerActions)
+        self._translator = TypeChatJsonTranslator(model, self._validator, music_schema.PlayerActions)
         self._authentication_vals = authentication_vals
         self._client_context = None
 

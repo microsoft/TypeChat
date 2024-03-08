@@ -4,14 +4,14 @@ import json
 import sys
 from dotenv import dotenv_values
 import schema as music
-from typechat import Failure, TypeChatTranslator, TypeChatValidator, create_language_model, process_requests
+from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
 from client import handle_call, get_client_context
 
 async def main():
     env_vals = dotenv_values()
     model = create_language_model(env_vals)
     validator = TypeChatValidator(music.PlayerActions)
-    translator = TypeChatTranslator(model, validator, music.PlayerActions)
+    translator = TypeChatJsonTranslator(model, validator, music.PlayerActions)
     player_context = await get_client_context(env_vals)
 
     async def request_handler(message: str):

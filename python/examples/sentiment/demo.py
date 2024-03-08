@@ -3,13 +3,13 @@ import asyncio
 import sys
 from dotenv import dotenv_values
 import schema as sentiment
-from typechat import Failure, TypeChatTranslator, TypeChatValidator, create_language_model, process_requests
+from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
 
 async def main():    
     env_vals = dotenv_values()
     model = create_language_model(env_vals)
     validator = TypeChatValidator(sentiment.Sentiment)
-    translator = TypeChatTranslator(model, validator, sentiment.Sentiment)
+    translator = TypeChatJsonTranslator(model, validator, sentiment.Sentiment)
 
     async def request_handler(message: str):
         result = await translator.translate(message)

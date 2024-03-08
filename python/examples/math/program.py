@@ -19,7 +19,7 @@ from typechat import (
     Success,
     TypeChatLanguageModel,
     TypeChatValidator,
-    TypeChatTranslator,
+    TypeChatJsonTranslator,
     python_type_to_typescript_schema,
 )
 
@@ -130,7 +130,7 @@ class TypeChatProgramValidator(TypeChatValidator[JsonProgram]):
         
 
 
-class TypeChatProgramTranslator(TypeChatTranslator[JsonProgram]):
+class TypeChatProgramTranslator(TypeChatJsonTranslator[JsonProgram]):
     _api_declaration_str: str
 
     def __init__(self, model: TypeChatLanguageModel, validator: TypeChatProgramValidator, api_type: type):

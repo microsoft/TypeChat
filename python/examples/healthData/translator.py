@@ -1,7 +1,7 @@
 import json
 from typing_extensions import TypeVar, Any, override, TypedDict, Literal
 
-from typechat import TypeChatValidator, TypeChatLanguageModel, TypeChatTranslator, Result, Failure, PromptSection
+from typechat import TypeChatValidator, TypeChatLanguageModel, TypeChatJsonTranslator, Result, Failure, PromptSection
 
 from datetime import datetime
 
@@ -13,7 +13,7 @@ class ChatMessage(TypedDict):
     body: Any
 
 
-class TranslatorWithHistory(TypeChatTranslator[T]):
+class TranslatorWithHistory(TypeChatJsonTranslator[T]):
     _chat_history: list[ChatMessage]
     _max_prompt_length: int
     _additional_agent_instructions: str

@@ -7,7 +7,7 @@ from typechat._internal.validator import TypeChatValidator
 
 T = TypeVar("T", covariant=True)
 
-class TypeChatTranslator(Generic[T]):
+class TypeChatJsonTranslator(Generic[T]):
     """
     Represents an object that can translate natural language requests in JSON objects of the given type.
     """

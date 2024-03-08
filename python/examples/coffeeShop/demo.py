@@ -5,13 +5,13 @@ import sys
 import schema as coffeeshop
 from dotenv import dotenv_values
 
-from typechat import Failure, TypeChatTranslator, TypeChatValidator, create_language_model, process_requests
+from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
 
 async def main():
     env_vals = dotenv_values()
     model = create_language_model(env_vals)
     validator = TypeChatValidator(coffeeshop.Cart)
-    translator = TypeChatTranslator(model, validator, coffeeshop.Cart)
+    translator = TypeChatJsonTranslator(model, validator, coffeeshop.Cart)
 
 
     async def request_handler(message: str):
