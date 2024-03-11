@@ -4,13 +4,13 @@ import json
 import sys
 from dotenv import dotenv_values
 import schema as calendar
-from typechat import Failure, TypeChatTranslator, TypeChatValidator, create_language_model, process_requests
+from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
 
 async def main():
     env_vals = dotenv_values()
     model = create_language_model(env_vals)
     validator = TypeChatValidator(calendar.CalendarActions)
-    translator = TypeChatTranslator(model, validator, calendar.CalendarActions)
+    translator = TypeChatJsonTranslator(model, validator, calendar.CalendarActions)
 
     async def request_handler(message: str):
         result = await translator.translate(message)

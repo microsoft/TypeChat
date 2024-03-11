@@ -23,18 +23,6 @@ class TypeChatValidator(Generic[T]):
         super().__init__()
         self._adapted_type = pydantic.TypeAdapter(py_type)
 
-    def validate_json_text(self, json_text: str) -> Result[T]:
-        """
-        Validates a string presumed to be JSON according to the associated schema type. Returns a
-        `Success[T]` object containing a corresponding object if validation was successful. Otherwise, returns
-        a `Failure` object with a `message` property describing the error.
-        """
-        try:
-            typed_dict = self._adapted_type.validate_json(json_text, strict=True)
-            return Success(typed_dict)
-        except pydantic.ValidationError as validation_error:
-            return _handle_error(validation_error)
-
     def validate_object(self, obj: object) -> Result[T]:
         """
         Validates the given Python object according to the associated schema type.

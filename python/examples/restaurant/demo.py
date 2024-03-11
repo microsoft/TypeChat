@@ -3,13 +3,13 @@ import json
 import sys
 from dotenv import dotenv_values
 import schema as restaurant
-from typechat import Failure, TypeChatTranslator, TypeChatValidator, create_language_model, process_requests
+from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
 
 async def main():
     env_vals = dotenv_values()
     model = create_language_model(env_vals)
     validator = TypeChatValidator(restaurant.Order)
-    translator = TypeChatTranslator(model, validator, restaurant.Order)
+    translator = TypeChatJsonTranslator(model, validator, restaurant.Order)
 
     async def request_handler(message: str):
         result = await translator.translate(message)

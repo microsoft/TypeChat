@@ -1,5 +1,7 @@
 from typing_extensions import Generic, TypeVar
 
+import pydantic_core
+
 from typechat._internal.model import PromptSection, TypeChatLanguageModel
 from typechat._internal.result import Failure, Result, Success
 from typechat._internal.ts_conversion import python_type_to_typescript_schema
@@ -7,7 +9,7 @@ from typechat._internal.validator import TypeChatValidator
 
 T = TypeVar("T", covariant=True)
 
-class TypeChatTranslator(Generic[T]):
+class TypeChatJsonTranslator(Generic[T]):
     """
     Represents an object that can translate natural language requests in JSON objects of the given type.
     """
@@ -81,7 +83,8 @@ class TypeChatTranslator(Generic[T]):
             error_message: str
             if 0 <= first_curly < last_curly:
                 trimmed_response = text_response[first_curly:last_curly]
-                result = self.validator.validate_json_text(trimmed_response)
+                pydantic_core.from_json(trimmed_response, allow_inf_nan=False, cache_strings=False)
+                result = self.validator.validate_object(trimmed_response)
                 if isinstance(result, Success):
                     return result
                 error_message = result.message

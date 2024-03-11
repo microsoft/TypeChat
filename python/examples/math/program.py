@@ -1,7 +1,6 @@
 from __future__ import annotations
 import asyncio
 from collections.abc import Sequence
-import json
 from typing import Any, TypeAlias, TypedDict, cast
 from typing_extensions import (
     TypeVar,
@@ -15,11 +14,10 @@ from typing_extensions import (
 
 from typechat import (
     Failure,
-    Result,
     Success,
     TypeChatLanguageModel,
     TypeChatValidator,
-    TypeChatTranslator,
+    TypeChatJsonTranslator,
     python_type_to_typescript_schema,
 )
 
@@ -111,17 +109,6 @@ class TypeChatProgramValidator(TypeChatValidator[JsonProgram]):
         super().__init__(py_type=cast(type[JsonProgram], Any))
 
     @override
-    def validate_json_text(self, json_text: str) -> Result[JsonProgram]:
-        # Pydantic is not able to validate JsonProgram instances. It fails with a recursion error.
-        # For JsonProgram, so we simply validate that it has a non-zero number of `@steps`.
-        # TODO: extend validations
-        parsed_obj = json.loads(json_text)
-        if "@steps" in parsed_obj and isinstance(parsed_obj["@steps"], Sequence):
-            return Success(parsed_obj)
-        else:
-            return Failure("This is not a valid program. The program must have an array of @steps")
-        
-    @override
     def validate_object(self, obj: Any) -> Success[JsonProgram] | Failure:
         if "@steps" in obj and isinstance(obj["@steps"], Sequence):
             return Success(obj)
@@ -130,7 +117,7 @@ class TypeChatProgramValidator(TypeChatValidator[JsonProgram]):
         
 
 
-class TypeChatProgramTranslator(TypeChatTranslator[JsonProgram]):
+class TypeChatProgramTranslator(TypeChatJsonTranslator[JsonProgram]):
     _api_declaration_str: str
 
     def __init__(self, model: TypeChatLanguageModel, validator: TypeChatProgramValidator, api_type: type):
