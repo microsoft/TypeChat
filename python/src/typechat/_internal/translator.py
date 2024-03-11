@@ -83,8 +83,8 @@ class TypeChatJsonTranslator(Generic[T]):
             error_message: str
             if 0 <= first_curly < last_curly:
                 trimmed_response = text_response[first_curly:last_curly]
-                pydantic_core.from_json(trimmed_response, allow_inf_nan=False, cache_strings=False)
-                result = self.validator.validate_object(trimmed_response)
+                parsed_response = pydantic_core.from_json(trimmed_response, allow_inf_nan=False, cache_strings=False)
+                result = self.validator.validate_object(parsed_response)
                 if isinstance(result, Success):
                     return result
                 error_message = result.message
