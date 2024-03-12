@@ -1,5 +1,4 @@
 import json
-import re
 from typing_extensions import assert_never
 
 from typechat._internal.ts_conversion.ts_type_nodes import (
