@@ -7,9 +7,9 @@ interface Derived extends C, C {
 }
 
 interface C {
-    "my_attr_2": number;
+    my_attr_2: number;
 }
 
 interface C {
-    "my_attr_1": string;
+    my_attr_1: string;
 }

@@ -22,9 +22,9 @@ interface D extends C<string> {
     y: boolean | null;
     z?: number[] | null;
     other?: IndirectC;
-    "non_class"?: NonClass;
+    non_class?: NonClass;
     // This comes from later metadata.
-    "multiple_metadata"?: string;
+    multiple_metadata?: string;
 }
 
 interface NonClass {
