@@ -1,4 +1,0 @@
-# serializer version: 1
-# name: test_generic_alias1
-  TypeScriptSchemaConversionResult(typescript_schema_str='type FirstOrSecond<T> = First<T> | Second<T>\n\ninterface Second<T> {\n    kind: "second";\n    "second_attr": T;\n}\n\ninterface First<T> {\n    kind: "first";\n    "first_attr": T;\n}\n', typescript_type_reference='FirstOrSecond', errors=[])
-# ---

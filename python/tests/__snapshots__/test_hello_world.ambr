@@ -1,4 +1,0 @@
-# serializer version: 1
-# name: test_generic_alias1
-  TypeScriptSchemaConversionResult(typescript_schema_str='type D_or_E = D | E\n\n// This is the definition of the class E.\ninterface E extends C<string> {\n    tag: "E";\n    next: this | null;\n}\n\n// This is a generic class named C.\ninterface C<T> {\n    x?: T;\n    c: C<number | null>;\n}\n\n// This is the definition of the class D.\ninterface D extends C<string> {\n    tag?: "D";\n    // This comes from string metadata\n    // within an Annotated hint.\n    y: boolean | null;\n    z?: number[] | null;\n    other?: IndirectC;\n    "non_class"?: NonClass;\n    // This comes from later metadata.\n    "multiple_metadata"?: string;\n}\n\ninterface NonClass {\n    a: number;\n    "my-dict": Record<string, number>;\n}\n\ntype IndirectC = C<number>\n', typescript_type_reference='D_or_E', errors=[])
-# ---

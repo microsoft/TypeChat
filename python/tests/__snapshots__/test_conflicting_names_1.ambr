@@ -1,4 +1,0 @@
-# serializer version: 1
-# name: test_conflicting_names_1
-  TypeScriptSchemaConversionResult(typescript_schema_str='interface Derived extends C, C {\n}\n\ninterface C {\n    "my_attr_2": number;\n}\n\ninterface C {\n    "my_attr_1": string;\n}\n', typescript_type_reference='Derived', errors=["Cannot create a schema using two types with the same name. C conflicts between <class 'tests.test_conflicting_names_1.a.<locals>.C'> and <class 'tests.test_conflicting_names_1.b.<locals>.C'>"])
-# ---
