@@ -1,7 +1,7 @@
 from typing import Any, TypedDict, cast
 
 from typechat import python_type_to_typescript_schema
-from .utilities import TypeScriptSchemaSnapshotExtension
+from .utilities import PyVersionedTypeScriptSchemaSnapshotExtension
 
 
 def a():
@@ -22,4 +22,4 @@ class Derived(A, B): # type: ignore
     pass
 
 def test_conflicting_names_1(snapshot: Any):
-    assert python_type_to_typescript_schema(cast(type, Derived)) == snapshot(extension_class=TypeScriptSchemaSnapshotExtension)
+    assert python_type_to_typescript_schema(cast(type, Derived)) == snapshot(extension_class=PyVersionedTypeScriptSchemaSnapshotExtension)
