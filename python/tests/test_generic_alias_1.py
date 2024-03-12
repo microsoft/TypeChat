@@ -1,6 +1,7 @@
 from typing_extensions import TypeAliasType, Any
 from typing import Literal, TypedDict, TypeVar, Generic
 from typechat import python_type_to_typescript_schema
+from .utilities import TypeScriptSchemaSnapshotExtension
 
 T = TypeVar("T", covariant=True)
 
@@ -19,4 +20,4 @@ FirstOrSecond = TypeAliasType("FirstOrSecond", First[T] | Second[T], type_params
 
 
 def test_generic_alias1(snapshot: Any):
-    assert(python_type_to_typescript_schema(FirstOrSecond) == snapshot)
+    assert(python_type_to_typescript_schema(FirstOrSecond) == snapshot(extension_class=TypeScriptSchemaSnapshotExtension))

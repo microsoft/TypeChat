@@ -1,5 +1,6 @@
 from typing_extensions import Literal, NotRequired, TypedDict, Annotated, Doc, Any
 from typechat import python_type_to_typescript_schema
+from .utilities import TypeScriptSchemaSnapshotExtension
 
 class UnknownText(TypedDict):
     """
@@ -141,4 +142,4 @@ class Cart(TypedDict):
 
 
 def test_coffeeshop_schema(snapshot: Any):
-    assert(python_type_to_typescript_schema(Cart) == snapshot)
+    assert(python_type_to_typescript_schema(Cart) == snapshot(extension_class=TypeScriptSchemaSnapshotExtension))

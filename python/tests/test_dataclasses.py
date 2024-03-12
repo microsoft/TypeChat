@@ -2,6 +2,7 @@ from typing_extensions import Any
 from typing import Annotated
 from dataclasses import dataclass, field
 from typechat import python_type_to_typescript_schema
+from .utilities import TypeScriptSchemaSnapshotExtension
 
 @dataclass
 class Options:
@@ -26,4 +27,4 @@ class Response:
 
 
 def test_data_classes(snapshot: Any):
-    assert(python_type_to_typescript_schema(Response) == snapshot)
+    assert(python_type_to_typescript_schema(Response) == snapshot(extension_class=TypeScriptSchemaSnapshotExtension))
