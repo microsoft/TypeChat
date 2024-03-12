@@ -104,7 +104,16 @@ _KNOWN_GENERIC_SPECIAL_FORMS: frozenset[Any] = frozenset(
     ]
 )
 
-_KNOWN_SPECIAL_BASES: frozenset[Any] = frozenset([typing.TypedDict, typing_extensions.TypedDict, Protocol])
+_KNOWN_SPECIAL_BASES: frozenset[Any] = frozenset([
+    typing.TypedDict,
+    typing_extensions.TypedDict,
+    Protocol,
+
+    # In older versions of Python, `__orig_bases__` will not be defined on `TypedDict`s
+    # derived from the built-in `typing` module (but they will from `typing_extensions`!).
+    # So `get_original_bases` will fetch `__bases__` which will map `TypedDict` to a plain `dict`.
+    dict,
+])
 
 
 @dataclass
