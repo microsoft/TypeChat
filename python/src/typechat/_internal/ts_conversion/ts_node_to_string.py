@@ -1,4 +1,5 @@
 import json
+import re
 from typing_extensions import assert_never
 
 from typechat._internal.ts_conversion.ts_type_nodes import (
@@ -64,12 +65,11 @@ def ts_type_to_str(type_node: TypeNode) -> str:
         #     raise NotImplementedError(f"Unhandled type {type(type_node)}")
     assert_never(type_node)
 
-
 def object_member_to_str(member: PropertyDeclarationNode | IndexSignatureDeclarationNode) -> str:
     match member:
         case PropertyDeclarationNode(name, is_optional, comment, annotation):
             comment = comment_to_str(comment, "    ")
-            if not name.isalnum():
+            if not name.isidentifier():
                 name = json.dumps(name)
             return f"{comment}    {name}{'?' if is_optional else ''}: {ts_type_to_str(annotation)};"
         case IndexSignatureDeclarationNode(key_type, value_type):
