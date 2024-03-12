@@ -1,8 +1,5 @@
 // Entry point is: 'D_or_E'
 
-// ERRORS:
-// !!! dict was not a TypedDict, dataclass, or type alias, and cannot be translated.
-
 type D_or_E = D | E
 
 // This is the definition of the class E.
@@ -30,12 +27,9 @@ interface D extends C<string> {
     "multiple_metadata"?: string;
 }
 
-interface NonClass extends dict {
+interface NonClass {
     a: number;
     "my-dict": Record<string, number>;
-}
-
-interface dict {
 }
 
 type IndirectC = C<number>
