@@ -1,6 +1,7 @@
 from typing import Annotated, Literal, NotRequired, Optional, Required, Self, TypedDict, TypeVar, Generic, Any
 from typing_extensions import TypeAliasType
 from typechat import python_type_to_typescript_schema
+from .utilities import PyVersionedTypeScriptSchemaSnapshotExtension
 
 T = TypeVar("T", covariant=True)
 
@@ -8,7 +9,6 @@ class C(Generic[T], TypedDict):
     "This is a generic class named C."
     x: NotRequired[T]
     c: "C[int | float | None]"
-
 
 IndirectC = TypeAliasType("IndirectC", C[int])
 
@@ -37,4 +37,4 @@ D_or_E = TypeAliasType("D_or_E", D | E)
 
 
 def test_generic_alias1(snapshot: Any):
-    assert(python_type_to_typescript_schema(D_or_E) == snapshot)
+    assert(python_type_to_typescript_schema(D_or_E) == snapshot(extension_class=PyVersionedTypeScriptSchemaSnapshotExtension))

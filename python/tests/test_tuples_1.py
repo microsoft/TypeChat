@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from typechat import python_type_to_typescript_schema
-
+from .utilities import TypeScriptSchemaSnapshotExtension
 
 @dataclass
 class TupleContainer:
@@ -24,4 +24,4 @@ class TupleContainer:
     arbitrary_length_6: tuple[int, ...] | tuple[int] | tuple[int, int]
 
 def test_tuples_1(snapshot: Any):
-    assert python_type_to_typescript_schema(TupleContainer) == snapshot
+    assert python_type_to_typescript_schema(TupleContainer) == snapshot(extension_class=TypeScriptSchemaSnapshotExtension)

@@ -1,4 +1,0 @@
-# serializer version: 1
-# name: test_data_classes
-  TypeScriptSchemaConversionResult(typescript_schema_str='interface Response {\n    "attr_1": string;\n    // Hello!\n    "attr_2": number;\n    "attr_3": string | null;\n    "attr_4"?: string;\n    "attr_5"?: string | null;\n    "attr_6"?: string[];\n    "attr_7"?: Options;\n    "_underscore_attr_1"?: number;\n}\n\n// TODO: someone add something here.\ninterface Options {\n}\n', typescript_type_reference='Response', errors=[])
-# ---

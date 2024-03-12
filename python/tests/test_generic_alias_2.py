@@ -1,6 +1,7 @@
 from typing_extensions import TypeAliasType, Any
 from typing import Literal, TypedDict, Generic, TypeVar
 from typechat import python_type_to_typescript_schema
+from .utilities import TypeScriptSchemaSnapshotExtension
 
 T = TypeVar("T", covariant=True)
 
@@ -23,5 +24,5 @@ class Nested(TypedDict):
 
 
 def test_generic_alias1(snapshot: Any):
-    assert(python_type_to_typescript_schema(Nested) == snapshot)
+    assert(python_type_to_typescript_schema(Nested) == snapshot(extension_class=TypeScriptSchemaSnapshotExtension))
     

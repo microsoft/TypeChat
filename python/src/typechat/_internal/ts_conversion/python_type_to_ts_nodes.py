@@ -104,7 +104,16 @@ _KNOWN_GENERIC_SPECIAL_FORMS: frozenset[Any] = frozenset(
     ]
 )
 
-_KNOWN_SPECIAL_BASES: frozenset[Any] = frozenset([typing.TypedDict, typing_extensions.TypedDict, Protocol])
+_KNOWN_SPECIAL_BASES: frozenset[Any] = frozenset([
+    typing.TypedDict,
+    typing_extensions.TypedDict,
+    Protocol,
+
+    # In older versions of Python, `__orig_bases__` will not be defined on `TypedDict`s
+    # derived from the built-in `typing` module (but they will from `typing_extensions`!).
+    # So `get_original_bases` will fetch `__bases__` which will map `TypedDict` to a plain `dict`.
+    dict,
+])
 
 
 @dataclass
@@ -327,12 +336,12 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         if (is_typeddict(py_type) or is_dataclass(py_type)) and isinstance(py_type, type):
             comment = py_type.__doc__ or ""
 
-            if hasattr(py_type, "__type_params__"):
+            if hasattr(py_type, "__type_params__") and cast(GenericDeclarationish, py_type).__type_params__:
                 type_params = [
                     TypeParameterDeclarationNode(type_param.__name__)
                     for type_param in cast(GenericDeclarationish, py_type).__type_params__
                 ]
-            elif hasattr(py_type, "__parameters__"):
+            elif hasattr(py_type, "__parameters__") and cast(GenericDeclarationish, py_type).__parameters__:
                 type_params = [
                     TypeParameterDeclarationNode(type_param.__name__)
                     for type_param in cast(GenericDeclarationish, py_type).__parameters__

@@ -1,4 +1,0 @@
-# serializer version: 1
-# name: test_tuples_1
-  TypeScriptSchemaConversionResult(typescript_schema_str='interface TupleContainer {\n    "empty_tuple": [];\n    "tuple_1": [number];\n    "tuple_2": [number, string];\n    "tuple_3": [number, string];\n    "arbitrary_length_1": number[];\n    "arbitrary_length_2": number[];\n    "arbitrary_length_3": number[];\n    "arbitrary_length_4": number[];\n    "arbitrary_length_5": number[] | [number];\n    "arbitrary_length_6": number[] | [number] | [number, number];\n}\n', typescript_type_reference='TupleContainer', errors=[])
-# ---
