@@ -1,5 +1,5 @@
 import json
-from typing_extensions import overload, Generic, TypeVar
+from typing_extensions import Generic, TypeVar
 
 import pydantic
 import pydantic_core
