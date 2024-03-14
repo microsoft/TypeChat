@@ -9,7 +9,7 @@ import { createHealthDataTranslator } from "./translator";
 
 const dotEnvPath = findConfig(".env");
 assert(dotEnvPath, ".env file not found!");
-dotenv.config({ path: dotEnvPath });
+dotenv.config({ path: dotEnvPath, override: true });
 
 const healthInstructions = `
 Help me enter my health data step by step.

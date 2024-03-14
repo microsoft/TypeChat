@@ -9,7 +9,7 @@ import { SentimentResponse } from "./sentimentSchema";
 
 const dotEnvPath = findConfig(".env");
 assert(dotEnvPath, ".env file not found!");
-dotenv.config({ path: dotEnvPath });
+dotenv.config({ path: dotEnvPath, override: true });
 
 const model = createLanguageModel(process.env);
 const schema = fs.readFileSync(path.join(__dirname, "sentimentSchema.ts"), "utf8");

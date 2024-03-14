@@ -7,7 +7,7 @@ import { SentimentSchema } from "./sentimentSchema";
 
 const dotEnvPath = findConfig(".env");
 assert(dotEnvPath, ".env file not found!");
-dotenv.config({ path: dotEnvPath });
+dotenv.config({ path: dotEnvPath, override: true });
 
 const model = createLanguageModel(process.env);
 const validator = createZodJsonValidator(SentimentSchema, "SentimentResponse");
