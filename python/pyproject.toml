@@ -23,6 +23,7 @@ classifiers = [
 ]
 dependencies = [
   "pydantic>=2.5.2",
+  "pydantic_core>=2.16.3",
   "httpx>=0.27.0",
   "typing_extensions>=4.10.0",
 ]
@@ -64,7 +65,7 @@ cov = [
 ]
 
 [[tool.hatch.envs.all.matrix]]
-python = ["3.11"]
+python = ["3.11", "3.12"]
 
 [tool.hatch.envs.lint]
 detached = true
