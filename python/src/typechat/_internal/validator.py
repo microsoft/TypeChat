@@ -2,6 +2,7 @@ import json
 from typing_extensions import Generic, TypeVar
 
 import pydantic
+import pydantic_core
 
 from typechat._internal.result import Failure, Result, Success
 
@@ -26,14 +27,19 @@ class TypeChatValidator(Generic[T]):
     def validate_object(self, obj: object) -> Result[T]:
         """
         Validates the given Python object according to the associated schema type.
-        
-        Useful for translators that may presume a non-JSON output.
 
         Returns a `Success[T]` object containing the object if validation was successful.
         Otherwise, returns a `Failure` object with a `message` property describing the error.
         """
         try:
-            typed_dict = self._adapted_type.validate_python(obj, strict=True)
+            # TODO: Switch to `validate_python` when validation modes are exposed.
+            # https://github.com/pydantic/pydantic-core/issues/712
+            # We'd prefer to keep `validate_object` as the core method and
+            # allow translators to concern themselves with the JSON instead.
+            # However, under Pydantic's `strict` mode, a `dict` isn't considered compatible
+            # with a dataclass. So for now, jump back to JSON and validate the string.
+            json_str = pydantic_core.to_json(obj)
+            typed_dict = self._adapted_type.validate_json(json_str, strict=True)
             return Success(typed_dict)
         except pydantic.ValidationError as validation_error:
             return _handle_error(validation_error)
