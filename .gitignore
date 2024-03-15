@@ -2,7 +2,8 @@ build/
 dist/
 out/
 node_modules/
-.env
+.venv/
+.env*
 *.map
 *.out.txt
 *.bat
