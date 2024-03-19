@@ -1,4 +1,4 @@
-import { TypeChatLanguageModel } from "../../../dist";
+import { TypeChatLanguageModel } from "typechat";
 import { getArtist } from "./endpoints";
 import { IClientContext } from "./main";
 

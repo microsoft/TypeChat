@@ -1,5 +1,5 @@
 import {Result, TypeChatLanguageModel, createJsonTranslator, TypeChatJsonTranslator} from "typechat";
-import { createTypeScriptJsonValidator } from "../../../dist/ts";
+import { createTypeScriptJsonValidator } from "typechat/ts";
 
 type ChatMessage = {
     source: "system" | "user" | "assistant";
