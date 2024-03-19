@@ -3,8 +3,9 @@ import dotenv from "dotenv";
 import findConfig from "find-config";
 import fs from "fs";
 import path from "path";
-import { createJsonTranslator, createLanguageModel, processRequests } from "typechat";
+import { createJsonTranslator, createLanguageModel } from "typechat";
 import { createTypeScriptJsonValidator } from "typechat/ts";
+import { processRequests } from "typechat/interactive";
 import { Cart } from "./coffeeShopSchema";
 
 const dotEnvPath = findConfig(".env");

@@ -3,7 +3,8 @@ import dotenv from "dotenv";
 import findConfig from "find-config";
 import fs from "fs";
 import path from "path";
-import { createLanguageModel, processRequests } from "typechat";
+import { createLanguageModel } from "typechat";
+import { processRequests } from "typechat/interactive";
 import { HealthDataResponse } from "./healthDataSchema";
 import { createHealthDataTranslator } from "./translator";
 

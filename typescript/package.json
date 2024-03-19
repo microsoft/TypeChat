@@ -27,7 +27,8 @@
   "exports": {
     ".": "./dist/index.js",
     "./ts": "./dist/ts/index.js",
-    "./zod": "./dist/zod/index.js"
+    "./zod": "./dist/zod/index.js",
+    "./interactive": "./dist/interactive/index.js"
   },
   "engines": {
     "node": ">=18"

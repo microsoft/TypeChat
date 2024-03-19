@@ -3,7 +3,8 @@ import dotenv from "dotenv";
 import findConfig from "find-config";
 import fs from "fs";
 import path from "path";
-import { createJsonTranslator, createLanguageModel, processRequests } from "typechat";
+import { createJsonTranslator, createLanguageModel } from "typechat";
+import { processRequests } from "typechat/interactive";
 import { createTypeScriptJsonValidator } from "typechat/ts";
 import { SentimentResponse } from "./sentimentSchema";
 
