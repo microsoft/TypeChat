@@ -18,21 +18,31 @@ Types are all you need!
 
 # Getting Started
 
-Install TypeChat:
+Install TypeChat for TypeScript/JavaScript:
 
 ```
 npm install typechat
 ```
 
-You can also build TypeChat from source:
+<!--
 
-```
-git clone https://github.com/microsoft/TypeChat
-cd TypeChat
-npm run build
-```
+Or from PyPI:
 
-To see TypeChat in action, we recommend exploring the [TypeChat example projects](./examples). You can try them on your local machine or in a GitHub Codespace.
+...
+
+Or NuGet
+
+...
+
+-->
+
+You can also work with TypeChat from source for:
+
+* [Python](./python/README.md)
+* [TypeScript](./typescript/README.md)
+* [C#/.NET](./dotnet/README.md)
+
+To see TypeChat in action, we recommend exploring the [TypeChat example projects](./typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
 

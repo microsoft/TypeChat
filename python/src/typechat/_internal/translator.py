@@ -1,35 +1,79 @@
-from textwrap import dedent, indent
 from typing_extensions import Generic, TypeVar
 
-from typechat._internal.model import TypeChatModel
+import pydantic_core
+
+from typechat._internal.model import PromptSection, TypeChatLanguageModel
 from typechat._internal.result import Failure, Result, Success
 from typechat._internal.ts_conversion import python_type_to_typescript_schema
 from typechat._internal.validator import TypeChatValidator
 
 T = TypeVar("T", covariant=True)
 
-class TypeChatTranslator(Generic[T]):
-    model: TypeChatModel
+class TypeChatJsonTranslator(Generic[T]):
+    """
+    Represents an object that can translate natural language requests in JSON objects of the given type.
+    """
+
+    model: TypeChatLanguageModel
     validator: TypeChatValidator[T]
     target_type: type[T]
     _type_name: str
     _schema_str: str
     _max_repair_attempts = 1
 
-    def __init__(self, model: TypeChatModel, validator: TypeChatValidator[T], target_type: type[T]):
+    def __init__(
+        self,
+        model: TypeChatLanguageModel,
+        validator: TypeChatValidator[T],
+        target_type: type[T],
+        *, # keyword-only parameters follow
+        _raise_on_schema_errors: bool = True,
+    ):
+        """
+        Args:
+            model: The associated `TypeChatLanguageModel`.
+            validator: The associated `TypeChatValidator[T]`.
+            target_type: A runtime type object describing `T` - the expected shape of JSON data.
+        """
         super().__init__()
         self.model = model
-        self.target_type = target_type
         self.validator = validator
+        self.target_type = target_type
+
         conversion_result = python_type_to_typescript_schema(target_type)
+
+        if _raise_on_schema_errors and conversion_result.errors:
+            error_text = "".join(f"\n- {error}" for error in conversion_result.errors)
+            raise ValueError(f"Could not convert Python type to TypeScript schema: \n{error_text}")
+
         self._type_name = conversion_result.typescript_type_reference
         self._schema_str = conversion_result.typescript_schema_str
 
-    async def translate(self, request: str) -> Result[T]:
+    async def translate(self, request: str, *, prompt_preamble: str | list[PromptSection] | None = None) -> Result[T]:
+        """
+        Translates a natural language request into an object of type `T`. If the JSON object returned by
+        the language model fails to validate, repair attempts will be made up until `_max_repair_attempts`.
+        The prompt for the subsequent attempts will include the diagnostics produced for the prior attempt.
+        This often helps produce a valid instance.
+
+        Args:
+            request: A natural language request.
+            prompt_preamble: An optional string or list of prompt sections to prepend to the generated prompt.\
+                             If a string is given, it is converted to a single "user" role prompt section.
+        """
         request = self._create_request_prompt(request)
+
+        prompt: str | list[PromptSection]
+        if prompt_preamble is None:
+            prompt = request
+        else:
+            if isinstance(prompt_preamble, str):
+                prompt_preamble = [{"role": "user", "content": prompt_preamble}]
+            prompt = [*prompt_preamble, {"role": "user", "content": request}]
+
         num_repairs_attempted = 0
         while True:
-            completion_response = await self.model.complete(request)
+            completion_response = await self.model.complete(prompt)
             if isinstance(completion_response, Failure):
                 return completion_response
 
@@ -39,7 +83,8 @@ class TypeChatTranslator(Generic[T]):
             error_message: str
             if 0 <= first_curly < last_curly:
                 trimmed_response = text_response[first_curly:last_curly]
-                result = self.validator.validate(trimmed_response)
+                parsed_response = pydantic_core.from_json(trimmed_response, allow_inf_nan=False, cache_strings=False)
+                result = self.validator.validate_object(parsed_response)
                 if isinstance(result, Success):
                     return result
                 error_message = result.message
@@ -51,28 +96,25 @@ class TypeChatTranslator(Generic[T]):
             request = f"{text_response}\n{self._create_repair_prompt(error_message)}"
 
     def _create_request_prompt(self, intent: str) -> str:
-        decl_str = indent(self._schema_str, "            ")
-        prompt = F"""
-            You are a service that translates user requests into JSON objects of type "{self._type_name}" according to the following TypeScript definitions:
-            ```
-            {decl_str}
-            ```
-            The following is a user request:
-            '''
-            {intent}
-            '''
-            The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
-            """
-        prompt = dedent(prompt)
+        prompt = f"""
+You are a service that translates user requests into JSON objects of type "{self._type_name}" according to the following TypeScript definitions:
+```
+{self._schema_str}
+```
+The following is a user request:
+'''
+{intent}
+'''
+The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+"""
         return prompt
 
     def _create_repair_prompt(self, validation_error: str) -> str:
-        validation_error = indent(validation_error, "            ")
-        prompt = F"""
-            The above JSON object is invalid for the following reason:
-            '''
-            {validation_error}
-            '''
-            The following is a revised JSON object:
-            """
-        return dedent(prompt)
+        prompt = f"""
+The above JSON object is invalid for the following reason:
+'''
+{validation_error}
+'''
+The following is a revised JSON object:
+"""
+        return prompt

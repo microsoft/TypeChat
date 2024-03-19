@@ -17,11 +17,15 @@ classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
   "pydantic>=2.5.2",
+  "pydantic_core>=2.16.3",
+  "httpx>=0.27.0",
+  "typing_extensions>=4.10.0",
 ]
 
 [project.urls]
@@ -32,17 +36,22 @@ Source = "https://github.com/microsoft/TypeChat"
 [tool.hatch.version]
 path = "src/typechat/__about__.py"
 
-[dirs.env]
-virtual = ".hatch"
-
 [tool.hatch.envs.default]
+# While users can always look up the virtual environment
+# to select the right interpreter for their editor, often editors can
+# automatically pick up on a local `.venv` or at least hint towards using it.
+# The only catch is that this tends to only kick in at the workspace root.
+type = "virtual"
+path = "../.venv"
+
 dependencies = [
   "coverage[toml]>=6.5",
-  "openai>=1.3.6",
   "python-dotenv>=1.0.0",
-  "pytest",
-  "typing_extensions",
+  "pytest>=8.0.2",
+  "syrupy>=4.6.1",
+  "spotipy", # for examples
 ]
+
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
 test-cov = "coverage run -m pytest {args:tests}"
@@ -55,13 +64,8 @@ cov = [
   "cov-report",
 ]
 
-[tool.hatch.envs.examples]
-extra-dependencies = [
-  "spotipy",
-]
-
 [[tool.hatch.envs.all.matrix]]
-python = ["3.11"]
+python = ["3.11", "3.12"]
 
 [tool.hatch.envs.lint]
 detached = true

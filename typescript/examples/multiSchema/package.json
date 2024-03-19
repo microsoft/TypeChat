@@ -1,0 +1,26 @@
+{
+  "name": "multi-schema",
+  "version": "0.0.1",
+  "private": true,
+  "description": "",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p src",
+    "postbuild": "copyfiles -u 1 -f ../../examples/**/src/**/*Schema.ts src/**/*.txt dist"
+
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "typechat": "^0.1.0",
+    "find-config": "^1.0.0",
+    "music": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/find-config": "1.0.4",
+    "@types/node": "^20.3.1",
+    "copyfiles": "^2.4.1",
+    "typescript": "^5.3.3"
+  }
+}

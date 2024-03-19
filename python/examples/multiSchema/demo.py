@@ -7,7 +7,7 @@ if examples_path not in sys.path:
 
 import asyncio
 from dotenv import dotenv_values
-from typechat import create_language_model
+from typechat import create_language_model, process_requests
 
 from router import TextRequestRouter
 from agents import MathAgent, JsonPrintAgent, MusicAgent
@@ -17,13 +17,12 @@ import examples.coffeeShop.schema as coffeeShop
 import examples.sentiment.schema as sentiment
 
 
-async def handle_unknown(line: str):
+async def handle_unknown(_line: str):
     print("The input did not match any registered agents")
 
-
 async def main():
-    vals = dotenv_values()
-    model = create_language_model(vals)
+    env_vals = dotenv_values()
+    model = create_language_model(env_vals)
     router = TextRequestRouter(model=model)
 
     # register agents
@@ -32,7 +31,7 @@ async def main():
         name="Math", description="Calculations using the four basic math operations", handler=math_agent.handle_request
     )
 
-    music_agent = MusicAgent(model=model, authentication_vals=vals)
+    music_agent = MusicAgent(model=model, authentication_vals=env_vals)
     await music_agent.authenticate()
     router.register_agent(
         name="Music Player",
@@ -69,10 +68,11 @@ async def main():
     # register a handler for unknown results
     router.register_agent(name="No Match", description="Handles all unrecognized requests", handler=handle_unknown)
 
-    print("🔀> ", end="", flush=True)
-    for line in sys.stdin:
-        await router.route_request(line)
-        print("\n🔀> ", end="", flush=True)
+    async def request_handler(message: str):
+        await router.route_request(message)
+
+    file_path = sys.argv[1] if len(sys.argv) == 2 else None
+    await process_requests("🔀> ", file_path, request_handler)
 
 
 if __name__ == "__main__":

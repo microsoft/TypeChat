@@ -1,7 +1,6 @@
 import json
-from textwrap import indent
 from typing_extensions import Any, Callable, Awaitable, TypedDict, Annotated
-from typechat import Failure, TypeChatValidator, TypeChatModel, TypeChatTranslator
+from typechat import Failure, TypeChatValidator, TypeChatLanguageModel, TypeChatJsonTranslator
 
 
 class AgentInfo(TypedDict):
@@ -17,12 +16,12 @@ class TaskClassification(TypedDict):
 class TextRequestRouter:
     _current_agents: dict[str, AgentInfo]
     _validator: TypeChatValidator[TaskClassification]
-    _translator: TypeChatTranslator[TaskClassification]
+    _translator: TypeChatJsonTranslator[TaskClassification]
 
-    def __init__(self, model: TypeChatModel):
+    def __init__(self, model: TypeChatLanguageModel):
         super().__init__()
         self._validator = TypeChatValidator(TaskClassification)
-        self._translator = TypeChatTranslator(model, self._validator, TaskClassification)
+        self._translator = TypeChatJsonTranslator(model, self._validator, TaskClassification)
         self._current_agents = {}
 
     def register_agent(self, name: str, description: str, handler: Callable[[str], Awaitable[Any]]):
@@ -31,14 +30,13 @@ class TextRequestRouter:
 
     async def route_request(self, line: str):
         classes_str = json.dumps(self._current_agents, indent=2, default=lambda o: None, allow_nan=False)
-        classes_str = indent(classes_str, "            ")
 
         prompt_fragment = F"""
-            Classify ""{line}"" using the following classification table:
-            '''
-            {classes_str}
-            '''
-            """
+Classify ""{line}"" using the following classification table:
+'''
+{classes_str}
+'''
+"""
 
         result = await self._translator.translate(prompt_fragment)
         if isinstance(result, Failure):

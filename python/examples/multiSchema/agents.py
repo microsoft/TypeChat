@@ -1,5 +1,7 @@
+from collections.abc import Sequence
 import os
 import sys
+from typing import cast
 
 examples_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if examples_path not in sys.path:
@@ -8,14 +10,13 @@ if examples_path not in sys.path:
 import json
 
 from typing_extensions import TypeVar, Generic
-from typechat import Failure, TypeChatTranslator, TypeChatValidator, TypeChatModel
+from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, TypeChatLanguageModel
 
 import examples.math.schema as math_schema
 from examples.math.program import (
     TypeChatProgramTranslator,
     TypeChatProgramValidator,
     evaluate_json_program,
-    JsonProgram,
 )
 
 import examples.music.schema as music_schema
@@ -26,36 +27,40 @@ T = TypeVar("T", covariant=True)
 
 class JsonPrintAgent(Generic[T]):
     _validator: TypeChatValidator[T]
-    _translator: TypeChatTranslator[T]
+    _translator: TypeChatJsonTranslator[T]
 
-    def __init__(self, model: TypeChatModel, target_type: type[T]):
+    def __init__(self, model: TypeChatLanguageModel, target_type: type[T]):
         super().__init__()
         self._validator = TypeChatValidator(target_type)
-        self._translator = TypeChatTranslator(model, self._validator, target_type)
+        self._translator = TypeChatJsonTranslator(model, self._validator, target_type)
 
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
+            print(result.message)
         else:
             result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
             print(json.dumps(result, indent=2))
 
 
 class MathAgent:
-    _validator: TypeChatProgramValidator[JsonProgram]
-    _translator: TypeChatProgramTranslator[JsonProgram]
+    _validator: TypeChatProgramValidator
+    _translator: TypeChatProgramTranslator
 
-    def __init__(self, model: TypeChatModel):
+    def __init__(self, model: TypeChatLanguageModel):
         super().__init__()
-        self._validator = TypeChatProgramValidator(JsonProgram)
+        self._validator = TypeChatProgramValidator()
         self._translator = TypeChatProgramTranslator(model, self._validator, math_schema.MathAPI)
 
-    async def _handle_json_program_call(self, func: str, args: list[int | float]) -> int | float:
+    async def _handle_json_program_call(self, func: str, args: Sequence[object]) -> int | float:
         print(f"{func}({json.dumps(args)}) ")
+        
+        for arg in args:
+            if not isinstance(arg, (int, float)):
+                raise ValueError("All arguments are expected to be numeric.")
+
+        args = cast(Sequence[int | float], args)
+
         match func:
             case "add":
                 return args[0] + args[1]
@@ -75,12 +80,9 @@ class MathAgent:
     async def handle_request(self, line: str):
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
+            print(result.message)
         else:
             result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
             print(json.dumps(result, indent=2))
 
             math_result = await evaluate_json_program(result, self._handle_json_program_call)
@@ -89,15 +91,16 @@ class MathAgent:
 
 class MusicAgent:
     _validator: TypeChatValidator[music_schema.PlayerActions]
-    _translator: TypeChatTranslator[music_schema.PlayerActions]
-    _client_context: ClientContext
+    _translator: TypeChatJsonTranslator[music_schema.PlayerActions]
+    _client_context: ClientContext | None
     _authentication_vals: dict[str, str | None]
 
-    def __init__(self, model: TypeChatModel, authentication_vals: dict[str, str | None]):
+    def __init__(self, model: TypeChatLanguageModel, authentication_vals: dict[str, str | None]):
         super().__init__()
         self._validator = TypeChatValidator(music_schema.PlayerActions)
-        self._translator = TypeChatTranslator(model, self._validator, music_schema.PlayerActions)
+        self._translator = TypeChatJsonTranslator(model, self._validator, music_schema.PlayerActions)
         self._authentication_vals = authentication_vals
+        self._client_context = None
 
     async def authenticate(self):
         self._client_context = await get_client_context(self._authentication_vals)
@@ -106,14 +109,12 @@ class MusicAgent:
         if not self._client_context:
             await self.authenticate()
 
+        assert self._client_context
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
-            print("Translation Failed ❌")
-            print(f"Context: {result.message}")
+            print(result.message)
         else:
             result = result.value
-            print("Translation Succeeded! ✅\n")
-            print("JSON View")
             print(json.dumps(result, indent=2))
 
             try:
