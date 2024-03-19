@@ -38,9 +38,18 @@
     "README.md",
     "SECURITY.md"
   ],
-  "dependencies": {
+  "dependencies": {},
+  "peerDependencies": {
     "typescript": "^5.3.3",
     "zod": "^3.22.4"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/node": "^20.10.4"
