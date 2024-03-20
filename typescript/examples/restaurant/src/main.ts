@@ -6,8 +6,10 @@ import path from "path";
 import {
   createJsonTranslator,
   createLanguageModel,
-  processRequests,
 } from "typechat";
+import {
+  processRequests,
+} from "typechat/interactive";
 import {
   createTypeScriptJsonValidator,
 } from "typechat/ts";

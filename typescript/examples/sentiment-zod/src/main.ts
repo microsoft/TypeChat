@@ -1,7 +1,8 @@
 import assert from "assert";
 import dotenv from "dotenv";
 import findConfig from "find-config";
-import { createJsonTranslator, createLanguageModel, processRequests } from "typechat";
+import { createJsonTranslator, createLanguageModel } from "typechat";
+import { processRequests } from "typechat/interactive";
 import { createZodJsonValidator } from "typechat/zod";
 import { SentimentSchema } from "./sentimentSchema";
 

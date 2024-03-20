@@ -3,7 +3,8 @@ import dotenv from "dotenv";
 import findConfig from "find-config";
 import fs from "fs";
 import path from "path";
-import { createLanguageModel, getData, processRequests } from "typechat";
+import { createLanguageModel, getData } from "typechat";
+import { processRequests } from "typechat/interactive";
 import { createModuleTextFromProgram, createProgramTranslator, evaluateJsonProgram } from "typechat/ts";
 
 const dotEnvPath = findConfig(".env");
