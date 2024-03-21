@@ -113,8 +113,9 @@ Here's the effective diff:
 ## Zod Validators
 
 The second change builds on pluggable validators: TypeChat makes it possible to create validators from Zod schemas.
-[If you're not familiar with Zod](https://zod.dev/), it's a fairly popular library in the TypeScript/JavaScript ecosystem for validating data.
+[If you're not familiar with Zod](https://zod.dev/), it's a popular library in the TypeScript/JavaScript ecosystem for validating data.
 One strength of this library is that as Zod type validator objects are constructed, static types can be derived from them.
+But for TypeChat, its more notable strength is the ability to construct schemas *dynamically*.
 
 To use a Zod-based schema, we first need to create a few Zod type validator objects and create an object defining all the ones we intend to use.
 
@@ -134,7 +135,7 @@ export const SentimentSchema = {
 };
 ```
 
-Note that while TypeScript schema files can use raw JavaScript/TypeScript `// comment` syntax, TypeChat generates schemas from Zod based on [whatever we pass in to `.describe()` calls](https://zod.dev/?id=describe).
+Note that while TypeScript schema files can use raw JavaScript/TypeScript `// comment` syntax, TypeChat generates comments from Zod based on [whatever we pass in to `.describe()` calls](https://zod.dev/?id=describe).
 
 Next, we have to construct a TypeChat Zod validator.
 We pass in the object map of types, and specify which type we want the model to conform to:
