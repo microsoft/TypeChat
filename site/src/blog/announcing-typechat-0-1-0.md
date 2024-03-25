@@ -2,6 +2,7 @@
 title: Announcing TypeChat 0.1.0
 layout: blog
 tags: post
+date: 2024-03-25
 authors: ["Daniel Rosenwasser"]
 ---
 
@@ -101,13 +102,13 @@ Here's the effective diff:
 + import { createTypeScriptJsonValidator } from "typechat/ts";
   import { SentimentResponse } from "./sentimentSchema";
 
-...
+  // ...
 
 - const translator = createJsonTranslator<SentimentResponse>(model, schema, "Sentiment")
 + const validator = createTypeScriptJsonValidator<SentimentResponse>(schema, "SentimentResponse");
 + const translator = createJsonTranslator(model, validator);
 
-...
+  // ...
 ```
 
 ## Zod Validators
@@ -164,7 +165,9 @@ translator.translate("hello world!").then(response => {
 That's it!
 
 While using a Zod schema has lots of advantages, you may still prefer the ergonomics of writing a plain TypeScript schema.
-Either option works!
+Either option works.
+
+For more information, [see the changes on GitHub](https://github.com/microsoft/TypeChat/pull/147).
 
 ## A `validateInstance` Hook
 
@@ -191,12 +194,14 @@ translator.validateInstance = summary => {
 
 If `validateInstance` returns a TypeChat `Error`, then the translator will use the message to repair the AI response.
 
+You can [see specifics of this change on GitHub](https://github.com/microsoft/TypeChat/pull/115).
+
 ## Other Changes
 
 Other changes to be aware of are:
 
-* `TypeChatJsonProgram` and related functions, such as `createModuleTextFromProgram`, `evaluateJsonProgram`, and `createProgramTranslator` all live in `typechat/ts`.
-* The `processRequests` function for creating a REPL-like prompt now lives in `typechat/interactive`.
+* `TypeChatJsonProgram` and related functions, such as `createModuleTextFromProgram`, `evaluateJsonProgram`, and `createProgramTranslator` all live in `typechat/ts` ([see PR](https://github.com/microsoft/TypeChat/pull/147)).
+* The `processRequests` function for creating a REPL-like prompt now lives in `typechat/interactive` ([see PR](https://github.com/microsoft/TypeChat/pull/221)).
 
 ## What's Next?
 
