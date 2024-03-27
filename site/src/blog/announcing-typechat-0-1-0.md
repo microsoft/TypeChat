@@ -19,7 +19,7 @@ npm install typechat
 As a refresher, TypeChat is an experimental library for getting structured output (like JSON) from AI language models.
 The way it works is by using types in your programs to guide language models, and then using those same types to ensure that the responses match up with your types.
 When they don't, TypeChat can use validation errors to guide language models to repair their responses.
-You can [read our original announcement blog post](./introducing-typechat) for more details, but we should be able to catch you up to speed here too.
+You can [read our original announcement blog post](/blog/introducing-typechat/) for more details, but we should be able to catch you up to speed here too.
 
 Here's a few things that are new to TypeChat for TypeScript.
 
