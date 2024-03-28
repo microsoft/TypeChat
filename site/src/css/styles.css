@@ -37,6 +37,7 @@
 
 :root {
     --typechat-monospace: Consolas, Menlo, Monaco, Roboto, monospace;
+    --typechat-inline-code-color: #a10615;
     --typechat-rounding-radius: 0.5rem;
 }
 
@@ -80,7 +81,8 @@
 
 .typechat-prose-content code {
     font-family: var(--typechat-monospace);
-    font-size: 16px;
+    color: var(--typechat-inline-code-color);
+    font-size: inherit;
 }
 
 .typechat-prose-content :not(pre) code {
