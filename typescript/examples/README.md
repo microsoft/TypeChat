@@ -27,7 +27,7 @@ Ensure [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en) or newer is insta
 
 ```
 git clone https://github.com/microsoft/TypeChat
-cd TypeChat
+cd TypeChat/typescript
 npm install
 ```
 
