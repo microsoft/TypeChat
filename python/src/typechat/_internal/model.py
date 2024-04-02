@@ -42,6 +42,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
     _async_client: httpx.AsyncClient
     _max_retry_attempts: int = 3
     _retry_pause_seconds: float = 1.0
+    _timeout_seconds = 10
 
     def __init__(self, url: str, headers: dict[str, str], default_params: dict[str, str]):
         super().__init__()
@@ -73,6 +74,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                     self.url,
                     headers=headers,
                     json=body,
+                    timeout=self._timeout_seconds
                 )
                 if response.is_success:
                     json_result = cast(
@@ -85,7 +87,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                     return Failure(f"REST API error {response.status_code}: {response.reason_phrase}")
             except Exception as e:
                 if retry_count >= self._max_retry_attempts:
-                    return Failure(str(e))
+                    return Failure(str(e) or f"{repr(e)} raised from within internal TypeChat language model.")
 
             await asyncio.sleep(self._retry_pause_seconds)
             retry_count += 1
