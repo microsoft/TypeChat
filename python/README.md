@@ -22,7 +22,7 @@ TypeChat for Python is not yet on PyPI, but you can try our [examples](./example
 
 You will need [Python >=3.11](https://www.python.org/downloads/) and [hatch](https://hatch.pypa.io/1.6/install/).
 
-```
+```sh
 git clone https://github.com/microsoft/TypeChat
 cd TypeChat/python
 hatch shell

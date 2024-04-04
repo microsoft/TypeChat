@@ -20,13 +20,13 @@ Types are all you need!
 
 Install TypeChat:
 
-```
+```sh
 npm install typechat
 ```
 
 You can also build TypeChat from source:
 
-```
+```sh
 git clone https://github.com/microsoft/TypeChat
 cd TypeChat/typescript
 npm install

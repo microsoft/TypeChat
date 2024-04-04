@@ -56,7 +56,7 @@ For more information, see the [GitHub Codespaces Overview](https://docs.github.c
 
 Build TypeChat and the examples by running the following command in the repository root:
 
-```
+```sh
 npm run build-all
 ```
 
@@ -69,7 +69,7 @@ To use an OpenAI endpoint, include the following environment variables:
 |----------|-------|
 | `OPENAI_MODEL`| The OpenAI model name (e.g. `gpt-3.5-turbo` or `gpt-4`) |
 | `OPENAI_API_KEY` | Your OpenAI API key  |
-| `OPENAI_ENDPOINT` | OpenAI API Endpoint - *optional*,  defaults to `"https://api.openai.com/v1/chat/completions"` |
+| `OPENAI_ENDPOINT` | OpenAI API Endpoint - *optional*, defaults to `"https://api.openai.com/v1/chat/completions"` |
 | `OPENAI_ORGANIZATION` | OpenAI Organization - *optional*, defaults to `""` |
 
 To use an Azure OpenAI endpoint, include the following environment variables:
@@ -81,7 +81,7 @@ To use an Azure OpenAI endpoint, include the following environment variables:
 
 We recommend setting environment variables by creating a `.env` file in the root directory of the project that looks like the following:
 
-```
+```ini
 # For OpenAI
 OPENAI_MODEL=...
 OPENAI_API_KEY=...
@@ -102,6 +102,6 @@ Note that there are various sample "prose" files (e.g. `input.txt`) provided in 
 To run an example with one of these input files, run `node ./dist/main.js <input-file-path>`.
 For example, in the `coffeeShop` directory, you can run:
 
-```
+```sh
 node ./dist/main.js ./dist/input.txt
 ```

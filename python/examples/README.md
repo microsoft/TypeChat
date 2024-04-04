@@ -27,7 +27,7 @@ You can experiment with these TypeChat examples on your local machine.
 
 You will need [Python >=3.11](https://www.python.org/downloads/) and [hatch](https://hatch.pypa.io/1.6/install/).
 
-```
+```sh
 git clone https://github.com/microsoft/TypeChat
 cd TypeChat/python
 hatch shell
@@ -77,7 +77,7 @@ To use an Azure OpenAI endpoint, include the following environment variables:
 
 We recommend setting environment variables by creating a `.env` file in the root directory of the project that looks like the following:
 
-```
+```ini
 # For OpenAI
 OPENAI_MODEL=...
 OPENAI_API_KEY=...
