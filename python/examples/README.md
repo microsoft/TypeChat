@@ -34,6 +34,23 @@ hatch shell
 python examples/sentiment/demo.py
 ```
 
+Alternatively, you can just use `venv` and `pip`:
+
+```sh
+git clone https://github.com/microsoft/TypeChat
+cd TypeChat/python
+python -m venv ../.venv
+
+# Activate the virtual environment
+# Windows
+../.venv/Scripts/Activate.ps1
+# Unix/POSIX
+source ../.venv/bin/activate
+
+pip install .[example-dependencies]
+
+python examples/sentiment/demo.py
+```
 
 ### Option 2: GitHub Codespaces
 

@@ -28,6 +28,18 @@ dependencies = [
   "typing_extensions>=4.10.0",
 ]
 
+[project.optional-dependencies]
+dev-dependencies = [
+  "coverage[toml]>=6.5",
+  "pytest>=8.0.2",
+  "syrupy>=4.6.1",
+]
+
+example-dependencies = [
+  "python-dotenv>=1.0.0",
+  "spotipy",
+]
+
 [project.urls]
 Documentation = "https://github.com/microsoft/TypeChat#readme"
 Issues = "https://github.com/microsoft/TypeChat/issues"
@@ -44,12 +56,9 @@ path = "src/typechat/__about__.py"
 type = "virtual"
 path = "../.venv"
 
-dependencies = [
-  "coverage[toml]>=6.5",
-  "python-dotenv>=1.0.0",
-  "pytest>=8.0.2",
-  "syrupy>=4.6.1",
-  "spotipy", # for examples
+features = [
+  "dev-dependencies",
+  "example-dependencies"
 ]
 
 [tool.hatch.envs.default.scripts]
