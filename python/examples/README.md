@@ -47,7 +47,7 @@ python -m venv ../.venv
 # Unix/POSIX
 source ../.venv/bin/activate
 
-pip install .[example-dependencies]
+pip install .[examples]
 
 python examples/sentiment/demo.py
 ```

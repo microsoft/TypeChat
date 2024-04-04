@@ -29,13 +29,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev-dependencies = [
+# Development-time dependencies.
+dev = [
   "coverage[toml]>=6.5",
   "pytest>=8.0.2",
   "syrupy>=4.6.1",
 ]
 
-example-dependencies = [
+# Dependencies for examples.
+examples = [
   "python-dotenv>=1.0.0",
   "spotipy",
 ]
@@ -56,9 +58,11 @@ path = "src/typechat/__about__.py"
 type = "virtual"
 path = "../.venv"
 
+# Include dependencies from optional-dependencies for
+# development of the core package along with examples.
 features = [
-  "dev-dependencies",
-  "example-dependencies"
+  "dev",
+  "examples"
 ]
 
 [tool.hatch.envs.default.scripts]
