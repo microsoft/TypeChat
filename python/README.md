@@ -16,17 +16,26 @@ After defining your types, TypeChat takes care of the rest by:
 
 Types are all you need!
 
-## Installation
+## Getting Started
 
-TypeChat for Python is not yet on PyPI, but you can try our [examples](./examples/) by cloning this repository.
+Install TypeChat:
 
-You will need [Python >=3.11](https://www.python.org/downloads/) and [hatch](https://hatch.pypa.io/1.6/install/).
+```sh
+pip install typechat
+```
+
+You can also develop TypeChat from source, which needs [Python >=3.11](https://www.python.org/downloads/), [hatch](https://hatch.pypa.io/1.6/install/), and [Node.js >=20](https://nodejs.org/en/download):
 
 ```sh
 git clone https://github.com/microsoft/TypeChat
 cd TypeChat/python
 hatch shell
+npm ci
 ```
+
+To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/python/examples). You can try them on your local machine or in a GitHub Codespace.
+
+To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
 
 ## Contributing
 
