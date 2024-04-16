@@ -5,7 +5,8 @@
             { "title": "Introduction", "url": "/docs/introduction/"},
             { "title": "Examples", "url": "/docs/examples/"},
             { "title": "Techniques", "url": "/docs/techniques/"},
-            { "title": "FAQ", "url": "/docs/faq/"}
+            { "title": "FAQ", "url": "/docs/faq/"},
+            { "title": "Basic Usage for TypeScript", "url": "/docs/typescript/basic-usage/"}
         ]
     }
 ]
