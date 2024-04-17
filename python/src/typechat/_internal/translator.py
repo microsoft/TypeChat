@@ -63,9 +63,9 @@ class TypeChatJsonTranslator(Generic[T]):
         """
         request = self._create_request_prompt(request)
 
-        prompt: str | list[PromptSection]
+        prompt: list[PromptSection]
         if prompt_preamble is None:
-            prompt = request
+            prompt = [{"role": "user", "content": request}]
         else:
             if isinstance(prompt_preamble, str):
                 prompt_preamble = [{"role": "user", "content": prompt_preamble}]
@@ -73,6 +73,9 @@ class TypeChatJsonTranslator(Generic[T]):
 
         num_repairs_attempted = 0
         while True:
+            print("--------- NEXT REQUEST ---------")
+            for thing in prompt: print(thing)
+            print()
             completion_response = await self.model.complete(prompt)
             if isinstance(completion_response, Failure):
                 return completion_response
@@ -93,7 +96,8 @@ class TypeChatJsonTranslator(Generic[T]):
             if num_repairs_attempted >= self._max_repair_attempts:
                 return Failure(error_message)
             num_repairs_attempted += 1
-            request = f"{text_response}\n{self._create_repair_prompt(error_message)}"
+            print("Trying to repair", repr(error_message))
+            prompt.append({"role": "user", "content": self._create_repair_prompt(error_message)})
 
     def _create_request_prompt(self, intent: str) -> str:
         prompt = f"""

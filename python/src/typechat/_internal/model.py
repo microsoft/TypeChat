@@ -92,6 +92,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
             except Exception as e:
                 if retry_count >= self.max_retry_attempts:
                     return Failure(str(e) or f"{repr(e)} raised from within internal TypeChat language model.")
+                print(f"retrying ({e!r}) ...")
 
             await asyncio.sleep(self.retry_pause_seconds)
             retry_count += 1
