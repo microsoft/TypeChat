@@ -17,7 +17,7 @@ async def main():
             print(result.message)
         else:
             result = result.value
-            print(f"The sentiment is {result['sentiment']}")
+            print(f"The sentiment is {result.sentiment}")
 
     file_path = sys.argv[1] if len(sys.argv) == 2 else None
     await process_requests("😀> ", file_path, request_handler)

@@ -10,7 +10,7 @@ T = TypeVar("T", covariant=True)
 
 class TypeChatValidator(Generic[T]):
     """
-    Validates JSON text against a given Python type.
+    Validates an object against a given Python type.
     """
 
     _adapted_type: pydantic.TypeAdapter[T]
