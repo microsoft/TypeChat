@@ -1,4 +1,3 @@
-import sys
 from typing import Callable, Awaitable
 
 async def process_requests(interactive_prompt: str, input_file_name: str | None, process_request: Callable[[str], Awaitable[None]]):
@@ -21,13 +20,15 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
                 print(interactive_prompt + line)
                 await process_request(line)
     else:
-        print(interactive_prompt, end="", flush=True)
-        for line in sys.stdin:
-            lower_line = line.lower().strip()
-            if lower_line == "quit" or lower_line == "exit":
+        # Use readline to enable input editing and history
+        import readline  # type: ignore
+        while True:
+            try:
+                line = input(interactive_prompt)
+            except EOFError:
+                print("\n")
+                break
+            if line.lower().strip() in ("quit", "exit"):
                 break
             else:
                 await process_request(line)
-                print(interactive_prompt, end="", flush=True)
-
-                
