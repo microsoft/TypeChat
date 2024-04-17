@@ -1,12 +1,11 @@
 import asyncio
 import json
 import sys
-from typing import Any
 
 import schema as drawing
 from dotenv import dotenv_values
 
-from typechat import Success, Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
+from typechat import Success, Failure, TypeChatJsonTranslator, TypeChatValidator, PromptSection, create_language_model, process_requests
 
 
 async def main(file_path: str | None):
@@ -14,20 +13,25 @@ async def main(file_path: str | None):
     model = create_language_model(env_vals)
     validator = TypeChatValidator(drawing.Drawing)
     translator = TypeChatJsonTranslator(model, validator, drawing.Drawing)
-    print(translator._schema_str)
+    # print(translator._schema_str)
+
+    history: list[PromptSection] = []
 
     async def request_handler(message: str):
-        result: Success[drawing.Drawing] | Failure = await translator.translate(message)
+        result: Success[drawing.Drawing] | Failure = await translator.translate(message, prompt_preamble=history)
         if isinstance(result, Failure):
             print(result.message)
         else:
             value = result.value
-            print(json.dumps(value, indent=2))
+            output = json.dumps(value, indent=2)
+            print(output)
             if any(item["type"] == "Unknown" for item in value["items"]):
                 print("I did not understand the following")
                 for item in value["items"]:
                     if item["type"] == "Unknown":
                         print(item["text"])
+            history.append({"role": "user", "content": message})
+            history.append({"role": "assistant", "content": output})
 
     await process_requests("~> ", file_path, request_handler)
 
