@@ -21,7 +21,8 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
                 print(interactive_prompt + line)
                 await process_request(line)
     else:
-        import readline  # Enable input editing and history
+        # Use readline to enable input editing and history
+        import readline  # type: ignore
         while True:
             try:
                 line = input(interactive_prompt)
