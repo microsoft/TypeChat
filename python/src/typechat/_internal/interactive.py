@@ -28,8 +28,7 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
             except EOFError:
                 print("\n")
                 break
-            lower_line = line.lower().strip()
-            if lower_line == "quit" or lower_line == "exit":
+            if line.lower().strip() in ("quit", "exit"):
                 break
             else:
                 await process_request(line)
