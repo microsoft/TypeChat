@@ -39,10 +39,14 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
     url: str
     headers: dict[str, str]
     default_params: dict[str, str]
+    # Specifies the maximum number of retry attempts.
+    max_retry_attempts: int = 3
+    # Specifies the delay before retrying in milliseconds.
+    retry_pause_seconds: float = 1.0
+    # Specifies how long a request should wait in seconds
+    # before timing out with a Failure.
+    timeout_seconds = 10
     _async_client: httpx.AsyncClient
-    _max_retry_attempts: int = 3
-    _retry_pause_seconds: float = 1.0
-    _timeout_seconds = 10
 
     def __init__(self, url: str, headers: dict[str, str], default_params: dict[str, str]):
         super().__init__()
@@ -74,7 +78,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                     self.url,
                     headers=headers,
                     json=body,
-                    timeout=self._timeout_seconds
+                    timeout=self.timeout_seconds
                 )
                 if response.is_success:
                     json_result = cast(
@@ -83,13 +87,13 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                     )
                     return Success(json_result["choices"][0]["message"]["content"] or "")
 
-                if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self._max_retry_attempts:
+                if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
                     return Failure(f"REST API error {response.status_code}: {response.reason_phrase}")
             except Exception as e:
-                if retry_count >= self._max_retry_attempts:
+                if retry_count >= self.max_retry_attempts:
                     return Failure(str(e) or f"{repr(e)} raised from within internal TypeChat language model.")
 
-            await asyncio.sleep(self._retry_pause_seconds)
+            await asyncio.sleep(self.retry_pause_seconds)
             retry_count += 1
 
     @override
@@ -106,7 +110,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         except Exception:
             pass
 
-def create_language_model(vals: dict[str, str | None]) -> TypeChatLanguageModel:
+def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
     chosen by a dictionary of variables (typically just `os.environ`).
@@ -144,7 +148,7 @@ def create_language_model(vals: dict[str, str | None]) -> TypeChatLanguageModel:
     else:
         raise ValueError("Missing environment variables for OPENAI_API_KEY or AZURE_OPENAI_API_KEY.")
 
-def create_openai_language_model(api_key: str, model: str, endpoint: str = "https://api.openai.com/v1/chat/completions", org: str = ""):
+def create_openai_language_model(api_key: str, model: str, endpoint: str = "https://api.openai.com/v1/chat/completions", org: str = "") -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI REST API endpoint.
 
@@ -163,7 +167,7 @@ def create_openai_language_model(api_key: str, model: str, endpoint: str = "http
     }
     return HttpxLanguageModel(url=endpoint, headers=headers, default_params=default_params)
 
-def create_azure_openai_language_model(api_key: str, endpoint: str):
+def create_azure_openai_language_model(api_key: str, endpoint: str) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an Azure OpenAI REST API endpoint.
 
