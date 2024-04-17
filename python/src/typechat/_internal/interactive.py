@@ -21,13 +21,15 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
                 print(interactive_prompt + line)
                 await process_request(line)
     else:
-        print(interactive_prompt, end="", flush=True)
-        for line in sys.stdin:
+        import readline  # Enable input editing and history
+        while True:
+            try:
+                line = input(interactive_prompt)
+            except EOFError:
+                print("\n")
+                break
             lower_line = line.lower().strip()
             if lower_line == "quit" or lower_line == "exit":
                 break
             else:
                 await process_request(line)
-                print(interactive_prompt, end="", flush=True)
-
-                
