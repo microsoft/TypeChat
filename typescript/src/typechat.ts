@@ -1,5 +1,6 @@
 import { Result, success, error } from "./result";
 import { TypeChatLanguageModel, PromptSection } from "./model";
+import stripJsonTrailingCommas from "./ts/strip-whitespace";
 
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
@@ -136,7 +137,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             if (!(startIndex >= 0 && endIndex > startIndex)) {
                 return error(`Response is not JSON:\n${responseText}`);
             }
-            const jsonText = responseText.slice(startIndex, endIndex + 1);
+            const jsonText = stripJsonTrailingCommas(responseText.slice(startIndex, endIndex + 1));
             let jsonObject;
             try {
                 jsonObject = JSON.parse(jsonText) as object;
