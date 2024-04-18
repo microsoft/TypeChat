@@ -9,6 +9,8 @@ from typechat._internal.validator import TypeChatValidator
 
 T = TypeVar("T", covariant=True)
 
+
+
 class TypeChatJsonTranslator(Generic[T]):
     """
     Represents an object that can translate natural language requests in JSON objects of the given type.
@@ -49,7 +51,13 @@ class TypeChatJsonTranslator(Generic[T]):
         self._type_name = conversion_result.typescript_type_reference
         self._schema_str = conversion_result.typescript_schema_str
 
-    async def translate(self, request: str, *, prompt_preamble: str | list[PromptSection] | None = None) -> Result[T]:
+    async def translate(
+            self,
+            request: str,
+            *,
+            prompt_preamble: str | list[PromptSection] | None = None,
+            chat_history: list[tuple[str, str]] | None = None,  # (input, output) pairs
+        ) -> Result[T]:
         """
         Translates a natural language request into an object of type `T`. If the JSON object returned by
         the language model fails to validate, repair attempts will be made up until `_max_repair_attempts`.
@@ -57,26 +65,44 @@ class TypeChatJsonTranslator(Generic[T]):
         This often helps produce a valid instance.
 
         Args:
-            request: A natural language request.
-            prompt_preamble: An optional string or list of prompt sections to prepend to the generated prompt.\
+            input: A natural language request.
+            prompt_preamble: An optional string or list of prompt sections to prepend to the generated prompt.
                              If a string is given, it is converted to a single "user" role prompt section.
-        """
-        request = self._create_request_prompt(request)
+            chat_history: An optional list of (input, output) pairs from previous interactions.
 
-        prompt: list[PromptSection]
-        if prompt_preamble is None:
-            prompt = [{"role": "user", "content": request}]
-        else:
+        The "messages" list sent to the model has the following structure:
+
+        - The prompt_preamble, if any (unaltered)
+        - The description of the schema, with a suitable prefix ("You are a service ...")
+        - Past user inputs and bot outputs from chat_history, with suitable markup
+        - The final user input, from 'request', with suitable markup
+        - When in repair mode, additional repair prompts
+
+        The prompt preamble is send unaltered.
+        The others are marked up using stereotypical phrases to indicate their role in the conversation.
+        """
+        messages: list[PromptSection] = []
+
+        if prompt_preamble:
             if isinstance(prompt_preamble, str):
-                prompt_preamble = [{"role": "user", "content": prompt_preamble}]
-            prompt = [*prompt_preamble, {"role": "user", "content": request}]
+                messages.append({"role": "user", "content": prompt_preamble})
+            else:
+                messages.extend(prompt_preamble)
+
+        messages.append({"role": "user", "content": self._create_system_prompt()})  # Maybe role: system?
+
+        for input, output in chat_history or []:
+            messages.append({"role": "user", "content": self._create_user_request(input)})
+            messages.append({"role": "assistant", "content": self._create_bot_output(output)})
+
+        messages.append({"role": "user", "content": self._create_user_request(request, challenge=True)})
 
         num_repairs_attempted = 0
         while True:
             print("--------- NEXT REQUEST ---------")
-            for thing in prompt: print(thing)
+            for thing in messages: print(thing)
             print()
-            completion_response = await self.model.complete(prompt)
+            completion_response = await self.model.complete(messages)
             if isinstance(completion_response, Failure):
                 return completion_response
 
@@ -97,21 +123,36 @@ class TypeChatJsonTranslator(Generic[T]):
                 return Failure(error_message)
             num_repairs_attempted += 1
             print("Trying to repair", repr(error_message))
-            prompt.append({"role": "user", "content": self._create_repair_prompt(error_message)})
+            messages.append({"role": "user", "content": self._create_repair_prompt(error_message)})
 
-    def _create_request_prompt(self, intent: str) -> str:
-        prompt = f"""
+    def _create_system_prompt(self) -> str:
+        return f"""
 You are a service that translates user requests into JSON objects of type "{self._type_name}" according to the following TypeScript definitions:
 ```
 {self._schema_str}
 ```
+"""
+    
+    def _create_user_request(self, input: str, challenge: bool = False) -> str:
+        prompt = f"""
 The following is a user request:
 '''
-{intent}
+{input}
 '''
+"""
+        if challenge:
+            prompt += """
 The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
 """
         return prompt
+    
+    def _create_bot_output(self, output: str) -> str:
+        return f"""
+The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+```
+{output}
+```
+"""
 
     def _create_repair_prompt(self, validation_error: str) -> str:
         prompt = f"""
