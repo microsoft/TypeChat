@@ -2,8 +2,10 @@ import asyncio
 import json
 import sys
 
-import schema as drawing
 from dotenv import dotenv_values
+
+import schema as drawing
+from render import render_drawing
 
 from typechat import Success, Failure, TypeChatJsonTranslator, TypeChatValidator, PromptSection, create_language_model, process_requests
 
@@ -32,6 +34,7 @@ async def main(file_path: str | None):
                         print(item["text"])
             else:
                 history.append((request, output))
+                render_drawing(value)
 
     await process_requests("~> ", file_path, request_handler)
 
