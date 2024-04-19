@@ -1,5 +1,12 @@
 import tkinter as tk
 
+# Map line style to dash patterns
+dash_pattern = {
+    'solid': None,
+    'dashed': (4, 4),  # 4 pixels drawn, 4 pixels space
+    'dotted': (1, 1)   # 1 pixel drawn, 1 pixel space
+}
+
 def render_drawing(drawing):
     # Create a new Tkinter window
     window = tk.Tk()
@@ -32,7 +39,10 @@ def render_drawing(drawing):
     def draw_arrow(arrow):
         x1, y1 = arrow['start_x'], arrow['start_y']
         x2, y2 = arrow['end_x'], arrow['end_y']
-        canvas.create_line(x1, y1, x2, y2, arrow=tk.LAST, fill='black')
+        line_style = (arrow['style'].get('line_style', 'solid')  # Default line style
+                      if arrow['style'] else 'solid')
+
+        canvas.create_line(x1, y1, x2, y2, dash=dash_pattern[line_style], arrow=tk.LAST, fill='black')
 
     # Iterate through each item in the drawing and render it
     for item in drawing['items']:
@@ -56,7 +66,8 @@ if __name__ == '__main__':
         'items': [
             {'type': 'Box', 'x': 50, 'y': 50, 'width': 100, 'height': 100, 'text': 'Hello', 'style': None},
             {'type': 'Ellipse', 'x': 200, 'y': 50, 'width': 150, 'height': 100, 'text': 'World', 'style': {'fill_color': 'lightblue'}},
-            {'type': 'Arrow', 'start_x': 50, 'start_y': 200, 'end_x': 150, 'end_y': 200}
+            {'type': 'Arrow', 'start_x': 50, 'start_y': 200, 'end_x': 150, 'end_y': 200,
+             'style': {'type': 'Style', 'line_style': 'dashed'}, 'head_size': 10}
         ]
     }
 

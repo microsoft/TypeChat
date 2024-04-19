@@ -7,6 +7,7 @@ class Style(TypedDict):
     line_thickness: Annotated[Optional[int], Doc("Thickness of the lines.")]
     line_color: Annotated[Optional[str], Doc("CSS-style color code for line color.")]
     fill_color: Annotated[Optional[str], Doc("CSS-style color code for fill color.")]
+    line_style: Annotated[Optional[str], Doc("Style of the line: 'solid', 'dashed', 'dotted'.")]
 
 
 class Box(TypedDict):
