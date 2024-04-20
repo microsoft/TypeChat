@@ -1,0 +1,137 @@
+# serializer version: 1
+# name: test_translator_with_immediate_pass
+  list([
+    dict({
+      'kind': 'CLIENT REQUEST',
+      'payload': list([
+        dict({
+          'content': 'Get me stuff.',
+          'role': 'user',
+        }),
+        dict({
+          'content': '''
+            
+            You are a service that translates user requests into JSON objects of type "ExampleABC" according to the following TypeScript definitions:
+            ```
+            interface ExampleABC {
+                a: string;
+                b: boolean;
+                c: number;
+            }
+            
+            ```
+            The following is a user request:
+            '''
+            Get me stuff.
+            '''
+            The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+  
+          ''',
+          'role': 'user',
+        }),
+      ]),
+    }),
+    dict({
+      'kind': 'MODEL RESPONSE',
+      'payload': '{ "a": "hello", "b": true, "c": 1234 }',
+    }),
+  ])
+# ---
+# name: test_translator_with_single_failure
+  list([
+    dict({
+      'kind': 'CLIENT REQUEST',
+      'payload': list([
+        dict({
+          'content': 'Get me stuff.',
+          'role': 'user',
+        }),
+        dict({
+          'content': '''
+            
+            You are a service that translates user requests into JSON objects of type "ExampleABC" according to the following TypeScript definitions:
+            ```
+            interface ExampleABC {
+                a: string;
+                b: boolean;
+                c: number;
+            }
+            
+            ```
+            The following is a user request:
+            '''
+            Get me stuff.
+            '''
+            The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+  
+          ''',
+          'role': 'user',
+        }),
+        dict({
+          'content': '''
+            
+            The above JSON object is invalid for the following reason:
+            '''
+            Validation path `c` failed for value `{"a": "hello", "b": true}` because:
+              Field required
+            '''
+            The following is a revised JSON object:
+  
+          ''',
+          'role': 'user',
+        }),
+      ]),
+    }),
+    dict({
+      'kind': 'MODEL RESPONSE',
+      'payload': '{ "a": "hello", "b": true }',
+    }),
+    dict({
+      'kind': 'CLIENT REQUEST',
+      'payload': list([
+        dict({
+          'content': 'Get me stuff.',
+          'role': 'user',
+        }),
+        dict({
+          'content': '''
+            
+            You are a service that translates user requests into JSON objects of type "ExampleABC" according to the following TypeScript definitions:
+            ```
+            interface ExampleABC {
+                a: string;
+                b: boolean;
+                c: number;
+            }
+            
+            ```
+            The following is a user request:
+            '''
+            Get me stuff.
+            '''
+            The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+  
+          ''',
+          'role': 'user',
+        }),
+        dict({
+          'content': '''
+            
+            The above JSON object is invalid for the following reason:
+            '''
+            Validation path `c` failed for value `{"a": "hello", "b": true}` because:
+              Field required
+            '''
+            The following is a revised JSON object:
+  
+          ''',
+          'role': 'user',
+        }),
+      ]),
+    }),
+    dict({
+      'kind': 'MODEL RESPONSE',
+      'payload': '{ "a": "hello", "b": true, "c": 1234 }',
+    }),
+  ])
+# ---
