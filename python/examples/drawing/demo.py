@@ -7,7 +7,7 @@ from dotenv import dotenv_values
 import schema as drawing
 from render import render_drawing
 
-from typechat import Success, Failure, TypeChatJsonTranslator, TypeChatValidator, PromptSection, create_language_model, process_requests
+from typechat import Success, Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
 
 
 async def main(file_path: str | None):

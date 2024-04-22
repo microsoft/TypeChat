@@ -1,13 +1,15 @@
 import tkinter as tk
 
+from schema import Drawing, Box, Ellipse, Arrow
+
 # Map line style to dash patterns
 dash_pattern = {
-    'solid': None,
+    'solid': '',
     'dashed': (4, 4),  # 4 pixels drawn, 4 pixels space
     'dotted': (1, 1)   # 1 pixel drawn, 1 pixel space
 }
 
-def render_drawing(drawing):
+def render_drawing(drawing: Drawing):
     # Create a new Tkinter window
     window = tk.Tk()
     window.title("Drawing")
@@ -18,7 +20,7 @@ def render_drawing(drawing):
     canvas.pack(padx=10, pady=10)  # Adds 10 pixels of padding on all sides
 
     # Function to draw a box with text if provided
-    def draw_box(box):
+    def draw_box(box: Box):
         x1, y1 = box['x'], box['y']
         x2, y2 = x1 + box['width'], y1 + box['height']
         fill = box['style'].get('fill_color', '') if box['style'] else ''
@@ -27,7 +29,7 @@ def render_drawing(drawing):
             canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=box['text'], fill='black')
 
     # Function to draw an ellipse with text if provided
-    def draw_ellipse(ellipse):
+    def draw_ellipse(ellipse: Ellipse):
         x1, y1 = ellipse['x'], ellipse['y']
         x2, y2 = x1 + ellipse['width'], y1 + ellipse['height']
         fill = ellipse['style'].get('fill_color', '') if ellipse['style'] else ''
@@ -36,7 +38,7 @@ def render_drawing(drawing):
             canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=ellipse['text'], fill='black')
 
     # Function to draw an arrow
-    def draw_arrow(arrow):
+    def draw_arrow(arrow: Arrow):
         x1, y1 = arrow['start_x'], arrow['start_y']
         x2, y2 = arrow['end_x'], arrow['end_y']
         line_style = (arrow['style'].get('line_style', 'solid')  # Default line style
@@ -62,13 +64,13 @@ def render_drawing(drawing):
 
 # Example usage:
 if __name__ == '__main__':
-    drawing = {
+    drawing: Drawing = {
         'items': [
             {'type': 'Box', 'x': 50, 'y': 50, 'width': 100, 'height': 100, 'text': 'Hello', 'style': None},
-            {'type': 'Ellipse', 'x': 200, 'y': 50, 'width': 150, 'height': 100, 'text': 'World', 'style': {'fill_color': 'lightblue'}},
+            {'type': 'Ellipse', 'x': 200, 'y': 50, 'width': 150, 'height': 100, 'text': 'World', 'style': {'type': 'Style', 'fill_color': 'lightblue'}},
             {'type': 'Arrow', 'start_x': 50, 'start_y': 200, 'end_x': 150, 'end_y': 200,
-             'style': {'type': 'Style', 'line_style': 'dashed'}, 'head_size': 10}
-        ]
+             'style': {'type': 'Style', 'line_style': 'dashed'}, 'head_size': 10},
+        ],
     }
 
     render_drawing(drawing)
