@@ -3,11 +3,11 @@ from typing_extensions import Literal, TypedDict, Annotated, Doc, NotRequired, O
 
 class Style(TypedDict):
     type: Literal["Style"]
-    corners: Annotated[NotRequired[Literal["rounded", "sharp"]], Doc("Corner style of the drawing elements.")]
-    line_thickness: Annotated[NotRequired[int], Doc("Thickness of the lines.")]
-    line_color: Annotated[NotRequired[str], Doc("CSS-style color code for line color.")]
-    fill_color: Annotated[NotRequired[str], Doc("CSS-style color code for fill color.")]
-    line_style: Annotated[NotRequired[str], Doc("Style of the line: 'solid', 'dashed', 'dotted'.")]
+    corners: NotRequired[Annotated[Literal["rounded", "sharp"], Doc("Corner style of the drawing elements.")]]
+    line_thickness: NotRequired[Annotated[int, Doc("Thickness of the lines.")]]
+    line_color: NotRequired[Annotated[str, Doc("CSS-style color code for line color.")]]
+    fill_color: NotRequired[Annotated[str, Doc("CSS-style color code for fill color.")]]
+    line_style: NotRequired[Annotated[str, Doc("Style of the line: 'solid', 'dashed', 'dotted'.")]]
 
 
 class Box(TypedDict):
