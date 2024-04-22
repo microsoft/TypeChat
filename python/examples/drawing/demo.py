@@ -17,10 +17,8 @@ async def main(file_path: str | None):
     translator = TypeChatJsonTranslator(model, validator, drawing.Drawing)
     # print(translator._schema_str)
 
-    history: list[tuple[str, str]] = []
-
     async def request_handler(request: str):
-        result: Success[drawing.Drawing] | Failure = await translator.translate(request, chat_history=history)
+        result: Success[drawing.Drawing] | Failure = await translator.translate(request)
         if isinstance(result, Failure):
             print(result.message)
         else:
@@ -33,7 +31,6 @@ async def main(file_path: str | None):
                     if item["type"] == "Unknown":
                         print(item["text"])
             else:
-                history.append((request, output))
                 render_drawing(value)
 
     await process_requests("~> ", file_path, request_handler)
