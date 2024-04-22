@@ -7,7 +7,7 @@ from dotenv import dotenv_values
 import schema as drawing
 from render import render_drawing
 
-from typechat import Success, Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
+from typechat import Success, Failure, TypeChatJsonTranslator, TypeChatValidator, PromptSection, create_language_model, process_requests
 
 
 async def main(file_path: str | None):
@@ -17,8 +17,10 @@ async def main(file_path: str | None):
     translator = TypeChatJsonTranslator(model, validator, drawing.Drawing)
     # print(translator._schema_str)
 
+    history: list[PromptSection] = []
+
     async def request_handler(request: str):
-        result: Success[drawing.Drawing] | Failure = await translator.translate(request)
+        result: Success[drawing.Drawing] | Failure = await translator.translate(request, prompt_preamble=history)
         if isinstance(result, Failure):
             print(result.message)
         else:
@@ -31,6 +33,8 @@ async def main(file_path: str | None):
                     if item["type"] == "Unknown":
                         print(item["text"])
             else:
+                history.append({"role": "user", "content": request})
+                history.append({"role": "assistant", "content": output})
                 render_drawing(value)
 
     await process_requests("~> ", file_path, request_handler)
