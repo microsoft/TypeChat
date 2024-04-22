@@ -20,6 +20,11 @@ async def main(file_path: str | None):
     history: list[PromptSection] = []
 
     async def request_handler(request: str):
+        if len(history) > 10:
+            # Prune history
+            old = history[:-10]
+            old = [item for item in old if item["role"] == "user"]
+            history[:-10] = old
         result: Success[drawing.Drawing] | Failure = await translator.translate(request, prompt_preamble=history)
         if isinstance(result, Failure):
             print(result.message)
