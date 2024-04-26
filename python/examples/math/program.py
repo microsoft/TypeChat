@@ -121,6 +121,7 @@ class TypeChatProgramTranslator(TypeChatJsonTranslator[JsonProgram]):
     _api_declaration_str: str
 
     def __init__(self, model: TypeChatLanguageModel, validator: TypeChatProgramValidator, api_type: type):
+        api_type = self._convert_pythonic_comments_to_annotated_docs(api_type)
         super().__init__(model=model, validator=validator, target_type=api_type, _raise_on_schema_errors = False)
         # TODO: the conversion result here has errors!
         conversion_result = python_type_to_typescript_schema(api_type)
