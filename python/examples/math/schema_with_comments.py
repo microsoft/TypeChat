@@ -1,4 +1,4 @@
-from typing_extensions import TypedDict, Annotated, Callable, Doc
+from typing_extensions import TypedDict, Callable
 
 class MathAPI(TypedDict):
     """
@@ -13,4 +13,6 @@ class MathAPI(TypedDict):
     div: Callable[[float, float], float] # Divide two numbers
     neg: Callable[[float], float] # Negate a number
     id: Callable[[float], float] # Identity function
-    unknown: Callable[[str], float] # Unknown request
+    unknown: Callable[
+        [str], float
+    ] # Unknown request
