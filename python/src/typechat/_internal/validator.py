@@ -4,7 +4,7 @@ from typing_extensions import Generic, TypeVar
 import pydantic
 import pydantic_core
 
-from typechat._internal.result import Failure, Result, Success
+from typechat._internal.result import Failure, Result
 
 T = TypeVar("T", covariant=True)
 
@@ -40,7 +40,7 @@ class TypeChatValidator(Generic[T]):
             # with a dataclass. So for now, jump back to JSON and validate the string.
             json_str = pydantic_core.to_json(obj)
             typed_dict = self._adapted_type.validate_json(json_str, strict=True)
-            return Success(typed_dict)
+            return typed_dict
         except pydantic.ValidationError as validation_error:
             return _handle_error(validation_error)
 

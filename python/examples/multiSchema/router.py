@@ -42,9 +42,9 @@ Classify ""{line}"" using the following classification table:
         if isinstance(result, Failure):
             print("Translation Failed ❌")
             print(f"Context: {result.message}")
-        else:
-            result = result.value
-            print("Translation Succeeded! ✅\n")
-            print(f"The target class is {result['task_kind']}")
-            target = self._current_agents[result["task_kind"]]
-            await target.get("handler")(line)
+            return
+
+        print("Translation Succeeded! ✅\n")
+        print(f"The target class is {result['task_kind']}")
+        target = self._current_agents[result["task_kind"]]
+        await target.get("handler")(line)

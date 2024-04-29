@@ -14,7 +14,7 @@ from typing_extensions import (
 
 from typechat import (
     Failure,
-    Success,
+    Result,
     TypeChatLanguageModel,
     TypeChatValidator,
     TypeChatJsonTranslator,
@@ -109,9 +109,9 @@ class TypeChatProgramValidator(TypeChatValidator[JsonProgram]):
         super().__init__(py_type=cast(type[JsonProgram], Any))
 
     @override
-    def validate_object(self, obj: Any) -> Success[JsonProgram] | Failure:
+    def validate_object(self, obj: Any) -> Result[JsonProgram]:
         if "@steps" in obj and isinstance(obj["@steps"], Sequence):
-            return Success(obj)
+            return obj
         else:
             return Failure("This is not a valid program. The program must have an array of @steps")
         

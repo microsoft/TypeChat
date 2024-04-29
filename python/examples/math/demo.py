@@ -19,7 +19,6 @@ async def main():
         if isinstance(result, Failure):
             print(result.message)
         else:
-            result = result.value
             print(json.dumps(result, indent=2))
             math_result = await evaluate_json_program(result, apply_operations)
             print(f"Math Result: {math_result}")

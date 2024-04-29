@@ -2,7 +2,7 @@ import asyncio
 from types import TracebackType
 from typing_extensions import AsyncContextManager, Literal, Protocol, Self, TypedDict, cast, override
 
-from typechat._internal.result import Failure, Result, Success
+from typechat._internal.result import Failure, Result
 
 import httpx
 
@@ -56,7 +56,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         self._async_client = httpx.AsyncClient()
 
     @override
-    async def complete(self, prompt: str | list[PromptSection]) -> Success[str] | Failure:
+    async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
         headers = {
             "Content-Type": "application/json",
             **self.headers,
@@ -85,7 +85,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                         dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
                         response.json()
                     )
-                    return Success(json_result["choices"][0]["message"]["content"] or "")
+                    return json_result["choices"][0]["message"]["content"] or ""
 
                 if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
                     return Failure(f"REST API error {response.status_code}: {response.reason_phrase}")

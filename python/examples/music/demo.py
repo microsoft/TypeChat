@@ -19,7 +19,7 @@ async def main():
         if isinstance(result, Failure):
             print(result.message)
         else:
-            result = result.value
+            result = result
             print(json.dumps(result, indent=2))
             try:
                 for action in result["actions"]:

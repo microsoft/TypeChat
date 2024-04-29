@@ -39,7 +39,6 @@ class JsonPrintAgent(Generic[T]):
         if isinstance(result, Failure):
             print(result.message)
         else:
-            result = result.value
             print(json.dumps(result, indent=2))
 
 
@@ -81,12 +80,12 @@ class MathAgent:
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
             print(result.message)
-        else:
-            result = result.value
-            print(json.dumps(result, indent=2))
+            return
 
-            math_result = await evaluate_json_program(result, self._handle_json_program_call)
-            print(f"Math Result: {math_result}")
+        print(json.dumps(result, indent=2))
+
+        math_result = await evaluate_json_program(result, self._handle_json_program_call)
+        print(f"Math Result: {math_result}")
 
 
 class MusicAgent:
@@ -113,12 +112,12 @@ class MusicAgent:
         result = await self._translator.translate(line)
         if isinstance(result, Failure):
             print(result.message)
-        else:
-            result = result.value
-            print(json.dumps(result, indent=2))
+            return
 
-            try:
-                for action in result["actions"]:
-                    await handle_call(action, self._client_context)
-            except Exception as error:
-                print("An exception occurred: ", error)
+        print(json.dumps(result, indent=2))
+
+        try:
+            for action in result["actions"]:
+                await handle_call(action, self._client_context)
+        except Exception as error:
+            print("An exception occurred: ", error)

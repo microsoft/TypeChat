@@ -30,7 +30,6 @@ async def main():
         if isinstance(result, Failure):
             print(result.message)
         else:
-            result = result.value
             print(json.dumps(result, indent=2))
 
             agent_message = result.get("message", "None")

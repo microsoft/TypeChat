@@ -19,7 +19,6 @@ async def main():
         if isinstance(result, Failure):
             print(result.message)
         else:
-            result = result.value
             print(json.dumps(result, indent=2))
             if any(item["type"] == "Unknown" for item in result["items"]):
                 print("I did not understand the following")

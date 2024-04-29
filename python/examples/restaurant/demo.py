@@ -15,14 +15,14 @@ async def main():
         result = await translator.translate(message)
         if isinstance(result, Failure):
             print(result.message)
-        else:
-            result = result.value
-            print(json.dumps(result, indent=2))
-            if any(item["itemType"] == "Unknown" for item in result["items"]):
-                print("I did not understand the following")
-                for item in result["items"]:
-                    if item["itemType"] == "Unknown":
-                        print(item["text"])
+            return
+
+        print(json.dumps(result, indent=2))
+        if any(item["itemType"] == "Unknown" for item in result["items"]):
+            print("I did not understand the following")
+            for item in result["items"]:
+                if item["itemType"] == "Unknown":
+                    print(item["text"])
 
     file_path = sys.argv[1] if len(sys.argv) == 2 else None
     await process_requests("🍕> ", file_path, request_handler)

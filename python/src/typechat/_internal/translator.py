@@ -3,7 +3,7 @@ from typing_extensions import Generic, TypeVar
 import pydantic_core
 
 from typechat._internal.model import PromptSection, TypeChatLanguageModel
-from typechat._internal.result import Failure, Result, Success
+from typechat._internal.result import Failure, Result
 from typechat._internal.ts_conversion import python_type_to_typescript_schema
 from typechat._internal.validator import TypeChatValidator
 
@@ -79,7 +79,7 @@ class TypeChatJsonTranslator(Generic[T]):
             if isinstance(completion_response, Failure):
                 return completion_response
 
-            text_response = completion_response.value
+            text_response = completion_response
             first_curly = text_response.find("{")
             last_curly = text_response.rfind("}") + 1
             error_message: str
@@ -87,9 +87,10 @@ class TypeChatJsonTranslator(Generic[T]):
                 trimmed_response = text_response[first_curly:last_curly]
                 parsed_response = pydantic_core.from_json(trimmed_response, allow_inf_nan=False, cache_strings=False)
                 result = self.validator.validate_object(parsed_response)
-                if isinstance(result, Success):
+                if isinstance(result, Failure):
+                    error_message = result.message
+                else:
                     return result
-                error_message = result.message
             else:
                 error_message = "Response did not contain any text resembling JSON."
             if num_repairs_attempted >= self._max_repair_attempts:

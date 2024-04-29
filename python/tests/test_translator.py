@@ -23,7 +23,7 @@ class FixedModel(typechat.TypeChatLanguageModel):
         self.conversation.append({ "kind": "CLIENT REQUEST", "payload": prompt })
         response = next(self.responses)
         self.conversation.append({ "kind": "MODEL RESPONSE", "payload": response })
-        return typechat.Success(response)
+        return response
 
 @dataclass
 class ExampleABC:

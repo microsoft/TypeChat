@@ -30,7 +30,7 @@ class TranslatorWithHistory(TypeChatJsonTranslator[T]):
     async def translate(self, input: str, *, prompt_preamble: str | list[PromptSection] | None = None) -> Result[T]:
         result = await super().translate(input=input, prompt_preamble=prompt_preamble)
         if not isinstance(result, Failure):
-            self._chat_history.append(ChatMessage(source="assistant", body=result.value))
+            self._chat_history.append(ChatMessage(source="assistant", body=result))
         return result
 
     @override
