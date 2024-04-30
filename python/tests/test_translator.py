@@ -52,6 +52,16 @@ def test_translator_with_single_failure(snapshot: Any):
     
     assert m.conversation == snapshot
 
+def test_translator_with_invalid_json(snapshot: Any):
+    m = FixedModel([
+        '{ "a": "hello" "b": true }',
+        '{ "a": "hello" "b": true, "c": 1234 }',
+    ])
+    t = typechat.TypeChatJsonTranslator(m, v, ExampleABC)
+    asyncio.run(t.translate("Get me stuff."))
+    
+    assert m.conversation == snapshot
+
 def test_translator_with_single_failure_and_str_preamble(snapshot: Any):
     m = FixedModel([
         '{ "a": "hello", "b": true }',
