@@ -98,12 +98,11 @@
             
             The above JSON object is invalid for the following reason:
             '''
-            
             Error: expected `,` or `}` at line 1 column 16
             
             Attempted to parse:
-            { "a": "hello" "b": true }
             
+            { "a": "hello" "b": true }
             '''
             The following is a revised JSON object:
   
