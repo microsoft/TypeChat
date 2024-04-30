@@ -86,19 +86,14 @@ class TypeChatJsonTranslator(Generic[T]):
                 try:
                     parsed_response = pydantic_core.from_json(trimmed_response, allow_inf_nan=False, cache_strings=False)
                 except ValueError as e:
-                    error_message = f"""
-Error: {e}
-
-Attempted to parse:
-{trimmed_response}
-"""
+                    error_message = f"Error: {e}\n\nAttempted to parse:\n\n{trimmed_response}"
                 else:
                     result = self.validator.validate_object(parsed_response)
                     if isinstance(result, Success):
                         return result
                     error_message = result.message
             else:
-                error_message = "Response did not contain any text resembling JSON."
+                error_message = f"Response did not contain any text resembling JSON.\nResponse was\n\n{text_response}"
             if num_repairs_attempted >= self._max_repair_attempts:
                 return Failure(error_message)
             num_repairs_attempted += 1
