@@ -20,6 +20,11 @@ class FixedModel(typechat.TypeChatLanguageModel):
 
     @override
     async def complete(self, prompt: str | list[typechat.PromptSection]) -> typechat.Result[str]:
+        # Capture a snapshot because the translator
+        # can choose to pass in the same underlying list.
+        if isinstance(prompt, list):
+            prompt = prompt.copy()
+
         self.conversation.append({ "kind": "CLIENT REQUEST", "payload": prompt })
         response = next(self.responses)
         self.conversation.append({ "kind": "MODEL RESPONSE", "payload": response })
