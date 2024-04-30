@@ -64,12 +64,10 @@ class TypeChatJsonTranslator(Generic[T]):
 
         messages: list[PromptSection] = []
 
-        messages.append({"role": "user", "content": input})
         if prompt_preamble:
             if isinstance(prompt_preamble, str):
                 prompt_preamble = [{"role": "user", "content": prompt_preamble}]
-            else:
-                messages.extend(prompt_preamble)
+            messages.extend(prompt_preamble)
 
         messages.append({"role": "user", "content": self._create_request_prompt(input)})
 
@@ -95,6 +93,7 @@ class TypeChatJsonTranslator(Generic[T]):
             if num_repairs_attempted >= self._max_repair_attempts:
                 return Failure(error_message)
             num_repairs_attempted += 1
+            messages.append({"role": "assistant", "content": text_response})
             messages.append({"role": "user", "content": self._create_repair_prompt(error_message)})
 
     def _create_request_prompt(self, intent: str) -> str:
