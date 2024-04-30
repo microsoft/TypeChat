@@ -18,10 +18,13 @@ Types are all you need!
 
 ## Getting Started
 
+> [!NOTE]
+> TypeChat is not currently published. For now, install from our GitHub repository.
+
 Install TypeChat:
 
 ```sh
-pip install typechat
+pip install "typechat @ git+https://github.com/microsoft/TypeChat#subdirectory=python"
 ```
 
 You can also develop TypeChat from source, which needs [Python >=3.11](https://www.python.org/downloads/), [hatch](https://hatch.pypa.io/1.6/install/), and [Node.js >=20](https://nodejs.org/en/download):

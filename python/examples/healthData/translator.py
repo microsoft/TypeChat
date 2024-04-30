@@ -27,8 +27,8 @@ class TranslatorWithHistory(TypeChatJsonTranslator[T]):
         self._additional_agent_instructions = additional_agent_instructions
 
     @override
-    async def translate(self, request: str, *, prompt_preamble: str | list[PromptSection] | None = None) -> Result[T]:
-        result = await super().translate(request=request, prompt_preamble=prompt_preamble)
+    async def translate(self, input: str, *, prompt_preamble: str | list[PromptSection] | None = None) -> Result[T]:
+        result = await super().translate(input=input, prompt_preamble=prompt_preamble)
         if not isinstance(result, Failure):
             self._chat_history.append(ChatMessage(source="assistant", body=result.value))
         return result
