@@ -64,12 +64,10 @@ class TypeChatJsonTranslator(Generic[T]):
 
         messages: list[PromptSection] = []
 
-        messages.append({"role": "user", "content": input})
         if prompt_preamble:
             if isinstance(prompt_preamble, str):
                 prompt_preamble = [{"role": "user", "content": prompt_preamble}]
-            else:
-                messages.extend(prompt_preamble)
+            messages.extend(prompt_preamble)
 
         messages.append({"role": "user", "content": self._create_request_prompt(input)})
 
@@ -85,16 +83,21 @@ class TypeChatJsonTranslator(Generic[T]):
             error_message: str
             if 0 <= first_curly < last_curly:
                 trimmed_response = text_response[first_curly:last_curly]
-                parsed_response = pydantic_core.from_json(trimmed_response, allow_inf_nan=False, cache_strings=False)
-                result = self.validator.validate_object(parsed_response)
-                if isinstance(result, Success):
-                    return result
-                error_message = result.message
+                try:
+                    parsed_response = pydantic_core.from_json(trimmed_response, allow_inf_nan=False, cache_strings=False)
+                except ValueError as e:
+                    error_message = f"Error: {e}\n\nAttempted to parse:\n\n{trimmed_response}"
+                else:
+                    result = self.validator.validate_object(parsed_response)
+                    if isinstance(result, Success):
+                        return result
+                    error_message = result.message
             else:
-                error_message = "Response did not contain any text resembling JSON."
+                error_message = f"Response did not contain any text resembling JSON.\nResponse was\n\n{text_response}"
             if num_repairs_attempted >= self._max_repair_attempts:
                 return Failure(error_message)
             num_repairs_attempted += 1
+            messages.append({"role": "assistant", "content": text_response})
             messages.append({"role": "user", "content": self._create_repair_prompt(error_message)})
 
     def _create_request_prompt(self, intent: str) -> str:
