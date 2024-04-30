@@ -69,7 +69,8 @@ class TypeChatJsonTranslator(Generic[T]):
                 prompt_preamble = [{"role": "user", "content": prompt_preamble}]
             messages.extend(prompt_preamble)
 
-        messages.append({"role": "user", "content": self._create_request_prompt(input)})
+        messages.append({"role": "system", "content": self._create_request_prompt(input)})
+        messages.append({"role": "user", "content": input})
 
         num_repairs_attempted = 0
         while True:
@@ -98,7 +99,7 @@ class TypeChatJsonTranslator(Generic[T]):
                 return Failure(error_message)
             num_repairs_attempted += 1
             messages.append({"role": "assistant", "content": text_response})
-            messages.append({"role": "user", "content": self._create_repair_prompt(error_message)})
+            messages.append({"role": "system", "content": self._create_repair_prompt(error_message)})
 
     def _create_request_prompt(self, intent: str) -> str:
         prompt = f"""
@@ -106,11 +107,7 @@ You are a service that translates user requests into JSON objects of type "{self
 ```
 {self._schema_str}
 ```
-The following is a user request:
-'''
-{intent}
-'''
-The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+All JSON objects must have 2 spaces of indentation and no properties with the value undefined:
 """
         return prompt
 
@@ -120,6 +117,6 @@ The above JSON object is invalid for the following reason:
 '''
 {validation_error}
 '''
-The following is a revised JSON object:
+Provide a new JSON object that fixes the error.
 """
         return prompt
