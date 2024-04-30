@@ -5,10 +5,6 @@
       'kind': 'CLIENT REQUEST',
       'payload': list([
         dict({
-          'content': 'Get me stuff.',
-          'role': 'user',
-        }),
-        dict({
           'content': '''
             
             You are a service that translates user requests into JSON objects of type "ExampleABC" according to the following TypeScript definitions:
@@ -43,10 +39,6 @@
       'kind': 'CLIENT REQUEST',
       'payload': list([
         dict({
-          'content': 'Get me stuff.',
-          'role': 'user',
-        }),
-        dict({
           'content': '''
             
             You are a service that translates user requests into JSON objects of type "ExampleABC" according to the following TypeScript definitions:
@@ -66,6 +58,10 @@
   
           ''',
           'role': 'user',
+        }),
+        dict({
+          'content': '{ "a": "hello", "b": true }',
+          'role': 'assistant',
         }),
         dict({
           'content': '''
@@ -90,10 +86,6 @@
       'kind': 'CLIENT REQUEST',
       'payload': list([
         dict({
-          'content': 'Get me stuff.',
-          'role': 'user',
-        }),
-        dict({
           'content': '''
             
             You are a service that translates user requests into JSON objects of type "ExampleABC" according to the following TypeScript definitions:
@@ -113,6 +105,10 @@
   
           ''',
           'role': 'user',
+        }),
+        dict({
+          'content': '{ "a": "hello", "b": true }',
+          'role': 'assistant',
         }),
         dict({
           'content': '''
@@ -141,10 +137,6 @@
       'kind': 'CLIENT REQUEST',
       'payload': list([
         dict({
-          'content': 'Get me stuff.',
-          'role': 'user',
-        }),
-        dict({
           'content': 'Hey, I need some stuff.',
           'role': 'user',
         }),
@@ -172,6 +164,10 @@
   
           ''',
           'role': 'user',
+        }),
+        dict({
+          'content': '{ "a": "hello", "b": true }',
+          'role': 'assistant',
         }),
         dict({
           'content': '''
@@ -196,10 +192,6 @@
       'kind': 'CLIENT REQUEST',
       'payload': list([
         dict({
-          'content': 'Get me stuff.',
-          'role': 'user',
-        }),
-        dict({
           'content': 'Hey, I need some stuff.',
           'role': 'user',
         }),
@@ -227,6 +219,10 @@
   
           ''',
           'role': 'user',
+        }),
+        dict({
+          'content': '{ "a": "hello", "b": true }',
+          'role': 'assistant',
         }),
         dict({
           'content': '''
@@ -255,7 +251,7 @@
       'kind': 'CLIENT REQUEST',
       'payload': list([
         dict({
-          'content': 'Get me stuff.',
+          'content': 'Just so you know, I need some stuff.',
           'role': 'user',
         }),
         dict({
@@ -278,6 +274,10 @@
   
           ''',
           'role': 'user',
+        }),
+        dict({
+          'content': '{ "a": "hello", "b": true }',
+          'role': 'assistant',
         }),
         dict({
           'content': '''
@@ -302,7 +302,7 @@
       'kind': 'CLIENT REQUEST',
       'payload': list([
         dict({
-          'content': 'Get me stuff.',
+          'content': 'Just so you know, I need some stuff.',
           'role': 'user',
         }),
         dict({
@@ -325,6 +325,10 @@
   
           ''',
           'role': 'user',
+        }),
+        dict({
+          'content': '{ "a": "hello", "b": true }',
+          'role': 'assistant',
         }),
         dict({
           'content': '''
