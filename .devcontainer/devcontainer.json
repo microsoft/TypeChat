@@ -14,7 +14,8 @@
         },
         "ghcr.io/devcontainers-contrib/features/hatch:2": {
             "version": "latest"
-        }
+        },
+        "ghcr.io/prulloac/devcontainer-features/ollama:1": {}
     },
 
     // Use 'forwardPorts' to make a list of ports inside the container available locally.
