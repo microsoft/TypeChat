@@ -110,6 +110,26 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         except Exception:
             pass
 
+
+class OllamaModel(TypeChatLanguageModel):
+    url: str
+
+    def __init__(self, url: str):
+        super().__init__()
+        self.url = url
+
+    @override
+    async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
+        if isinstance(prompt, str):
+            prompt = [{"role": "user", "content": prompt}]
+        post_result = httpx.post(
+            url="http://localhost:11434/api/chat",
+            json={"model": "phi3", "messages": prompt, "stream": False, "options": {"temperature": 0}},
+        )
+        answer = cast(str, post_result.json()["message"]["content"])
+
+        return Success(answer)
+
 def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
@@ -145,6 +165,7 @@ def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
         api_key=required_var("AZURE_OPENAI_API_KEY")
         endpoint=required_var("AZURE_OPENAI_ENDPOINT")
         return create_azure_openai_language_model(api_key, endpoint)
+
     else:
         raise ValueError("Missing environment variables for OPENAI_API_KEY or AZURE_OPENAI_API_KEY.")
 
