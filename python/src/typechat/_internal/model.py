@@ -1,4 +1,5 @@
 import asyncio
+import json
 from types import TracebackType
 from typing_extensions import AsyncContextManager, Literal, Protocol, Self, TypedDict, cast, override
 
@@ -122,15 +123,25 @@ class OllamaModel(TypeChatLanguageModel):
     async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
         if isinstance(prompt, str):
             prompt = [{"role": "user", "content": prompt}]
-        post_result = httpx.post(
+        s = httpx.stream("POST",
             url="http://localhost:11434/api/chat",
-            json={"model": "phi3", "messages": prompt, "stream": False, "options": {"temperature": 0}},
+            json={"model": "phi3", "messages": prompt, "stream": True, "options": {"temperature": 0.0}},
+            timeout=15.0
         )
-        answer = cast(str, post_result.json()["message"]["content"])
 
-        return Success(answer)
+        result = ""
+        with s as s:
+            print("=============")
+            for text in s.iter_lines():
+                content = json.loads(text)["message"]["content"]
+                print(content, end="")
+                result += content
+            print("")
+            print("=============")
 
-def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
+        return Success(result)
+
+def create_language_model(vals: dict[str, str | None]):
     """
     Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
     chosen by a dictionary of variables (typically just `os.environ`).
@@ -147,12 +158,13 @@ def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
     Args:
         vals: A dictionary of variables. Typically just `os.environ`.
     """
-    
+
     def required_var(name: str) -> str:
         val = vals.get(name, None)
         if val is None:
             raise ValueError(f"Missing environment variable {name}.")
         return val
+    return OllamaModel("http://localhost:11434/api/chat")
 
     if "OPENAI_API_KEY" in vals:
         api_key = required_var("OPENAI_API_KEY")
