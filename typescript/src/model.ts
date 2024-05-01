@@ -55,6 +55,33 @@ export interface TypeChatLanguageModel {
  * @returns An instance of `TypeChatLanguageModel`.
  */
 export function createLanguageModel(env: Record<string, string | undefined>): TypeChatLanguageModel {
+    return {
+        // A basic Ollama model.
+        async complete(prompt) {
+            if (typeof prompt === "string") {
+                prompt = [{
+                    role: "user",
+                    content: prompt,
+                }];
+            }
+            console.log(prompt);
+            const r = new Request("http://localhost:11434/api/chat", {
+                method: "POST",
+                body: JSON.stringify({
+                    "model": "phi3",
+                    "messages": prompt,
+                    "stream": false,
+                    "options": {
+                        "temperature": 0.0
+                    }
+                }),
+            });
+            const json = await (await fetch(r)).json() as any;
+            console.log(json);
+            return success(json["message"]["content"]);
+        },
+    }
+
     if (env.OPENAI_API_KEY) {
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
