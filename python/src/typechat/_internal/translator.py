@@ -64,14 +64,14 @@ class TypeChatJsonTranslator(Generic[T]):
 
         messages: list[PromptSection] = []
 
-        messages.append({"role": "system", "content": self._create_request_prompt(input)})
-
+        messages.append({"role": "user", "content": input})
         if prompt_preamble:
             if isinstance(prompt_preamble, str):
                 prompt_preamble = [{"role": "user", "content": prompt_preamble}]
-            messages.extend(prompt_preamble)
+            else:
+                messages.extend(prompt_preamble)
 
-        messages.append({"role": "user", "content": input})
+        messages.append({"role": "user", "content": self._create_request_prompt(input)})
 
         num_repairs_attempted = 0
         while True:
@@ -103,7 +103,11 @@ You are a service that translates user requests into JSON objects of type "{self
 ```
 {self._schema_str}
 ```
-You translate each user request into a JSON object with 2 spaces of indentation and no properties with the value undefined.
+The following is a user request:
+'''
+{intent}
+'''
+The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
 """
         return prompt
 
