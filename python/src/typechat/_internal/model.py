@@ -65,13 +65,6 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         if isinstance(prompt, str):
             prompt = [{"role": "user", "content": prompt}]
 
-        print("===============>")
-        for i, item in enumerate(prompt):
-            role, content = item["role"], item["content"]
-            print(f"---------- {i} {role} ----------")
-            print(content)
-        print("end ===========>")
-
         body = {
             **self.default_params,
             "messages": prompt,
@@ -92,11 +85,6 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                         dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
                         response.json()
                     )
-
-                    print("<===============")
-                    print(json_result["choices"][0]["message"]["content"] or "")
-                    print("<=============== end")
-
                     return Success(json_result["choices"][0]["message"]["content"] or "")
 
                 if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
