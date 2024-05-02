@@ -4,7 +4,7 @@ import json
 import sys
 from typing import cast
 from dotenv import dotenv_values
-import schema_with_comments as math
+import schema as math
 from typechat import Failure, create_language_model, process_requests
 from program import TypeChatProgramTranslator, TypeChatProgramValidator, evaluate_json_program
 

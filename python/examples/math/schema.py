@@ -1,5 +1,6 @@
 from typing_extensions import TypedDict, Annotated, Callable, Doc
 
+
 class MathAPI(TypedDict):
     """
     This is API for a simple calculator
