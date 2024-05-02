@@ -29,7 +29,7 @@ async def main(file_path: str | None):
         history.append(request)
         result: Success[schema.Drawing] | Failure = await translator.translate("\n".join(history))
         if isinstance(result, Failure):
-            print(result.message)
+            print("Failure:", result.message)
         else:
             value: schema.Drawing = result.value
             print(value)
