@@ -1,5 +1,4 @@
 import asyncio
-import json
 import sys
 
 from dotenv import dotenv_values
@@ -12,7 +11,6 @@ from typechat import (
     Failure,
     TypeChatJsonTranslator,
     TypeChatValidator,
-    PromptSection,
     create_language_model,
     process_requests,
 )
