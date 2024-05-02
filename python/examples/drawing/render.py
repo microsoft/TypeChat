@@ -1,76 +1,86 @@
 import tkinter as tk
 
-from schema import Drawing, Box, Ellipse, Arrow
+from schema import Style, Box, Ellipse, Arrow, Drawing, UnknownText
+
 
 # Map line style to dash patterns
 dash_pattern = {
-    'solid': '',
-    'dashed': (4, 4),  # 4 pixels drawn, 4 pixels space
-    'dotted': (1, 1)   # 1 pixel drawn, 1 pixel space
+    "solid": "",
+    "dashed": (4, 4),  # 4 pixels drawn, 4 pixels space
+    "dotted": (1, 1),  # 1 pixel drawn, 1 pixel space
 }
 
+
 def render_drawing(drawing: Drawing):
-    # Create a new Tkinter window
     window = tk.Tk()
     window.title("Drawing")
-    window.configure(bg='white')  # Set the background color of the window
+    window.configure(bg="white")
 
-    # Create a canvas widget
-    canvas = tk.Canvas(window, width=800, height=600, bg='white', highlightthickness=0)
-    canvas.pack(padx=10, pady=10)  # Adds 10 pixels of padding on all sides
+    canvas = tk.Canvas(window, width=800, height=600, bg="white", highlightthickness=0)
+    canvas.pack(padx=10, pady=10)
 
-    # Function to draw a box with text if provided
     def draw_box(box: Box):
-        x1, y1 = box['x'], box['y']
-        x2, y2 = x1 + box['width'], y1 + box['height']
-        fill = box['style'].get('fill_color', '') if box['style'] else ''
-        canvas.create_rectangle(x1, y1, x2, y2, outline='black', fill=fill)
-        if 'text' in box and box['text']:
-            canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=box['text'], fill='black')
+        x1, y1 = box.x, box.y
+        x2, y2 = x1 + box.width, y1 + box.height
+        canvas.create_rectangle(x1, y1, x2, y2, outline=getattr(box.style, "line_color", None) or "black", fill=getattr(box.style, "fill_color", None) or "")
+        if box.text:
+            canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=box.text, fill="black")
 
-    # Function to draw an ellipse with text if provided
     def draw_ellipse(ellipse: Ellipse):
-        x1, y1 = ellipse['x'], ellipse['y']
-        x2, y2 = x1 + ellipse['width'], y1 + ellipse['height']
-        fill = ellipse['style'].get('fill_color', '') if ellipse['style'] else ''
-        canvas.create_oval(x1, y1, x2, y2, outline='black', fill=fill)
-        if 'text' in ellipse and ellipse['text']:
-            canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=ellipse['text'], fill='black')
+        x1, y1 = ellipse.x, ellipse.y
+        x2, y2 = x1 + ellipse.width, y1 + ellipse.height
+        canvas.create_oval(x1, y1, x2, y2, outline=getattr(ellipse.style, "line_color", None) or "black", fill=getattr(ellipse.style, "fill_color", None) or "")
+        if ellipse.text:
+            canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=ellipse.text, fill="black")
 
-    # Function to draw an arrow
     def draw_arrow(arrow: Arrow):
-        x1, y1 = arrow['start_x'], arrow['start_y']
-        x2, y2 = arrow['end_x'], arrow['end_y']
-        line_style = (arrow['style'].get('line_style', 'solid')  # Default line style
-                      if arrow['style'] else 'solid')
+        canvas.create_line(
+            arrow.start_x,
+            arrow.start_y,
+            arrow.end_x,
+            arrow.end_y,
+            dash=dash_pattern[getattr(arrow.style, "line_style", None) or "solid"],
+            arrow=tk.LAST,
+            fill=getattr(arrow.style, "line_color", None) or "black",
+        )
 
-        canvas.create_line(x1, y1, x2, y2, dash=dash_pattern[line_style], arrow=tk.LAST, fill='black')
+    for item in drawing.items:
+        match item:
+            case Box():
+                draw_box(item)
+            case Ellipse():
+                draw_ellipse(item)
+            case Arrow():
+                draw_arrow(item)
+            case UnknownText():
+                print(f"Unknown text: {item.text}")
 
-    # Iterate through each item in the drawing and render it
-    for item in drawing['items']:
-        if item['type'] == 'Box':
-            draw_box(item)
-        elif item['type'] == 'Ellipse':
-            draw_ellipse(item)
-        elif item['type'] == 'Arrow':
-            draw_arrow(item)
-
-    # Button to close the window (pretty ugly -- use Cmd-W/Ctrl-W instead)
-    # quit_button = tk.Button(window, text="Quit", command=window.quit)
-    # quit_button.pack(side=tk.BOTTOM, pady=10)
-
-    # Start the Tkinter event loop
     window.mainloop()
 
-# Example usage:
-if __name__ == '__main__':
-    drawing: Drawing = {
-        'items': [
-            {'type': 'Box', 'x': 50, 'y': 50, 'width': 100, 'height': 100, 'text': 'Hello', 'style': None},
-            {'type': 'Ellipse', 'x': 200, 'y': 50, 'width': 150, 'height': 100, 'text': 'World', 'style': {'type': 'Style', 'fill_color': 'lightblue'}},
-            {'type': 'Arrow', 'start_x': 50, 'start_y': 200, 'end_x': 150, 'end_y': 200,
-             'style': {'type': 'Style', 'line_style': 'dashed'}, 'head_size': 10},
-        ],
-    }
 
-    render_drawing(drawing)
+if __name__ == "__main__":
+    example_drawing = Drawing(
+        type="Drawing",
+        items=[
+            Box(type="Box", x=50, y=50, width=100, height=100, text="Hello", style=Style(type="Style")),
+            Ellipse(
+                type="Ellipse",
+                x=200,
+                y=50,
+                width=150,
+                height=100,
+                text="World",
+                style=Style(type="Style", fill_color="lightblue"),
+            ),
+            Arrow(
+                type="Arrow",
+                start_x=50,
+                start_y=200,
+                end_x=150,
+                end_y=200,
+                style=Style(type="Style", line_style="dashed"),
+            ),
+        ],
+    )
+
+    render_drawing(example_drawing)
