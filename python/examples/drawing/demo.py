@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import tkinter as tk
 
 from dotenv import dotenv_values
 
@@ -23,6 +24,12 @@ async def main(file_path: str | None):
     translator = TypeChatJsonTranslator(model, validator, schema.Drawing)
     # print(translator._schema_str)
 
+    window = tk.Tk()
+    window.title("Click to continue...")
+    canvas = tk.Canvas(window, width=800, height=600, bg="white", highlightthickness=0)
+    canvas.pack(padx=10, pady=10)
+    canvas.bind("<Button-1>", lambda event: window.quit())
+
     history: list[str] = []
 
     async def request_handler(request: str):
@@ -39,7 +46,9 @@ async def main(file_path: str | None):
                     if isinstance(item, schema.UnknownText):
                         print(" ", item.text)
 
-            render_drawing(value)
+            canvas.delete("all")
+            render_drawing(canvas, value)
+            window.mainloop()
 
     await process_requests("~> ", file_path, request_handler)
 

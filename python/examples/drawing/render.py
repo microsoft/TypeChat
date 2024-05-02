@@ -11,13 +11,7 @@ dash_pattern = {
 }
 
 
-def render_drawing(drawing: Drawing):
-    window = tk.Tk()
-    window.title("Drawing")
-    window.configure(bg="white")
-
-    canvas = tk.Canvas(window, width=800, height=600, bg="white", highlightthickness=0)
-    canvas.pack(padx=10, pady=10)
+def render_drawing(canvas: tk.Canvas, drawing: Drawing):
 
     def draw_box(box: Box):
         x1, y1 = box.x, box.y
@@ -69,8 +63,6 @@ def render_drawing(drawing: Drawing):
             case UnknownText():
                 print(f"Unknown text: {item.text}")
 
-    window.mainloop()
-
 
 if __name__ == "__main__":
     example_drawing = Drawing(
@@ -105,4 +97,9 @@ if __name__ == "__main__":
         ],
     )
 
-    render_drawing(example_drawing)
+    window = tk.Tk()
+    window.title("Drawing")
+    canvas = tk.Canvas(window, width=800, height=600, bg="white", highlightthickness=0)
+    canvas.pack(padx=10, pady=10)
+    render_drawing(canvas, example_drawing)
+    window.mainloop()
