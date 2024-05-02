@@ -10,7 +10,10 @@ class Style:
 
     type: Literal["Style"]
 
-    corners: Annotated[Optional[Literal["rounded", "sharp"]], Doc("Corner style of the drawing elements.")] = None
+    corners: Annotated[
+        Optional[Literal["rounded", "sharp"]],
+        Doc("Corner style of the drawing elements."),
+    ] = None
     line_thickness: Annotated[Optional[int], Doc("Thickness of the lines.")] = None
     line_color: Annotated[Optional[str], Doc("CSS-style color code for line color.")] = None
     fill_color: Annotated[Optional[str], Doc("CSS-style color code for fill color.")] = None

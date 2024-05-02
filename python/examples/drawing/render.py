@@ -22,14 +22,28 @@ def render_drawing(drawing: Drawing):
     def draw_box(box: Box):
         x1, y1 = box.x, box.y
         x2, y2 = x1 + box.width, y1 + box.height
-        canvas.create_rectangle(x1, y1, x2, y2, outline=getattr(box.style, "line_color", None) or "black", fill=getattr(box.style, "fill_color", None) or "")
+        canvas.create_rectangle(
+            x1,
+            y1,
+            x2,
+            y2,
+            outline=getattr(box.style, "line_color", None) or "black",
+            fill=getattr(box.style, "fill_color", None) or "",
+        )
         if box.text:
             canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=box.text, fill="black")
 
     def draw_ellipse(ellipse: Ellipse):
         x1, y1 = ellipse.x, ellipse.y
         x2, y2 = x1 + ellipse.width, y1 + ellipse.height
-        canvas.create_oval(x1, y1, x2, y2, outline=getattr(ellipse.style, "line_color", None) or "black", fill=getattr(ellipse.style, "fill_color", None) or "")
+        canvas.create_oval(
+            x1,
+            y1,
+            x2,
+            y2,
+            outline=getattr(ellipse.style, "line_color", None) or "black",
+            fill=getattr(ellipse.style, "fill_color", None) or "",
+        )
         if ellipse.text:
             canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=ellipse.text, fill="black")
 
@@ -62,7 +76,15 @@ if __name__ == "__main__":
     example_drawing = Drawing(
         type="Drawing",
         items=[
-            Box(type="Box", x=50, y=50, width=100, height=100, text="Hello", style=Style(type="Style")),
+            Box(
+                type="Box",
+                x=50,
+                y=50,
+                width=100,
+                height=100,
+                text="Hello",
+                style=Style(type="Style"),
+            ),
             Ellipse(
                 type="Ellipse",
                 x=200,
