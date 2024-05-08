@@ -33,6 +33,7 @@ async def main(file_path: str | None):
     history: list[str] = []
 
     async def request_handler(request: str):
+        print("[Sending request...]")
         history.append(request)
         result: Success[schema.Drawing] | Failure = await translator.translate("\n".join(history))
         if isinstance(result, Failure):
@@ -48,6 +49,7 @@ async def main(file_path: str | None):
 
             canvas.delete("all")
             render_drawing(canvas, value)
+            print("Click in drawing to continue...")
             window.mainloop()
 
     await process_requests("~> ", file_path, request_handler)
