@@ -28,7 +28,91 @@ npm install typechat
 
 and hooking it up with any language model to work with your app.
 
-But let's first quickly explore why TypeChat exists.
+
+## Getting Started with TypeChat
+
+> **1. Install TypeChat**
+
+```
+npm install typechat
+```
+<br>
+
+> **2. Create a Schema Definition**
+
+Define a schema for the expected response from the language model. This can be done using TypeScript types or interfaces.
+
+**Example:**
+
+```
+// sentimentSchema.ts
+
+export interface SentimentResponse {
+    sentiment: "negative" | "neutral" | "positive";
+}
+```
+<br>
+
+> **3. Set Up TypeChat**
+
+Create a main TypeScript file and set up TypeChat to work with your schema and language model.
+
+**Example:**
+
+```// main.ts
+
+import * as fs from "fs";
+import * as path from "path";
+import dotenv from "dotenv";
+import * as typechat from "typechat";
+import { SentimentResponse } from "./sentimentSchema";
+
+dotenv.config({ path: path.join(__dirname, "../.env") });
+
+const model = typechat.createLanguageModel(process.env);
+const schema = fs.readFileSync(path.join(__dirname, "sentimentSchema.ts"), "utf8");
+const translator = typechat.createJsonTranslator<SentimentResponse>(model, schema, "SentimentResponse");
+
+typechat.processRequests("😀> ", /*inputFile*/ undefined, async (request) => {
+    const response = await translator.translate(request);
+    if (!response.success) {
+        console.log(response.message);
+        return;
+    }
+    console.log(`The sentiment is ${response.data.sentiment}`);
+});
+```
+
+<br>
+
+> **4. Run Your TypeChat Application**
+
+Execute your TypeChat application:
+
+```
+node main.js
+```
+Now, you're ready to interactively process requests with TypeChat!
+
+<br>
+
+## Interfaces vs Types in TypeScript
+
+When working with TypeChat, you have the flexibility to use either interfaces or types to define your schemas. In TypeScript, the choice between interfaces and types is often subjective, but here's a brief guide:
+
+> **Use interfaces when:**
+    <br>
+    You want to extend or implement the structure in other parts of your code. <br>
+    You are working with classes and need to define contract-like shapes.
+ 
+> **Use types when:**
+    <br>
+    You need to create union types or intersection types. <br>
+    You want to create mapped types or conditional types.
+
+Choose the approach that fits your project's needs best.
+
+<br>
 
 ## Pampering and Parsing
 
@@ -75,6 +159,8 @@ Surprisingly, we can ask LLMs to respond in the form of JSON, and they generally
 
 This is good — though this example shows the best-case response.
 While examples can help guide structure, they don't define what an AI should return extensively, and they don't provide anything we can validate against.
+
+<br>
 
 ## Just Add Types!
 
@@ -131,6 +217,8 @@ When put together, we can get a robust process for getting well-typed responses 
 
 In other words, **types are all you need**.
 
+<br>
+
 ## Enter TypeChat
 
 The technique of combining a human prompt and a "response schema" is not necessarily unique — but it is promising.
@@ -186,6 +274,8 @@ The way we've discussed here so far is all about using a "data schema" to turn s
 however, TypeChat also makes it possible to use an "API schema" to construct basic programs.
 We have some [docs](/docs/) and [examples](/docs/examples/) to get a sense of the different ways you can use TypeChat.
 
+<br>
+
 ## Open and Pluggable
 
 First of all, TypeChat is open-source.
@@ -193,6 +283,8 @@ We're MIT-licensed and you can [find us on GitHub](https://github.com/Microsoft/
 
 Second, TypeChat is built in a way that is meant to be model-neutral.
 While we have some very basic integration with the OpenAI API and the Azure OpenAI service for convenience, this approach should work for any chat completion-style API that you want to use — though note that at the moment, TypeChat works best with models that have been trained on both prose and code.
+
+<br>
 
 ## Try It Today!
 
