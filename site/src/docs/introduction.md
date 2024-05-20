@@ -120,9 +120,113 @@ By just giving a model with a schema (some types) and a request, we can integrat
 
 ## Introducing TypeChat
 
+### Getting Started
+
+You can get up and running with TypeChat by running
+
+```
+npm install typechat
+```
+and hooking it up with any language model to work with your app.
+
+## Enter TypeChat
+
+The technique of combining a human prompt and a "response schema" is not necessarily unique — but it is promising.
+And as we've focused on translating user intent to structured data, we've found that TypeScript is very well-suited for the task.
+We've grown more confident with this approach, and in order to prove it out, we released a library called TypeChat to help make it easier to use in your apps.
+If you want to try it now, and provides tools for prompt prototyping, schema validation, repair, and more.
+
+Here's the basic code to hook TypeChat up to an LLM and decide if a sentence is negative, neutral, or positive.
+
+```ts
+// ./src/sentimentSchema.ts
+
+// The following is a schema definition for determining the sentiment of a some user input.
+
+export interface SentimentResponse {
+    /** The sentiment of the text. */
+    sentiment: "negative" | "neutral" | "positive";
+}
+```
+
+```ts
+// ./src/main.ts
+
+import * as fs from "fs";
+import * as path from "path";
+import dotenv from "dotenv";
+import * as typechat from "typechat";
+import { SentimentResponse } from "./sentimentSchema";
+
+// Load environment variables.
+dotenv.config({ path: path.join(__dirname, "../.env") });
+
+// Create a language model based on the environment variables.
+const model = typechat.createLanguageModel(process.env);
+
+// Load up the contents of our "Response" schema.
+const schema = fs.readFileSync(path.join(__dirname, "sentimentSchema.ts"), "utf8");
+const translator = typechat.createJsonTranslator<SentimentResponse>(model, schema, "SentimentResponse");
+
+// Process requests interactively.
+typechat.processRequests("😀> ", /*inputFile*/ undefined, async (request) => {
+    const response = await translator.translate(request);
+    if (!response.success) {
+        console.log(response.message);
+        return;
+    }
+    console.log(`The sentiment is ${response.data.sentiment}`);
+});
+```
+
+TypeChat can be used in a number of different ways.
+
 TypeChat makes it easy to build natural language interfaces using types.
 
 Simply define types that represent the intents supported in your NL application. That could be as simple as an interface for categorizing sentiment or more complex examples like types for a shopping cart or music application. For example, to add additional intents to a schema, a developer can add the intents using type composition, such as adding additional types into a discriminated union. To make schemas hierarchical, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
+
+Here are examples that explain more on types
+
+> **User:**
+> 
+> Translate the following request into JSON.
+> 
+> > Could I get a blueberry muffin and a grande latte?
+> 
+> Respond only in JSON that satisfies the `Response` type:
+> 
+> ```ts
+> type Response = {
+>     items: Item[];
+> };
+> 
+> type Item = {
+>     name: string;
+>     quantity: number;
+>     size?: string;
+>     notes?: string;
+> }
+> ```
+>
+> **ChatBot:**
+>
+> ```json
+> {
+>   "items": [
+>     {
+>       "name": "blueberry muffin",
+>       "quantity": 1
+>     },
+>     {
+>       "name": "latte",
+>       "quantity": 1,
+>       "size": "grande"
+>     }
+>   ]
+> }
+> ```
+
+TypeScript has shown that it's well-suited to precisely describye JSON.
 
 After defining your types, TypeChat takes care of the rest by:
 
