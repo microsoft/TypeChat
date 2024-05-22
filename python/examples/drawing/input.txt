@@ -1,0 +1,5 @@
+draw three red squares in a diagonal
+red is the fill color
+make the corners touch
+add labels "foo", etc.
+make them pink
