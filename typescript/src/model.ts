@@ -71,6 +71,7 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
                     "model": "phi3",
                     "messages": prompt,
                     "stream": false,
+                    "format": "json",
                     "options": {
                         "temperature": 0.0
                     }

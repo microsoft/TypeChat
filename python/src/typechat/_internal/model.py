@@ -123,10 +123,11 @@ class OllamaModel(TypeChatLanguageModel):
     async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
         if isinstance(prompt, str):
             prompt = [{"role": "user", "content": prompt}]
+
         s = httpx.stream("POST",
             url="http://localhost:11434/api/chat",
-            json={"model": "phi3", "messages": prompt, "stream": True, "options": {"temperature": 0.0}},
-            timeout=15.0
+            json={"model": "phi3", "messages": prompt, "format": "json", "stream": True, "options": {"temperature": 0.0}},
+            timeout=20.0
         )
 
         result = ""
