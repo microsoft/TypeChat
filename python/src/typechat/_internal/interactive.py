@@ -20,8 +20,11 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
                 print(interactive_prompt + line)
                 await process_request(line)
     else:
-        # Use readline to enable input editing and history
-        import readline  # type: ignore
+        try:
+            # Use readline to enable input editing and history
+            import readline  # type: ignore
+        except ImportError:
+            pass
         while True:
             try:
                 line = input(interactive_prompt)
