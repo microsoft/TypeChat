@@ -13,8 +13,32 @@ export interface PromptSection {
     /**
      * Specifies the content of this section.
      */
-    content: string;
+    content: string | MultimodalPromptContent[];
 }
+
+/**
+ * GPT-4-vision, GPT-4-omni and GPT-4-turbo allow multi-modal input, where images and text can
+ * be part of the prompt. To support this, the content section of the prompt has an array of objects.
+ */
+export type MultimodalPromptContent =
+    | string
+    | TextPromptContent
+    | ImagePromptContent;
+
+export type TextPromptContent = {
+    type: "text";
+    text: string;
+};
+
+export type ImagePromptContent = {
+    type: "image_url";
+    image_url: ImageUrl;
+};
+
+export type ImageUrl = {
+    url: string;
+    detail?: "auto" | "low" | "high";
+};
 
 /**
  * Represents a AI language model that can complete prompts. TypeChat uses an implementation of this
@@ -135,7 +159,11 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             const response = await fetch(url, options);
             if (response.ok) {
                 const json = await response.json() as { choices: { message: PromptSection }[] };
-                return success(json.choices[0].message.content ?? "");
+                if (typeof json.choices[0].message.content  === 'string') {
+                    return success(json.choices[0].message.content ?? "");
+                } else {
+                    return error(`REST API unexpected response format :  ${JSON.stringify(json.choices[0].message.content)}`);
+                }
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
                 return error(`REST API error ${response.status}: ${response.statusText}`);
