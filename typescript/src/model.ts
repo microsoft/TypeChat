@@ -36,7 +36,16 @@ export type ImagePromptContent = {
 };
 
 export type ImageUrl = {
+    /*
+     * This could be a URL to a hosted image, or the base64-encoded image content.
+     */
     url: string;
+    
+    /*
+     * Controls how the model processes the image and generates its textual understanding.
+     * In "low res" mode, the model treats the image as 512x512px, while "high res" mode considers
+     * the image at full resolution.
+     */
     detail?: "auto" | "low" | "high";
 };
 
