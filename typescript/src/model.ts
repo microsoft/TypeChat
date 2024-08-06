@@ -43,8 +43,8 @@ export type ImageUrl = {
     
     /*
      * Controls how the model processes the image and generates its textual understanding.
-     * In "low res" mode, the model treats the image as 512x512px, while "high res" mode considers
-     * the image at full resolution.
+     * In "low" mode, the model treats the image as 512x512px, while "high" mode considers
+     * the image at full size.
      */
     detail?: "auto" | "low" | "high";
 };
@@ -168,10 +168,10 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             const response = await fetch(url, options);
             if (response.ok) {
                 const json = await response.json() as { choices: { message: PromptSection }[] };
-                if (typeof json.choices[0].message.content  === 'string') {
+                if (typeof json.choices[0].message.content === "string") {
                     return success(json.choices[0].message.content ?? "");
                 } else {
-                    return error(`REST API unexpected response format :  ${JSON.stringify(json.choices[0].message.content)}`);
+                    return error(`REST API unexpected response format: ${JSON.stringify(json.choices[0].message.content)}`);
                 }
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
