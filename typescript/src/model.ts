@@ -172,7 +172,11 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             const response = await fetch(url, options);
             if (response.ok) {
                 const json = await response.json() as { choices: { message: PromptSection }[] };
-                return success(json.choices[0].message.content ?? "");
+                if (typeof json.choices[0].message.content === "string") {
+                    return success(json.choices[0].message.content ?? "");
+                } else {
+                    return error(`REST API unexpected response format: ${JSON.stringify(json.choices[0].message.content)}`);
+                }
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
                 return error(`REST API error ${response.status}: ${response.statusText}`);
