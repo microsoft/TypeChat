@@ -13,8 +13,45 @@ export interface PromptSection {
     /**
      * Specifies the content of this section.
      */
-    content: string;
+    content: PromptContent;
 }
+
+export type PromptContent =
+    | string
+    | MultimodalPromptContent[];
+
+/**
+ * GPT-4-vision, GPT-4-omni and GPT-4-turbo allow multi-modal input, where images and text can
+ * be part of the prompt. To support this, the content section of the prompt has an array of objects.
+ */
+export type MultimodalPromptContent =
+    | string
+    | TextPromptContent
+    | ImagePromptContent;
+
+export type TextPromptContent = {
+    type: "text";
+    text: string;
+};
+
+export type ImagePromptContent = {
+    type: "image_url";
+    image_url: ImageUrl;
+};
+
+export type ImageUrl = {
+    /*
+     * This could be a URL to a hosted image, or the base64-encoded image content.
+     */
+    url: string;
+    
+    /*
+     * Controls how the model processes the image and generates its textual understanding.
+     * In "low" mode, the model treats the image as 512x512px, while "high" mode considers
+     * the image at full size.
+     */
+    detail?: "auto" | "low" | "high";
+};
 
 /**
  * Represents a AI language model that can complete prompts. TypeChat uses an implementation of this
