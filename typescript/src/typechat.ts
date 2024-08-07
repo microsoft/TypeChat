@@ -1,5 +1,5 @@
 import { Result, success, error } from "./result";
-import { TypeChatLanguageModel, PromptSection } from "./model";
+import { TypeChatLanguageModel, PromptSection, PromptContent } from "./model";
 
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
@@ -31,7 +31,7 @@ export interface TypeChatJsonTranslator<T extends object> {
      * @param request The natural language request.
      * @returns A prompt that combines the request with the schema and type name of the underlying validator.
      */
-    createRequestPrompt(request: string): string;
+    createRequestPrompt(request: string): PromptContent;
     /**
      * Creates a repair prompt to append to an original prompt/response in order to repair a JSON object that
      * failed to validate. This function is called by `completeAndValidate` when `attemptRepair` is true and the

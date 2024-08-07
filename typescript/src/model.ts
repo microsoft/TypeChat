@@ -13,8 +13,12 @@ export interface PromptSection {
     /**
      * Specifies the content of this section.
      */
-    content: string | MultimodalPromptContent[];
+    content: PromptContent;
 }
+
+export type PromptContent =
+    | string
+    | MultimodalPromptContent[];
 
 /**
  * GPT-4-vision, GPT-4-omni and GPT-4-turbo allow multi-modal input, where images and text can
