@@ -1,0 +1,38 @@
+{
+  "name": "aicar-zod",
+  "version": "0.0.1",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p src",
+    "postbuild": "copyfiles -u 1 src/**/*Schema.ts src/**/*.txt src/**/*.html dist"
+  },
+  "exports": {
+    "./*": [
+      "./dist/*.js"
+    ]
+  },
+  "author": "",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "@bufbuild/buf": "^1.39.0",
+    "@bufbuild/protobuf": "^1.10.0",
+    "@bufbuild/protoc-gen-es": "^1.10.0",
+    "@connectrpc/connect": "^1.4.0",
+    "@connectrpc/connect-node": "^1.4.0",
+    "@connectrpc/protoc-gen-connect-es": "^1.4.0",
+    "assert": "^2.1.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "find-config": "^1.0.0",
+    "ts-progress": "^0.1.9",
+    "typescript": "^5.5.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/assert": "^1.5.10",
+    "@types/find-config": "^1.0.4",
+    "@types/node": "^22.5.1",
+    "copyfiles": "^2.4.1"
+  }
+}
