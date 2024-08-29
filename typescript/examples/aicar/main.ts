@@ -21,11 +21,10 @@ const llmodel = createLLM(inputOptions, modelConfigPath ?? undefined);
 const schema = fs.readFileSync(path.join(__dirname, "SDVCarActionSchema.ts"), "utf8");
 const validator = createTypeScriptJsonValidator<CarActions>(schema, "CarActions");
 const translator = createJsonTranslator(llmodel, validator);
-//const translator = createCarActionTranslator(llmodel, validator);
 
 if(inputOptions.validate){
 
-    if(inputOptions.inputfile) //check the input file exists
+    if(inputOptions.inputfile) 
     {
         const lines = fs.readFileSync(inputOptions.inputfile).toString().split(/\r?\n/);
         var progress = tsprogress.create({total: lines.length});
