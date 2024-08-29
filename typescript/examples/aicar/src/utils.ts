@@ -1,10 +1,9 @@
 import { z } from "zod";
-import { VAL} from "./gen/kuksa/val/v1/val_connect";
-import { GetRequest, SetRequest} from "./gen/kuksa/val/v1/val_pb";
+import { VAL} from "../src/gen/kuksa/val/v1/val_connect";
+import { GetRequest, SetRequest} from "../src/gen/kuksa/val/v1/val_pb";
 import { createPromiseClient } from "@connectrpc/connect";
 import { createGrpcTransport } from "@connectrpc/connect-node";
 import { Command, Option, OptionValues } from 'commander';
-import path from "path";
 import { createAzureOpenAILanguageModel, createLanguageModel,createOpenAILanguageModel } from "typechat";
 import fs from "fs";
 
@@ -72,7 +71,6 @@ export const SDVSetResponse = z.object({
 })
 
 export type Error = {
-
   code: 0;
   reason: "";
   message: "";
@@ -94,7 +92,7 @@ export interface ModelConfig {
   modelDetails: ModelDetails;
 }
 
-export async function validateCarResponse(request, translator) {
+export async function validateCarResponse(request: string, translator: any) {
   const transport = createGrpcTransport({baseUrl: "http://localhost:55556",httpVersion: "2"}); //assumes local databroker on commonly used port
   const vl = createPromiseClient(VAL, transport);
   let requestTracking: requestTracking = {request: request};

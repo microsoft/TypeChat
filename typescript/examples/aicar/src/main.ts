@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 import findConfig from "find-config";
 import fs from "fs";
 import path from "path";
-import { createJsonTranslator, createLanguageModel } from "typechat";
+import { createJsonTranslator } from "typechat";
 import { createTypeScriptJsonValidator } from "typechat/ts";
 import { processRequests } from "typechat/interactive";
 import { CarActions } from "./SDVCarActionSchema";
@@ -17,7 +17,7 @@ const modelConfigPath = findConfig("modelconfig.json");
 assert(dotEnvPath, ".env file not found!");
 dotenv.config({ path: dotEnvPath });
 
-const llmodel = createLLM(inputOptions, modelConfigPath ?? undefined);
+const llmodel = createLLM(inputOptions, modelConfigPath ?? undefined)!;
 const schema = fs.readFileSync(path.join(__dirname, "SDVCarActionSchema.ts"), "utf8");
 const validator = createTypeScriptJsonValidator<CarActions>(schema, "CarActions");
 const translator = createJsonTranslator(llmodel, validator);
