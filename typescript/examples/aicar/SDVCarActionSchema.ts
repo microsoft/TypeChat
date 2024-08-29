@@ -1,29 +1,10 @@
 // The following types define the structure of an object of type CarActions that represents a list of actions you can do on a car.
 
-
-
-// export type CarActions = {
-//     actions: Action[];
-// };
 export interface CarActions {
     actions: (GetTempurature | SetTemperature | GetDoorLockState 
         | SetDoorLockState | GetLightState | SetLightState | SetDoorOpenState 
         | GetTirePressure | GetDoorOpenState | SetTirePressure | UnknownAction)[];
 }
-
-// export interface Action 
-//     | GetTempurature //use this to get the temperature of the car
-//     | SetTemperature //use this to set the temperature of the car
-//     | GetDoorLockState //use this to see if the doors or locked or unlocked
-//     | SetDoorLockState //use this to lock or unlock the doors
-//     | GetLightState //use this to see if the lights are on or off
-//     | SetLightState //use this to turn the lights off and on
-//     | SetDoorOpenState //use this to open or close the vehicle doors
-//     | GetTirePressure //use this to get the pressure of the vehicle tires
-//     | GetDoorOpenState //use this to see if the vehicle doors are open or closed
-//     | SetDoorOpenState //use this to open or close the vehicle doors
-//     | SetTirePressure //use this to set the pressure of the vehicle tires
-//     | UnknownAction; //use this when you don't know what the user is asking for
 
 //use this when you don't know what the user is asking for
 export interface UnknownAction {
