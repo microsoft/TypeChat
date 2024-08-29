@@ -95,22 +95,19 @@ export interface ModelConfig {
 }
 
 export async function validateCarResponse(request, translator) {
-  const transport = createGrpcTransport({baseUrl: "http://localhost:55556",httpVersion: "2"});
+  const transport = createGrpcTransport({baseUrl: "http://localhost:55556",httpVersion: "2"}); //assumes local databroker on commonly used port
   const vl = createPromiseClient(VAL, transport);
   let requestTracking: requestTracking = {request: request};
-  //translator.stripNulls = true;
   translator.attemptRepair = true;
   requestTracking.prompt = translator.createRequestPrompt(request);
   const response = await translator.translate(request);
   if (!response.success) {
-      //console.log('Failed translation: '+JSON.stringify(response));
       requestTracking.status = "Failed";
       requestTracking.errors = [response.message];
       return requestTracking;
   }
   const car = response.data;
   for (const item of car.actions) {
-      //console.log(JSON.stringify('Running Command: ' + JSON.stringify(item.command)));
       if(item.type.includes('Set'))
       {
           requestTracking.generatedRequest = JSON.stringify(item.command);
@@ -128,9 +125,7 @@ export async function validateCarResponse(request, translator) {
       else
       {
           requestTracking.unknownRequest = JSON.stringify(item.command);
-          //console.log('Unknown Command: '+ JSON.stringify(item.command));
       }
   }
-  //requestArray.push(requestTracking);
   return requestTracking;
 }
