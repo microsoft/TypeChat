@@ -62,7 +62,7 @@ The simplest way to get an example Databroker and VSS schema for experimentation
    > :bulb: **Tip:** You can stop the container using `ctrl-c`.
 
 ### AICar MVE
-To test the sample in interactive mode, the the command line below.  This will leverage TypeChat to translate the natural language entered, translate it into the VSS scheme, and execute the GRPC call against the running databroker.
+To test the sample in interactive mode, use the command line below.  This will leverage TypeChat to translate the natural language entered, translate it into the VSS scheme, and execute the GRPC call against the running databroker.
    ```sh
    node ./dist/main.js
    ```
