@@ -39,7 +39,7 @@ export type Program = {
 }
 
 /**
- * A function call specifices a function name and a list of argument expressions. Arguments may contain
+ * A function call specifies a function name and a list of argument expressions. Arguments may contain
  * nested function calls and result references.
  */
 export type FunctionCall = {
