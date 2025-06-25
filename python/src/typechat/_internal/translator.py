@@ -17,8 +17,8 @@ class TypeChatJsonTranslator(Generic[T]):
     model: TypeChatLanguageModel
     validator: TypeChatValidator[T]
     target_type: type[T]
-    _type_name: str
-    _schema_str: str
+    type_name: str
+    schema_str: str
     _max_repair_attempts = 1
 
     def __init__(
@@ -46,8 +46,8 @@ class TypeChatJsonTranslator(Generic[T]):
             error_text = "".join(f"\n- {error}" for error in conversion_result.errors)
             raise ValueError(f"Could not convert Python type to TypeScript schema: \n{error_text}")
 
-        self._type_name = conversion_result.typescript_type_reference
-        self._schema_str = conversion_result.typescript_schema_str
+        self.type_name = conversion_result.typescript_type_reference
+        self.schema_str = conversion_result.typescript_schema_str
 
     async def translate(self, input: str, *, prompt_preamble: str | list[PromptSection] | None = None) -> Result[T]:
         """
@@ -102,9 +102,9 @@ class TypeChatJsonTranslator(Generic[T]):
 
     def _create_request_prompt(self, intent: str) -> str:
         prompt = f"""
-You are a service that translates user requests into JSON objects of type "{self._type_name}" according to the following TypeScript definitions:
+You are a service that translates user requests into JSON objects of type "{self.type_name}" according to the following TypeScript definitions:
 ```
-{self._schema_str}
+{self.schema_str}
 ```
 The following is a user request:
 '''
