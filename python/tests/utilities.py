@@ -42,6 +42,9 @@ class PyVersionedTypeScriptSchemaSnapshotExtension(TypeScriptSchemaSnapshotExten
         )
         return str(result)
 
+class PyVersioned3_12_PlusSnapshotExtension(PyVersionedTypeScriptSchemaSnapshotExtension):
+    py_ver_dir: str = f"__py3.12+_snapshots__"
+
 def check_snapshot_for_module_string_if_3_12_plus(snapshot: Any, input_type_str: str, module_str: str):
     if sys.version_info < (3, 12):
         pytest.skip("requires python 3.12 or higher")
@@ -50,7 +53,7 @@ def check_snapshot_for_module_string_if_3_12_plus(snapshot: Any, input_type_str:
     exec(module_str, module.__dict__)
     type_obj = eval(input_type_str, globals(), module.__dict__)
 
-    assert(python_type_to_typescript_schema(type_obj) == snapshot(extension_class=TypeScriptSchemaSnapshotExtension))
+    assert(python_type_to_typescript_schema(type_obj) == snapshot(extension_class=PyVersioned3_12_PlusSnapshotExtension))
 
 @pytest.fixture
 def snapshot_schema(snapshot: Any):
