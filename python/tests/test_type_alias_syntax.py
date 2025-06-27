@@ -1,5 +1,4 @@
 from typing import Any
-from typechat import python_type_to_typescript_schema
 from .utilities import check_snapshot_for_module_string_if_3_12_plus
 
 module_str = "type StrOrInt = str | int"
