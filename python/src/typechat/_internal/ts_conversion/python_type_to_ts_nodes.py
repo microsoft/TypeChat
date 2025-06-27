@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 import inspect
+import sys
 import typing
 import typing_extensions
 from dataclasses import MISSING, Field, dataclass
@@ -79,6 +80,15 @@ class Dataclassish(Protocol):
 class TypeOfTypedDict(Protocol):
     __total__: bool
 
+if sys.version_info >= (3, 12) and typing.TypeAliasType is not typing_extensions.TypeAliasType:
+    # Sometimes typing_extensions aliases TypeAliasType,
+    # sometimes it's its own declaration.
+    def is_type_alias_type(py_type: object) -> TypeGuard[TypeAliasType]:
+        return isinstance(py_type, typing.TypeAliasType | typing_extensions.TypeAliasType)
+else:
+    def is_type_alias_type(py_type: object) -> TypeGuard[TypeAliasType]:
+        return isinstance(py_type, typing_extensions.TypeAliasType)
+
 
 def is_generic(py_type: object) -> TypeGuard[GenericAliasish]:
     return hasattr(py_type, "__origin__") and hasattr(py_type, "__args__")
@@ -88,9 +98,8 @@ def is_dataclass(py_type: object) -> TypeGuard[Dataclassish]:
 
 TypeReferenceTarget: TypeAlias = type | TypeAliasType | TypeVar | GenericAliasish
 
-
 def is_python_type_or_alias(origin: object) -> TypeGuard[type | TypeAliasType]:
-    return isinstance(origin, TypeAliasType | type)
+    return isinstance(origin, type) or is_type_alias_type(origin)
 
 
 _KNOWN_GENERIC_SPECIAL_FORMS: frozenset[Any] = frozenset(
@@ -393,7 +402,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             reserve_name(py_type)
 
             return InterfaceDeclarationNode(py_type.__name__, None, "", None, [])
-        if isinstance(py_type, TypeAliasType):
+        if is_type_alias_type(py_type):
             type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
 
             reserve_name(py_type)
