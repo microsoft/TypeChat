@@ -95,7 +95,7 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
     if (env.OPENAI_API_KEY) {
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
-        const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
+        const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/responses";
         const org = env.OPENAI_ORGANIZATION ?? "";
         return createOpenAILanguageModel(apiKey, model, endPoint, org);
     }
@@ -111,11 +111,11 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  * Creates a language model encapsulation of an OpenAI REST API endpoint.
  * @param apiKey The OpenAI API key.
  * @param model The model name.
- * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to "https://api.openai.com/v1/chat/completions".
+ * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to "https://api.openai.com/v1/responses".
  * @param org The OpenAI organization id.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = ""): TypeChatLanguageModel {
+export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/responses", org = ""): TypeChatLanguageModel {
     const headers = {
         "Authorization": `Bearer ${apiKey}`,
         "OpenAI-Organization": org
@@ -126,7 +126,7 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
 /**
  * Creates a language model encapsulation of an Azure OpenAI REST API endpoint.
  * @param endPoint The URL of the OpenAI REST API endpoint. The URL must be in the format
- *   "https://{your-resource-name}.openai.azure.com/openai/deployments/{your-deployment-name}/chat/completions?api-version={API-version}".
+ *   "https://{your-resource-name}.openai.azure.com/openai/deployments/{your-deployment-name}/responses?api-version={API-version}".
  *   Example deployment names are "gpt-35-turbo" and "gpt-4". An example API versions is "2023-05-15".
  * @param apiKey The Azure OpenAI API key.
  * @returns An instance of `TypeChatLanguageModel`.
