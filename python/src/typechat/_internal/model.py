@@ -71,8 +71,10 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
             "temperature": 0.0,
             "n": 1,
         }
+        
         retry_count = 0
         while True:
+            response: httpx.Response | None = None
             try:
                 response = await self._async_client.post(
                     self.url,
@@ -80,21 +82,34 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                     json=body,
                     timeout=self.timeout_seconds
                 )
+
                 if response.is_success:
-                    json_result = cast(
-                        dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
-                        response.json()
-                    )
-                    return Success(json_result["choices"][0]["message"]["content"] or "")
+                    try:
+                        json_result = cast(
+                            dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
+                            response.json()
+                        )
+                        return Success(json_result["choices"][0]["message"]["content"] or "")
+                    
+                    except (Exception) as e:
+                        return Failure(f"Failed to parse successful API response: {str(e)}")
 
                 if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
                     return Failure(f"REST API error {response.status_code}: {response.reason_phrase}")
-            except Exception as e:
-                if retry_count >= self.max_retry_attempts:
-                    return Failure(str(e) or f"{repr(e)} raised from within internal TypeChat language model.")
 
-            await asyncio.sleep(self.retry_pause_seconds)
+            except httpx.RequestError as e:
+                if retry_count >= self.max_retry_attempts:
+                    return Failure(str(e) or f"{type(e).__name__} raised from within internal TypeChat language model.")
+            
+            except Exception as e:
+                return Failure(f"Unexpected error: {str(e) or repr(e)}")
+
+            delay = self.retry_pause_seconds * (2 ** retry_count)
+            await asyncio.sleep(delay)
             retry_count += 1
+
+    async def aclose(self):
+        await self._async_client.aclose()
 
     @override
     async def __aenter__(self) -> Self:
@@ -102,13 +117,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
 
     @override
     async def __aexit__(self, __exc_type: type[BaseException] | None, __exc_value: BaseException | None, __traceback: TracebackType | None) -> bool | None:
-        await self._async_client.aclose()
-
-    def __del__(self):
-        try:
-            asyncio.get_running_loop().create_task(self._async_client.aclose())
-        except Exception:
-            pass
+        await self.aclose()
 
 def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
     """
