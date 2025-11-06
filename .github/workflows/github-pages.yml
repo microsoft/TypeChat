@@ -13,11 +13,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: Use Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: 18.x
         cache: 'npm'
@@ -29,9 +29,9 @@ jobs:
         npm ci
         npm run build
     - name : Upload artifact
-      uses: actions/upload-pages-artifact@v2
+      uses: actions/upload-pages-artifact@v3
       with:
         name: github-pages
         path: site/_site
     - name: Deploy to GitHub Pages from artifacts
-      uses: actions/deploy-pages@v2 
+      uses: actions/deploy-pages@v4 
