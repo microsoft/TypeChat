@@ -33,7 +33,7 @@ dependencies = [
 dev = [
   "coverage[toml]>=6.5",
   "pytest>=8.0.2",
-  "syrupy>=4.6.1",
+  "syrupy>=5.0.0",
 ]
 
 # Dependencies for examples.
