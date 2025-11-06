@@ -75,6 +75,11 @@
     box-shadow: 0px 2px 5px #666;
 }
 
+.typechat-prose-content pre:focus {
+    outline: 3px solid #0078d4;
+    outline-offset: 2px;
+}
+
 .typechat-prose-content blockquote {
     background-color: #f5f8fa;
 }
