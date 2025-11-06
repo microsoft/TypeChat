@@ -12,7 +12,7 @@ from typechat._internal.ts_conversion import TypeScriptSchemaConversionResult, p
 
 class TypeScriptSchemaSnapshotExtension(SingleFileSnapshotExtension):
     _write_mode = WriteMode.TEXT
-    _file_extension = "schema.d.ts"
+    file_extension = "schema.d.ts"
 
     @override
     def serialize(self, data: TypeScriptSchemaConversionResult, *,
