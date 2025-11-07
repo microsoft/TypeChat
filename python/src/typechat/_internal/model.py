@@ -91,7 +91,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                         )
                         return Success(json_result["choices"][0]["message"]["content"] or "")
                     
-                    except (Exception) as e:
+                    except Exception as e:
                         return Failure(f"Failed to parse successful API response: {str(e)}")
 
                 if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
