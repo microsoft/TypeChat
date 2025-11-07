@@ -99,7 +99,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
 
             except httpx.RequestError as e:
                 if retry_count >= self.max_retry_attempts:
-                    return Failure(str(e) or f"{type(e).__name__} raised from within internal TypeChat language model.")
+                    return Failure(f"Failure from internal TypeChat language model: `{repr(e)}`")
             
             except Exception as e:
                 return Failure(f"Unexpected error: {str(e) or repr(e)}")
