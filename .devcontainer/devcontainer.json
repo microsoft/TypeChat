@@ -14,7 +14,8 @@
         },
         "ghcr.io/devcontainers-contrib/features/hatch:2": {
             "version": "latest"
-        }
+        },
+        "ghcr.io/devcontainers/features/docker-outside-of-docker": {}
     },
 
     // Use 'forwardPorts' to make a list of ports inside the container available locally.

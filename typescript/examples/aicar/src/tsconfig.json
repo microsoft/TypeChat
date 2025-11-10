@@ -1,0 +1,23 @@
+{
+    "include": [
+        "."
+      ],
+    "compilerOptions": {
+      "target": "es2021",
+      "lib": ["es2021"],
+      "module": "node16",
+      "allowJs": true,
+      "types": ["node"],
+      "outDir": "../dist",
+      "rootDirs": ["../gen"],
+      "esModuleInterop": true,
+      "moduleResolution": "NodeNext",
+      "forceConsistentCasingInFileNames": true,
+      "strict": true,
+      "noUnusedLocals": false,
+      "inlineSourceMap": true,
+      "declaration": true,
+      "composite": true,
+      "skipLibCheck": true
+    }
+  }

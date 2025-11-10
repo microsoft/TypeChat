@@ -1,0 +1,49 @@
+What is the temperature on the front drivers side?
+What is the temperature on the front passengar side?
+What is the temperature on the rear driver side?
+What is the temperature on the front passenger side?
+Set the temperature on the front drivers side to 33.
+Set the temperature on the rear drivers side to 33.
+Is the drivers side front door locked?
+Please lock the drivers side front door.
+what is the temperature in all the zones of the car?
+are the fog lights on?
+is the left turn signal on?
+turn the left turn signal on.
+are the high beams on?
+close the trunk.
+turn the high beams on.
+turn off the left turn signal.
+what is the left drivers side tire pressure?
+what is the right rear drivers side tire pressure?
+what is the left rear passenger side tire pressure?
+set the drivers front tire pressure to 33.
+set the passenger rear tire pressure to 33.
+open the rear passenger door.
+unlock the rear passenger door.
+close the rear passenger door.
+lock the rear passenger door.
+are the hazard lights on? what is the capital of france?
+turn on the hazard lights.
+is the trunk open?
+open the trunk.
+lock the rear passenger side door.
+turn on the fog lights
+turn off the fog lights and turn on the high beams.
+open and unlock all the doors.
+is austin texas a city? Are the doors open?
+Are the doors unlocked?
+turn on the right turn signal.
+turn off the right turn signal.
+Are the hazard lights on?
+is the right turn signal on?
+turn on the hazard lights and set the driver side temperature to 43.
+what is the temperature on the passenger zones of the car?
+turn up the driver side temperature to 55.
+lock every door except for the driver side.
+unlock all non driver doors
+lock every door
+close and lock everything
+set the tire pressure on all wheels to 22.
+open, unlock and turn on everything also set every temperature to 78
+close, lock and turn off everything also set every temperature to 22

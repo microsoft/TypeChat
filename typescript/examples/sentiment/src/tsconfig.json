@@ -6,6 +6,7 @@
     "types": ["node"],
     "outDir": "../dist",
     "esModuleInterop": true,
+    "moduleResolution": "Node16",
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "noUnusedLocals": true,
