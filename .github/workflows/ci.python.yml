@@ -54,7 +54,7 @@ jobs:
           echo "version=$PYRIGHT_VERSION" >> $GITHUB_OUTPUT
 
       - name: Run pyright ${{ steps.pyright-version.outputs.version }}
-        uses: jakebailey/pyright-action@v2
+        uses: jakebailey/pyright-action@v3
         with:
           version: ${{ steps.pyright-version.outputs.version }}
           python-version: ${{ matrix.python-version}}
