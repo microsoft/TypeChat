@@ -41,9 +41,9 @@ class TranslatorWithHistory(TypeChatJsonTranslator[T]):
         now = datetime.now()
 
         prompt = F"""
-user: You are a service that translates user requests into JSON objects of type  "{self._type_name}" according to the following TypeScript definitions:
+user: You are a service that translates user requests into JSON objects of type  "{self.type_name}" according to the following TypeScript definitions:
 '''
-{self._schema_str}
+{self.schema_str}
 '''
 
 user:
