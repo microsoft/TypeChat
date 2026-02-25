@@ -51,7 +51,7 @@ const enum TypePrecedence {
     Object = 2
 }
 
-function getTypePrecendece(type: z.ZodType): TypePrecedence {
+function getTypePrecedence(type: z.ZodType): TypePrecedence {
     switch (getTypeKind(type)) {
         case z.ZodFirstPartyTypeKind.ZodEnum:
         case z.ZodFirstPartyTypeKind.ZodUnion:
@@ -121,7 +121,7 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
             append(name);
         }
         else {
-            const parenthesize = getTypePrecendece(type) < minPrecedence;
+            const parenthesize = getTypePrecedence(type) < minPrecedence;
             if (parenthesize) append("(");
             appendTypeDefinition(type);
             if (parenthesize) append(")");
