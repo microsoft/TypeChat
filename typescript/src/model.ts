@@ -83,6 +83,8 @@ export interface TypeChatLanguageModel {
  * If an `OPENAI_API_KEY` environment variable exists, the `createOpenAILanguageModel` function
  * is used to create the instance. The `OPENAI_ENDPOINT` and `OPENAI_MODEL` environment variables
  * must also be defined or an exception will be thrown.
+ * Set `OPENAI_USE_RESPONSES_API=true` to opt-in to the newer OpenAI Responses API
+ * (`https://api.openai.com/v1/responses`) instead of the default Chat Completions API.
  *
  * If an `AZURE_OPENAI_API_KEY` environment variable exists, the `createAzureOpenAILanguageModel` function
  * is used to create the instance. The `AZURE_OPENAI_ENDPOINT` environment variable must also be defined
@@ -95,8 +97,12 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
     if (env.OPENAI_API_KEY) {
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
-        const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
         const org = env.OPENAI_ORGANIZATION ?? "";
+        if (env.OPENAI_USE_RESPONSES_API === "true") {
+            const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/responses";
+            return createOpenAIResponsesLanguageModel(apiKey, model, endPoint, org);
+        }
+        const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
         return createOpenAILanguageModel(apiKey, model, endPoint, org);
     }
     if (env.AZURE_OPENAI_API_KEY) {
@@ -142,6 +148,24 @@ export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string)
 }
 
 /**
+ * Creates a language model encapsulation of an OpenAI Responses API endpoint.
+ * This function uses the newer `/v1/responses` endpoint introduced by OpenAI.
+ * For users of the classic `/v1/chat/completions` endpoint, use `createOpenAILanguageModel` instead.
+ * @param apiKey The OpenAI API key.
+ * @param model The model name.
+ * @param endPoint The URL of the OpenAI Responses API endpoint. Defaults to "https://api.openai.com/v1/responses".
+ * @param org The OpenAI organization id.
+ * @returns An instance of `TypeChatLanguageModel`.
+ */
+export function createOpenAIResponsesLanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/responses", org = ""): TypeChatLanguageModel {
+    const headers = {
+        "Authorization": `Bearer ${apiKey}`,
+        "OpenAI-Organization": org
+    };
+    return createResponsesFetchLanguageModel(endPoint, headers, { model });
+}
+
+/**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
 function createFetchLanguageModel(url: string, headers: object, defaultParams: object) {
@@ -176,6 +200,59 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
                     return success(json.choices[0].message.content ?? "");
                 } else {
                     return error(`REST API unexpected response format: ${JSON.stringify(json.choices[0].message.content)}`);
+                }
+            }
+            if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
+                return error(`REST API error ${response.status}: ${response.statusText}`);
+            }
+            await sleep(retryPauseMs);
+            retryCount++;
+        }
+    }
+}
+
+/**
+ * OpenAI Responses API endpoint encapsulation using the fetch API.
+ * Handles the different request/response format used by `/v1/responses`.
+ */
+function createResponsesFetchLanguageModel(url: string, headers: object, defaultParams: object) {
+    const model: TypeChatLanguageModel = {
+        complete
+    };
+    return model;
+
+    async function complete(prompt: string | PromptSection[]) {
+        let retryCount = 0;
+        const retryMaxAttempts = model.retryMaxAttempts ?? 3;
+        const retryPauseMs = model.retryPauseMs ?? 1000;
+        const input = typeof prompt === "string" ? prompt : (prompt as PromptSection[]);
+        while (true) {
+            const options = {
+                method: "POST",
+                body: JSON.stringify({
+                    ...defaultParams,
+                    input,
+                    temperature: 0,
+                }),
+                headers: {
+                    "content-type": "application/json",
+                    ...headers
+                }
+            }
+            const response = await fetch(url, options);
+            if (response.ok) {
+                type ResponsesAPIOutputItem = {
+                    type: string;
+                    role?: string;
+                    content: { type: string; text: string }[];
+                };
+                const json = await response.json() as { output: ResponsesAPIOutputItem[] };
+                const message = json.output?.find(o => o.type === "message");
+                const textContent = message?.content?.find(c => c.type === "output_text");
+                if (textContent?.text !== undefined) {
+                    return success(textContent.text);
+                } else {
+                    return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
                 }
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
