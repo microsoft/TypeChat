@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import { Result, success, error } from '../result';
-import { TypeChatJsonValidator } from "../typechat";
+import { JsonSchemaOptions, TypeChatJsonValidator } from "../typechat";
+import { tsToJsonSchema } from './ast';
 
 const libText = `interface Array<T> { length: number, [n: number]: T }
 interface Object { toString(): string }
@@ -45,9 +46,17 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
         getSchemaText: () => schema,
         getTypeName: () => typeName,
         createModuleTextFromJson,
+        getJsonSchema,
         validate
     };
+
+
     return validator;
+
+    function getJsonSchema(options?: JsonSchemaOptions) {
+        const program = createProgramFromModuleText("", rootProgram);
+        return tsToJsonSchema(program, options);
+    }
 
     function validate(jsonObject: object) {
         const moduleResult = validator.createModuleTextFromJson(jsonObject);
