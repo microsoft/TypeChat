@@ -14,7 +14,7 @@
   "homepage": "https://github.com/microsoft/TypeChat#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/microsoft/TypeChat.git"
+    "url": "git+https://github.com/microsoft/TypeChat.git"
   },
   "bugs": {
     "url": "https://github.com/microsoft/TypeChat/issues"
@@ -22,8 +22,14 @@
   "scripts": {
     "build": "tsc -p src",
     "build-all": "npm run build --workspaces",
-    "prepare": "npm run build-all"
+    "prepare": "npm run build-all",
+    "prepublishOnly": "node -e \"require('fs').copyFileSync('../SECURITY.md','SECURITY.md')\"",
+    "postpublish": "node -e \"require('fs').unlinkSync('SECURITY.md')\"",
+    "publish-package": "npm publish",
+    "publish-package:dry-run": "npm publish --dry-run"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": "./dist/index.js",
     "./ts": "./dist/ts/index.js",
