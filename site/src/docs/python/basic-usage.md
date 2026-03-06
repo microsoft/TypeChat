@@ -50,7 +50,7 @@ class TypeChatLanguageModel(Protocol):
     async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
         """
         Represents a AI language model that can complete prompts.
-        
+
         TypeChat uses an implementation of this protocol to communicate
         with an AI service that can translate natural language requests to JSON
         instances according to a provided schema.
