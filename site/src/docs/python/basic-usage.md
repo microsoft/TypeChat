@@ -204,7 +204,7 @@ translator.translate("Hello world! 🙂");
 
 We'll come back to this.
 
-## Creating a "REPL"`
+## Creating a "REPL"
 
 TypeChat exports a `process_requests` function that makes it easy to
 experiment with TypeChat.
