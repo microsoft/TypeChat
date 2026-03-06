@@ -3,38 +3,37 @@ layout: doc-page
 title: Basic Python Usage
 ---
 
-TypeChat is currently a small library, so we can get a solid understanding just by going through the following example:
+TypeChat is currently a small library, so we can get a solid understanding
+just by going through the following example:
 
 ```py
 import asyncio
-
 import sys
-import schema as sentiment
-from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
+
+from dotenv import dotenv_values
+from typechat import (Failure, TypeChatJsonTranslator, TypeChatValidator,
+                      create_language_model, process_requests)
+
+import schema as sentiment  # See below for what's in schema.py.
 
 async def main():
-env_vals = dotenv_values()
+    env_vals = dotenv_values()
+    model = create_language_model(env_vals)
+    validator = TypeChatValidator(sentiment.Sentiment)
+    translator = TypeChatJsonTranslator(model, validator, sentiment.Sentiment)
 
-# Create a model.
-model = create_language_model(env_vals)
+    async def request_handler(message: str):
+        result = await translator.translate(message)
+        if isinstance(result, Failure):
+            print(result.message)
+        else:
+            result = result.value
+            print(f"The sentiment is {result['sentiment']}")
 
-# Create a validator
-validator = TypeChatValidator(sentiment.Sentiment)
+    filename = sys.argv[1] if len(sys.argv) == 2 else None
+    await process_requests("😀> ", filename, request_handler)
 
-# Create a translator.
-translator = TypeChatJsonTranslator(model, validator, sentiment.Sentiment)
-
-async def request_handler(message: str):
-    result = await translator.translate(message)
-    if isinstance(result, Failure):
-        print(result.message)
-    else:
-        result = result.value
-        print(f"The sentiment is {result.sentiment}")
-
-# Process requests interactively or from the input file specified on the command line.
-file_path = sys.argv[1] if len(sys.argv) == 2 else None
-await process_requests("😀> ", file_path, request_handler)
+asyncio.run(main())
 ```
 
 Let's break it down step-by-step.
@@ -62,9 +61,11 @@ class TypeChatLanguageModel(Protocol):
 then you should be able to try TypeChat out with such a model.
 
 The key thing here is providing a `complete` method.
-`complete` is just a function that takes a `string` and eventually returns a `string` if all goes well.
+`complete` is just a function that takes a `string` and eventually returns a
+string (wrapped in a `Result`) if all goes well.
 
-For convenience, TypeChat provides two functions out of the box to connect to the OpenAI API and Azure's OpenAI Services.
+For convenience, TypeChat provides two functions out of the box to connect to
+the OpenAI API and Azure's OpenAI Services.
 You can call these directly.
 
 ```py
@@ -76,19 +77,25 @@ def create_openai_language_model(
 ):
     ...
 
-def create_azure_openai_language_model(api_key: str, endpoint: str):
+def create_azure_openai_language_model(api_key: str, endpoint: str): ...
 ```
 
-For even more convenience, TypeChat also provides a function to infer whether you're using OpenAI or Azure OpenAI.
+For even more convenience, TypeChat also provides a function to infer whether
+you're using OpenAI or Azure OpenAI.
 
 ```ts
-def create_language_model(vals: dict[str, str | None]) -> TypeChatLanguageModel:
+def create_language_model(
+    vals: dict[str, str | None]
+) -> TypeChatLanguageModel: ...
 ```
 
-With `create_language_model`, you can populate your environment variables and pass them in.
-Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get a model of the appropriate type.
+With `create_language_model`, you can populate your environment variables and
+pass them in.
+Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get
+a model of the appropriate type.
 
-The `TypeChatLanguageModel` returned by these functions has a few attributes you might find useful:
+The `TypeChatLanguageModel` returned by these functions has a few writable
+attributes you might find useful:
 
 - `max_retry_attempts`
 - `retry_pause_seconds`
@@ -96,7 +103,7 @@ The `TypeChatLanguageModel` returned by these functions has a few attributes you
 
 Though note that these are unstable.
 
-Regardless, of how you decide to construct your model, it is important to avoid committing credentials directly in source.
+Regardless of how you decide to construct your model, it is important to avoid committing credentials directly in source.
 One way to make this work between production and development environments is to use a `.env` file in development, and specify that `.env` in your `.gitignore`.
 You can use a library like [`python-dotenv`](https://pypi.org/project/python-dotenv/) to help load these up.
 
@@ -178,15 +185,18 @@ validator = TypeChatValidator(sentiment.Sentiment)
 ## Creating a JSON Translator
 
 A `TypeChatJsonTranslator` brings all these concepts together.
-A translator takes a language model, a validator, and our expected type, and provides a way to translate some user input into objects following our schema.
-To do so, it crafts a prompt based on the schema, reaches out to the model, parses out JSON data, and attempts validation.
+A translator takes a language model, a validator, and our expected type, and
+provides a way to translate some user input into objects following our schema.
+To do so, it crafts a prompt based on the schema, reaches out to the model,
+parses out JSON data, and attempts validation.
 Optionally, it will craft repair prompts and retry if validation fails.
 
 ```py
 translator = TypeChatJsonTranslator(model, validator, sentiment.Sentiment)
 ```
 
-When we are ready to translate a user request, we can call the `translate` method.
+When we are ready to translate a user request, we can call the `translate`
+method.
 
 ```ts
 translator.translate("Hello world! 🙂");
@@ -194,35 +204,42 @@ translator.translate("Hello world! 🙂");
 
 We'll come back to this.
 
-## Creating the Prompt
+## Creating a "REPL"`
 
-TypeChat exports a `process_requests` function that makes it easy to experiment with TypeChat.
-Depending on its second argument, it either creates an interactive command line prompt (if given `None`), or reads lines in from the given a file path.
+TypeChat exports a `process_requests` function that makes it easy to
+experiment with TypeChat.
+Depending on its second argument, it either creates an interactive command
+line (if given `None`), or reads lines from the given a file path.
 
 ```ts
 async def request_handler(message: str):
     ...
 
-file_path = sys.argv[1] if len(sys.argv) == 2 else None
-await process_requests("😀> ", file_path, request_handler)
+filename = sys.argv[1] if len(sys.argv) == 2 else None
+await process_requests("😀> ", filename, request_handler)
 ```
 
 `process_requests` takes 3 things.
-First, there's the prompt prefix - this is what a user will see before their own text in interactive scenarios.
+First, there's the prompt string - this is what a user will see before their
+own input in interactive scenarios.
 You can make this playful.
 We like to use emoji here. 😄
 
 Next, we take a text file name.
-Input strings will be read from this file on a per-line basis.
-If the file name was `None`, `process_requests` will work on standard input and provide an interactive prompt.
-By checking `sys.argv`, our script makes our program interactive unless the person running the program provided an input file as a command line argument (e.g. `python ./example.py inputFile.txt`).
+Input strings will be read from this file one line at a time.
+If the file name was `None`, `process_requests` will work on standard input
+and provide an interactive prompt (assuming `sys.stdin.isatty()` is true).
+By checking `sys.argv`, our script makes our program interactive unless the
+person running the program provided an input file as a command line argument
+(e.g. `python ./example.py inputFile.txt`).
 
 Finally, there's the request handler.
 We'll fill that in next.
 
 ## Translating Requests
 
-Our handler receives some user input (the `message` string) each time it's called.
+Our handler receives some user input (the `message` string) each time it's
+called.
 It's time to pass that string into over to our `translator` object.
 
 ```ts
@@ -231,16 +248,21 @@ async def request_handler(message: str):
     if isinstance(result, Failure):
         print(result.message)
     else:
-        result = result.value
-        print(f"The sentiment is {result.sentiment}")
+        print(f"The sentiment is {result.value.sentiment}")
 ```
 
 We're calling the `translate` method on each string and getting a response.
-If something goes wrong, TypeChat will retry requests up to a maximum specified by `retry_max_attempts` on our `model`.
-However, if the initial request as well as all retries fail, `result` will be a `typechat.Failure` and we'll be able to grab a `message` explaining what went wrong.
+If something goes wrong, TypeChat will retry requests up to a maximum
+specified by `retry_max_attempts` on our `model`.
+However, if the initial request as well as all retries fail, `result` will be
+a `typechat.Failure` and we'll be able to grab a `message` explaining what
+went wrong.
 
-In the ideal case, `result` will be a `typechat.Success` and we'll be able to access our well-typed `value` property!
-This will correspond to the type that we passed in when we created our translator object (i.e. `Sentiment`).
+In the ideal case, `result` will be a `typechat.Success` and we'll be able to
+access our well-typed `value` property!
+This will correspond to the type that we passed in when we created our
+translator object (i.e. `Sentiment`).
 
 That's it!
-You should now have a basic idea of TypeChat's APIs and how to get started with a new project. 🎉
+You should now have a basic idea of TypeChat's APIs and how to get started
+with a new project. 🎉
