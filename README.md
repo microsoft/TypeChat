@@ -40,7 +40,7 @@ You can also work with TypeChat from source for:
 
 * [Python](./python/README.md)
 * [TypeScript](./typescript/README.md)
-* [C#/.NET](./dotnet/README.md)
+* [C#/.NET](https://github.com/microsoft/TypeChat.net)
 
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](./typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 

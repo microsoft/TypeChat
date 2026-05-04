@@ -1,9 +1,4 @@
 
-const shiki = require("shiki");
-
-// @ts-expect-error
-const { EleventyHtmlBasePlugin } = require("@11ty/eleventy");
-
 const dateFormatter = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long", day: "numeric" });
 const listFormatter = new Intl.ListFormat("en-US", { style: "long", type: "conjunction" });
 
@@ -11,7 +6,10 @@ const listFormatter = new Intl.ListFormat("en-US", { style: "long", type: "conju
  * 
  * @param {import("@11ty/eleventy").UserConfig} eleventyConfig 
  */
-module.exports = function (eleventyConfig) {
+module.exports = async function (eleventyConfig) {
+    const shiki = await import("shiki");
+    const { EleventyHtmlBasePlugin } = await import("@11ty/eleventy");
+
     eleventyConfig.addPlugin(EleventyHtmlBasePlugin);
 
     eleventyConfig.addPassthroughCopy("./src/css");

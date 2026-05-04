@@ -3,7 +3,7 @@ layout: doc-page
 title: Basic TypeScript Usage
 ---
 
-TypeChat is currently a small library, so let's take a look at some basic usage to understand it.
+TypeChat is currently a small library, so we can get a solid understanding just by understanding the following example:
 
 ```ts
 import fs from "fs";
@@ -33,6 +33,8 @@ processRequests("😀> ", process.argv[2], async (request) => {
     console.log(`The sentiment is ${response.data.sentiment}`);
 });
 ```
+
+Let's break it down step-by-step.
 
 ## Providing a Model
 
@@ -77,19 +79,25 @@ For even more convenience, TypeChat also provides a function to infer whether yo
 export function createLanguageModel(env: Record<string, string | undefined>): TypeChatLanguageModel
 ```
 
-You can populate your environment variables, and based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get a model of the appropriate type.
+With `createLanguageModel`, you can populate your environment variables and pass them in.
+Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get a model of the appropriate type.
+
+Regardless, of how you decide to construct your model, it is important to avoid committing credentials directly in source.
+One way to make this work between production and development environments is to use a `.env` file in development, and specify that `.env` in your `.gitignore`.
+You can use a library like [`dotenv`](https://www.npmjs.com/package/dotenv) to help load these up.
 
 ```ts
 import dotenv from "dotenv";
 dotenv.config(/*...*/);
+
+// ...
+
 import * as typechat from "typechat";
 const model = typechat.createLanguageModel(process.env);
 ```
 
-Regardless, of how you decide to construct your model, we recommend keeping your secret tokens/API keys in a `.env` file, and specifying `.env` in a `.gitignore`.
-You can use a library like [`dotenv`](https://www.npmjs.com/package/dotenv) to help load these up.
 
-## Loading the Schema
+## Defining and Loading the Schema
 
 TypeChat describes types to language models to help guide their responses.
 In this case, we are using a `TypeScriptJsonValidator` which uses the TypeScript compiler to validate data against a set of types.
@@ -243,9 +251,9 @@ A `TypeChatJsonTranslator` brings these together.
 import { createJsonTranslator } from "typechat";
 ```
 
-A translator takes both a model and a validator, and provides a way to translate some user input into objects within our schema.
+A translator takes both a model and a validator, and provides a way to translate some user input into objects following our schema.
 To do so, it crafts a prompt based on the schema, reaches out to the model, parses out JSON data, and attempts validation.
-Optionally, it will craft repair prompts and retry if validation failed..
+Optionally, it will craft repair prompts and retry if validation fails.
 
 ```ts
 const translator = createJsonTranslator(model, validator);

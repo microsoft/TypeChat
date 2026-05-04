@@ -22,7 +22,5 @@ class Nested(TypedDict):
     item: FirstOrSecond[str]
 
 
-
-def test_generic_alias1(snapshot: Any):
+def test_generic_alias2(snapshot: Any):
     assert(python_type_to_typescript_schema(Nested) == snapshot(extension_class=TypeScriptSchemaSnapshotExtension))
-    
