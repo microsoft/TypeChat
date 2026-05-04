@@ -132,7 +132,7 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
         "Authorization": `Bearer ${apiKey}`,
         "OpenAI-Organization": org
     };
-    if (useResponsesApi ?? isResponsesApiUrl(endPoint)) {
+    if ((useResponsesApi ?? isResponsesApiUrl(endPoint))) {
         return createResponsesFetchLanguageModel(endPoint, headers, { model });
     }
     return createFetchLanguageModel(endPoint, headers, { model });
