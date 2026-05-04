@@ -5,7 +5,7 @@
  * These tests use mocked fetch to avoid requiring real API keys.
  */
 
-import { test, describe, before, after } from "node:test";
+import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 
 // Load the compiled module from dist
@@ -19,6 +19,7 @@ function makeChatCompletionsResponse(content) {
     return {
         ok: true,
         status: 200,
+        headers: { get: (_name) => null },
         json: () =>
             Promise.resolve({
                 id: "chatcmpl-123",
@@ -32,6 +33,7 @@ function makeResponsesAPIResponse(text) {
     return {
         ok: true,
         status: 200,
+        headers: { get: (_name) => null },
         json: () =>
             Promise.resolve({
                 id: "resp-123",
@@ -47,8 +49,18 @@ function makeResponsesAPIResponse(text) {
     };
 }
 
-function makeErrorResponse(status, statusText) {
-    return { ok: false, status, statusText };
+function makeErrorResponse(status, statusText, retryAfterSec = null) {
+    return {
+        ok: false,
+        status,
+        statusText,
+        headers: {
+            get: (name) =>
+                name.toLowerCase() === "retry-after" && retryAfterSec !== null
+                    ? String(retryAfterSec)
+                    : null,
+        },
+    };
 }
 
 // ---------------------------------------------------------------------------
@@ -132,13 +144,49 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
         assert.equal(result.success, false);
         assert.ok(result.message.includes("401"));
     });
+
+    test("auto-detects Responses API from a /responses endpoint URL", async () => {
+        setupFetch([makeResponsesAPIResponse("Auto-detected!")]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/responses");
+        const result = await model.complete("test");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "Auto-detected!");
+        const body = JSON.parse(capturedRequests[0].options.body);
+        assert.ok("input" in body, "Expected input field (Responses API) from auto-detection");
+        assert.ok(!("messages" in body), "Should NOT have messages field when auto-detected as Responses API");
+    });
+
+    test("uses Responses API when useResponsesApi=true regardless of URL", async () => {
+        setupFetch([makeResponsesAPIResponse("Forced!")]);
+        // Passing a chat/completions URL but forcing Responses API via the flag
+        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/chat/completions", "", true);
+        const result = await model.complete("test");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "Forced!");
+        const body = JSON.parse(capturedRequests[0].options.body);
+        assert.ok("input" in body, "Expected input field when useResponsesApi=true");
+    });
+
+    test("respects retry-after header on 429 for Chat Completions API", async () => {
+        setupFetch([
+            makeErrorResponse(429, "Too Many Requests", 0), // Retry-After: 0s (immediate)
+            makeChatCompletionsResponse("OK after retry"),
+        ]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        model.retryMaxAttempts = 3;
+        model.retryPauseMs = 1000;
+        const result = await model.complete("test");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "OK after retry");
+        assert.equal(capturedRequests.length, 2, "Expected 2 requests: initial + 1 retry");
+    });
 });
 
 // ---------------------------------------------------------------------------
 // Responses API
 // ---------------------------------------------------------------------------
 
-describe("createOpenAIResponsesLanguageModel (Responses API)", () => {
+describe("createOpenAIResponsesLanguageModel (Responses API, deprecated)", () => {
     after(teardownFetch);
 
     test("uses /responses endpoint by default", async () => {
@@ -190,12 +238,27 @@ describe("createOpenAIResponsesLanguageModel (Responses API)", () => {
         setupFetch([{
             ok: true,
             status: 200,
+            headers: { get: (_name) => null },
             json: () => Promise.resolve({ output: [] }),
         }]);
         const model = createOpenAIResponsesLanguageModel("sk-test", "gpt-4");
         const result = await model.complete("test");
         assert.equal(result.success, false);
         assert.ok(result.message.includes("unexpected response format"));
+    });
+
+    test("respects retry-after header on 429 for Responses API", async () => {
+        setupFetch([
+            makeErrorResponse(429, "Too Many Requests", 0), // Retry-After: 0s (immediate)
+            makeResponsesAPIResponse("OK after retry"),
+        ]);
+        const model = createOpenAIResponsesLanguageModel("sk-test", "gpt-4");
+        model.retryMaxAttempts = 3;
+        model.retryPauseMs = 1000;
+        const result = await model.complete("test");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "OK after retry");
+        assert.equal(capturedRequests.length, 2, "Expected 2 requests: initial + 1 retry");
     });
 });
 
@@ -206,7 +269,7 @@ describe("createOpenAIResponsesLanguageModel (Responses API)", () => {
 describe("createLanguageModel environment variable routing", () => {
     after(teardownFetch);
 
-    test("defaults to Chat Completions API when OPENAI_USE_RESPONSES_API is not set", async () => {
+    test("defaults to Chat Completions API", async () => {
         setupFetch([makeChatCompletionsResponse("OK")]);
         const model = createLanguageModel({
             OPENAI_API_KEY: "sk-test",
@@ -217,16 +280,18 @@ describe("createLanguageModel environment variable routing", () => {
         assert.ok(capturedRequests[0].url.includes("/chat/completions"));
     });
 
-    test("uses Responses API when OPENAI_USE_RESPONSES_API=true", async () => {
+    test("uses Responses API when OPENAI_ENDPOINT points to a /responses URL", async () => {
         setupFetch([makeResponsesAPIResponse("OK")]);
         const model = createLanguageModel({
             OPENAI_API_KEY: "sk-test",
             OPENAI_MODEL: "gpt-4",
-            OPENAI_USE_RESPONSES_API: "true",
+            OPENAI_ENDPOINT: "https://api.openai.com/v1/responses",
         });
         const result = await model.complete("test");
         assert.equal(result.success, true);
         assert.ok(capturedRequests[0].url.includes("/responses"));
+        const body = JSON.parse(capturedRequests[0].options.body);
+        assert.ok("input" in body, "Expected Responses API request format");
     });
 
     test("OPENAI_ENDPOINT overrides default endpoint (Chat Completions path)", async () => {
@@ -241,20 +306,22 @@ describe("createLanguageModel environment variable routing", () => {
         assert.equal(capturedRequests[0].url, customUrl);
     });
 
-    test("OPENAI_ENDPOINT overrides default when Responses API is selected", async () => {
+    test("OPENAI_ENDPOINT pointing to custom /responses URL uses Responses API", async () => {
         setupFetch([makeResponsesAPIResponse("OK")]);
         const customUrl = "https://proxy.example.com/v1/responses";
         const model = createLanguageModel({
             OPENAI_API_KEY: "sk-test",
             OPENAI_MODEL: "gpt-4",
-            OPENAI_USE_RESPONSES_API: "true",
             OPENAI_ENDPOINT: customUrl,
         });
         await model.complete("test");
         assert.equal(capturedRequests[0].url, customUrl);
+        const body = JSON.parse(capturedRequests[0].options.body);
+        assert.ok("input" in body, "Expected Responses API request format");
     });
 
     test("throws when OPENAI_API_KEY and AZURE_OPENAI_API_KEY are both missing", () => {
         assert.throws(() => createLanguageModel({}), /Missing environment variable/);
     });
 });
+

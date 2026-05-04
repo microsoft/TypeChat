@@ -83,8 +83,8 @@ export interface TypeChatLanguageModel {
  * If an `OPENAI_API_KEY` environment variable exists, the `createOpenAILanguageModel` function
  * is used to create the instance. The `OPENAI_ENDPOINT` and `OPENAI_MODEL` environment variables
  * must also be defined or an exception will be thrown.
- * Set `OPENAI_USE_RESPONSES_API=true` to opt-in to the newer OpenAI Responses API
- * (`https://api.openai.com/v1/responses`) instead of the default Chat Completions API.
+ * To use the OpenAI Responses API, set `OPENAI_ENDPOINT` to a URL whose path ends with `/responses`
+ * (e.g. `https://api.openai.com/v1/responses`); otherwise the Chat Completions API is used.
  *
  * If an `AZURE_OPENAI_API_KEY` environment variable exists, the `createAzureOpenAILanguageModel` function
  * is used to create the instance. The `AZURE_OPENAI_ENDPOINT` environment variable must also be defined
@@ -98,10 +98,6 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
         const org = env.OPENAI_ORGANIZATION ?? "";
-        if (env.OPENAI_USE_RESPONSES_API === "true") {
-            const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/responses";
-            return createOpenAIResponsesLanguageModel(apiKey, model, endPoint, org);
-        }
         const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
         return createOpenAILanguageModel(apiKey, model, endPoint, org);
     }
@@ -115,17 +111,30 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
 
 /**
  * Creates a language model encapsulation of an OpenAI REST API endpoint.
+ *
+ * When `endPoint` (or `useResponsesApi`) indicates the Responses API the function routes through
+ * the `/v1/responses` request/response format; otherwise the Chat Completions format is used.
+ * The Responses API is auto-detected when the endpoint URL path ends with `/responses`
+ * (e.g. `https://api.openai.com/v1/responses`).
  * @param apiKey The OpenAI API key.
- * @param model The model name.
- * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to "https://api.openai.com/v1/chat/completions".
+ * @param model The model name (e.g. `"gpt-4o"`).
+ * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to
+ *   `"https://api.openai.com/v1/chat/completions"`. Supply a `/responses` URL to use the
+ *   Responses API instead.
  * @param org The OpenAI organization id.
+ * @param useResponsesApi When `true`, forces the Responses API regardless of the endpoint URL.
+ *   When `false`, forces Chat Completions. When `undefined` (default), the API variant is
+ *   inferred from the endpoint URL.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = ""): TypeChatLanguageModel {
+export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", useResponsesApi?: boolean): TypeChatLanguageModel {
     const headers = {
         "Authorization": `Bearer ${apiKey}`,
         "OpenAI-Organization": org
     };
+    if (useResponsesApi ?? isResponsesApiUrl(endPoint)) {
+        return createResponsesFetchLanguageModel(endPoint, headers, { model });
+    }
     return createFetchLanguageModel(endPoint, headers, { model });
 }
 
@@ -149,11 +158,26 @@ export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string)
 
 /**
  * Creates a language model encapsulation of an OpenAI Responses API endpoint.
- * This function uses the newer `/v1/responses` endpoint introduced by OpenAI.
- * For users of the classic `/v1/chat/completions` endpoint, use `createOpenAILanguageModel` instead.
+ *
+ * **Note:** Unlike the Chat Completions API (`/v1/chat/completions`), the Responses API
+ * (`/v1/responses`) uses a different request/response format:
+ * - **Request**: `input` field instead of `messages`.
+ * - **Response**: text is found at `output[n].content[m].text` where the output item has
+ *   `type === "message"` and the content item has `type === "output_text"`.
+ *
+ * See the [OpenAI Responses API documentation](https://platform.openai.com/docs/api-reference/responses)
+ * for full details, and the [Azure OpenAI Responses API documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/responses)
+ * for Azure-specific endpoint formats.
+ *
+ * @deprecated Use {@link createOpenAILanguageModel} instead — it accepts the same parameters and
+ *   automatically selects the Responses API when the endpoint URL path ends with `/responses`, or
+ *   when the fifth argument `useResponsesApi` is `true`.
+ *   This function will be removed in a future version.
+ *
  * @param apiKey The OpenAI API key.
- * @param model The model name.
- * @param endPoint The URL of the OpenAI Responses API endpoint. Defaults to "https://api.openai.com/v1/responses".
+ * @param model The model name (e.g. `"gpt-4o"`).
+ * @param endPoint The URL of the OpenAI Responses API endpoint. Defaults to
+ *   `"https://api.openai.com/v1/responses"`.
  * @param org The OpenAI organization id.
  * @returns An instance of `TypeChatLanguageModel`.
  */
@@ -205,7 +229,7 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
                 return error(`REST API error ${response.status}: ${response.statusText}`);
             }
-            await sleep(retryPauseMs);
+            await sleep(getRetryDelayMs(response, retryPauseMs, retryPauseMs * retryMaxAttempts));
             retryCount++;
         }
     }
@@ -213,7 +237,29 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
 
 /**
  * OpenAI Responses API endpoint encapsulation using the fetch API.
- * Handles the different request/response format used by `/v1/responses`.
+ *
+ * The Responses API uses a different request and response shape from Chat Completions:
+ * - **Request body**: `input` (string or array of `PromptSection`) instead of `messages`.
+ * - **Response body**: text is returned inside `output[n].content[m].text` where the matching
+ *   output item has `type === "message"` and the content item has `type === "output_text"`.
+ *
+ * Example successful response:
+ * ```json
+ * {
+ *   "id": "resp_...",
+ *   "output": [
+ *     {
+ *       "type": "message",
+ *       "role": "assistant",
+ *       "content": [{ "type": "output_text", "text": "Hello!" }]
+ *     }
+ *   ]
+ * }
+ * ```
+ *
+ * @param url The Responses API endpoint URL (path should end with `/responses`).
+ * @param headers HTTP headers to include in every request (e.g. `Authorization`).
+ * @param defaultParams Additional JSON body parameters merged into every request (e.g. `{ model }`).
  */
 function createResponsesFetchLanguageModel(url: string, headers: object, defaultParams: object) {
     const model: TypeChatLanguageModel = {
@@ -258,10 +304,29 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
                 return error(`REST API error ${response.status}: ${response.statusText}`);
             }
-            await sleep(retryPauseMs);
+            await sleep(getRetryDelayMs(response, retryPauseMs, retryPauseMs * retryMaxAttempts));
             retryCount++;
         }
     }
+}
+
+/**
+ * Returns the number of milliseconds to wait before the next retry attempt.
+ * For 429 (Too Many Requests) responses, the `Retry-After` header value (in seconds) is used
+ * when present, capped at `maxMs` to avoid waiting longer than the configured total budget.
+ * For all other transient errors the default pause is returned.
+ */
+function getRetryDelayMs(response: Response, defaultMs: number, maxMs: number): number {
+    if (response.status === 429) {
+        const retryAfter = response.headers.get("retry-after");
+        if (retryAfter) {
+            const seconds = parseInt(retryAfter, 10);
+            if (!isNaN(seconds)) {
+                return Math.min(seconds * 1000, maxMs);
+            }
+        }
+    }
+    return defaultMs;
 }
 
 /**
@@ -277,6 +342,21 @@ function isTransientHttpError(code: number): boolean {
             return true;
     }
     return false;
+}
+
+/**
+ * Returns true when the given URL targets the OpenAI Responses API.
+ * Detection is based on whether the URL path ends with `/responses` (before any query string).
+ * This covers both the standard OpenAI endpoint (`https://api.openai.com/v1/responses`) and
+ * Azure OpenAI deployments that end with `/responses?api-version=...`.
+ */
+function isResponsesApiUrl(url: string): boolean {
+    try {
+        return new URL(url).pathname.endsWith("/responses");
+    } catch {
+        // Fallback for relative or non-standard URLs
+        return url.split("?")[0].endsWith("/responses");
+    }
 }
 
 /**
