@@ -29,9 +29,9 @@ jobs:
         npm ci
         npm run build
     - name : Upload artifact
-      uses: actions/upload-pages-artifact@v4
+      uses: actions/upload-pages-artifact@v5
       with:
         name: github-pages
         path: site/_site
     - name: Deploy to GitHub Pages from artifacts
-      uses: actions/deploy-pages@v4 
+      uses: actions/deploy-pages@v5 
