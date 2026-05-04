@@ -246,6 +246,20 @@ describe("createOpenAILanguageModel (Responses API path)", () => {
         assert.equal(result.data, "OK after retry");
         assert.equal(capturedRequests.length, 2, "Expected 2 requests: initial + 1 retry");
     });
+
+    test("respects retry-after header on 503 for Responses API path", async () => {
+        setupFetch([
+            makeErrorResponse(503, "Service Unavailable", 0), // Retry-After: 0s (immediate)
+            makeResponsesAPIResponse("OK after 503 retry"),
+        ]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/responses");
+        model.retryMaxAttempts = 3;
+        model.retryPauseMs = 1000;
+        const result = await model.complete("test");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "OK after 503 retry");
+        assert.equal(capturedRequests.length, 2, "Expected 2 requests: initial + 1 retry");
+    });
 });
 
 // ---------------------------------------------------------------------------
