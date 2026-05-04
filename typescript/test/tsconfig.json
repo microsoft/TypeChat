@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "target": "es2021",
+        "lib": ["es2021"],
+        "module": "node16",
+        "moduleResolution": "node16",
+        "types": ["node"],
+        "esModuleInterop": true,
+        "outDir": "../out",
+        "rootDir": ".",
+        "skipLibCheck": true,
+        "strict": true
+    },
+    "include": ["./**/*.ts"]
+}

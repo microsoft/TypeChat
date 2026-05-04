@@ -58,10 +58,51 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
         const syntacticDiagnostics = program.getSyntacticDiagnostics();
         const programDiagnostics = syntacticDiagnostics.length ? syntacticDiagnostics : program.getSemanticDiagnostics();
         if (programDiagnostics.length) {
-            const diagnostics = programDiagnostics.map(d => typeof d.messageText === "string" ? d.messageText : d.messageText.messageText).join("\n");
+            const checker = program.getTypeChecker();
+            const diagnostics = programDiagnostics.map(d => {
+                const message = ts.flattenDiagnosticMessageText(d.messageText, "\n");
+                // TS error 2740 truncates the missing-properties list to 4 items ("and N more").
+                // Use the type checker to reconstruct the full list of missing required properties.
+                if (d.code === 2740 && d.file && d.start !== undefined) {
+                    return expandMissingPropertiesMessage(checker, d.file, d.start) ?? message;
+                }
+                return message;
+            }).join("\n");
             return error(diagnostics);
         }
         return success(jsonObject as T);
+    }
+
+    /**
+     * For TypeScript error 2740 (missing required properties, truncated with "and N more"),
+     * uses the type checker to compute the full list of missing required properties from the
+     * variable declaration at `position` in `file`. Returns `undefined` if the declaration
+     * cannot be located or yields no missing properties (fallback to the original message).
+     */
+    function expandMissingPropertiesMessage(checker: ts.TypeChecker, file: ts.SourceFile, position: number): string | undefined {
+        for (const stmt of file.statements) {
+            if (ts.isVariableStatement(stmt)) {
+                for (const decl of stmt.declarationList.declarations) {
+                    // Match the specific declaration that spans the diagnostic position.
+                    // Use getStart() to exclude leading trivia from the range check.
+                    if (decl.getStart(file) <= position && position <= decl.end &&
+                            decl.type && ts.isTypeReferenceNode(decl.type) && decl.initializer) {
+                        const targetType = checker.getTypeAtLocation(decl.type);
+                        const sourceType = checker.getTypeAtLocation(decl.initializer);
+                        const sourceProps = new Set(sourceType.getProperties().map(p => p.name));
+                        const missingProps = targetType.getProperties()
+                            .filter(p => !(p.flags & ts.SymbolFlags.Optional) && !sourceProps.has(p.name))
+                            .map(p => p.name);
+                        if (missingProps.length > 0) {
+                            const srcStr = checker.typeToString(sourceType, undefined, ts.TypeFormatFlags.NoTruncation);
+                            const tgtStr = checker.typeToString(targetType, undefined, ts.TypeFormatFlags.NoTruncation);
+                            return `Type '${srcStr}' is missing the following properties from type '${tgtStr}': ${missingProps.join(", ")}`;
+                        }
+                    }
+                }
+            }
+        }
+        return undefined;
     }
 
     function createModuleTextFromJson(jsonObject: object) {
