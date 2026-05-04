@@ -13,14 +13,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
       with:
         fetch-depth: 0
     - name: Use Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v6
       with:
         node-version: 18.x
         cache: 'npm'
+        cache-dependency-path: "site/package-lock.json"
     - name: Build site
       run: |
         cd site
@@ -28,9 +29,9 @@ jobs:
         npm ci
         npm run build
     - name : Upload artifact
-      uses: actions/upload-pages-artifact@v2
+      uses: actions/upload-pages-artifact@v5
       with:
         name: github-pages
         path: site/_site
     - name: Deploy to GitHub Pages from artifacts
-      uses: actions/deploy-pages@v2 
+      uses: actions/deploy-pages@v5 

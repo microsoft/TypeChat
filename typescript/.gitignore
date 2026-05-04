@@ -1,0 +1,19 @@
+build/
+dist/
+out/
+node_modules/
+.env
+*.map
+*.out.txt
+*.bat
+
+# Copied at publish time from repo root
+SECURITY.md
+
+# Local development and debugging
+.scratch/
+**/.vscode/*
+**/tsconfig.debug.json
+!**/.vscode/launch.json
+**/build.bat
+
