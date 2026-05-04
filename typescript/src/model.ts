@@ -157,39 +157,6 @@ export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string)
 }
 
 /**
- * Creates a language model encapsulation of an OpenAI Responses API endpoint.
- *
- * **Note:** Unlike the Chat Completions API (`/v1/chat/completions`), the Responses API
- * (`/v1/responses`) uses a different request/response format:
- * - **Request**: `input` field instead of `messages`.
- * - **Response**: text is found at `output[n].content[m].text` where the output item has
- *   `type === "message"` and the content item has `type === "output_text"`.
- *
- * See the [OpenAI Responses API documentation](https://platform.openai.com/docs/api-reference/responses)
- * for full details, and the [Azure OpenAI Responses API documentation](https://learn.microsoft.com/en-us/azure/ai-services/openai/how-to/responses)
- * for Azure-specific endpoint formats.
- *
- * @deprecated Use {@link createOpenAILanguageModel} instead — it accepts the same parameters and
- *   automatically selects the Responses API when the endpoint URL path ends with `/responses`, or
- *   when the fifth argument `useResponsesApi` is `true`.
- *   This function will be removed in a future version.
- *
- * @param apiKey The OpenAI API key.
- * @param model The model name (e.g. `"gpt-4o"`).
- * @param endPoint The URL of the OpenAI Responses API endpoint. Defaults to
- *   `"https://api.openai.com/v1/responses"`.
- * @param org The OpenAI organization id.
- * @returns An instance of `TypeChatLanguageModel`.
- */
-export function createOpenAIResponsesLanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/responses", org = ""): TypeChatLanguageModel {
-    const headers = {
-        "Authorization": `Bearer ${apiKey}`,
-        "OpenAI-Organization": org
-    };
-    return createResponsesFetchLanguageModel(endPoint, headers, { model });
-}
-
-/**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
 function createFetchLanguageModel(url: string, headers: object, defaultParams: object) {
@@ -312,18 +279,17 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
 
 /**
  * Returns the number of milliseconds to wait before the next retry attempt.
- * For 429 (Too Many Requests) responses, the `Retry-After` header value (in seconds) is used
- * when present, capped at `maxMs` to avoid waiting longer than the configured total budget.
+ * When the response carries a `Retry-After` header (sent by servers on 429 Too Many Requests
+ * and 503 Service Unavailable), its value (in seconds) is used as the delay, capped at
+ * `maxMs` to avoid waiting longer than the configured total retry budget.
  * For all other transient errors the default pause is returned.
  */
 function getRetryDelayMs(response: Response, defaultMs: number, maxMs: number): number {
-    if (response.status === 429) {
-        const retryAfter = response.headers.get("retry-after");
-        if (retryAfter) {
-            const seconds = parseInt(retryAfter, 10);
-            if (!isNaN(seconds)) {
-                return Math.min(seconds * 1000, maxMs);
-            }
+    const retryAfter = response.headers.get("retry-after");
+    if (retryAfter) {
+        const seconds = parseInt(retryAfter, 10);
+        if (!isNaN(seconds)) {
+            return Math.min(seconds * 1000, maxMs);
         }
     }
     return defaultMs;

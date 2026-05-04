@@ -9,7 +9,7 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 
 // Load the compiled module from dist
-import { createOpenAILanguageModel, createOpenAIResponsesLanguageModel, createLanguageModel } from "../dist/index.js";
+import { createOpenAILanguageModel, createLanguageModel } from "../dist/index.js";
 
 // ---------------------------------------------------------------------------
 // Helpers: build mock Response objects
@@ -167,7 +167,7 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
         assert.ok("input" in body, "Expected input field when useResponsesApi=true");
     });
 
-    test("respects retry-after header on 429 for Chat Completions API", async () => {
+    test("respects retry-after header on 429", async () => {
         setupFetch([
             makeErrorResponse(429, "Too Many Requests", 0), // Retry-After: 0s (immediate)
             makeChatCompletionsResponse("OK after retry"),
@@ -180,30 +180,32 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
         assert.equal(result.data, "OK after retry");
         assert.equal(capturedRequests.length, 2, "Expected 2 requests: initial + 1 retry");
     });
+
+    test("respects retry-after header on 503", async () => {
+        setupFetch([
+            makeErrorResponse(503, "Service Unavailable", 0), // Retry-After: 0s (immediate)
+            makeChatCompletionsResponse("OK after 503 retry"),
+        ]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        model.retryMaxAttempts = 3;
+        model.retryPauseMs = 1000;
+        const result = await model.complete("test");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "OK after 503 retry");
+        assert.equal(capturedRequests.length, 2, "Expected 2 requests: initial + 1 retry");
+    });
 });
 
 // ---------------------------------------------------------------------------
-// Responses API
+// Responses API via createOpenAILanguageModel
 // ---------------------------------------------------------------------------
 
-describe("createOpenAIResponsesLanguageModel (Responses API, deprecated)", () => {
+describe("createOpenAILanguageModel (Responses API path)", () => {
     after(teardownFetch);
-
-    test("uses /responses endpoint by default", async () => {
-        setupFetch([makeResponsesAPIResponse("Hello!")]);
-        const model = createOpenAIResponsesLanguageModel("sk-test", "gpt-4");
-        const result = await model.complete("Say hello");
-        assert.equal(result.success, true);
-        assert.equal(result.data, "Hello!");
-        assert.ok(
-            capturedRequests[0].url.includes("/responses"),
-            "Expected /responses URL"
-        );
-    });
 
     test("sends input field (not messages) in request body", async () => {
         setupFetch([makeResponsesAPIResponse("Hi!")]);
-        const model = createOpenAIResponsesLanguageModel("sk-test", "gpt-4");
+        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/responses");
         await model.complete("Say hi");
         const body = JSON.parse(capturedRequests[0].options.body);
         assert.ok("input" in body, "Expected input field in request body");
@@ -212,26 +214,10 @@ describe("createOpenAIResponsesLanguageModel (Responses API, deprecated)", () =>
 
     test("parses text from output[0].content[0].text", async () => {
         setupFetch([makeResponsesAPIResponse("The answer is 42.")]);
-        const model = createOpenAIResponsesLanguageModel("sk-test", "gpt-4");
+        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/responses");
         const result = await model.complete("What is the answer?");
         assert.equal(result.success, true);
         assert.equal(result.data, "The answer is 42.");
-    });
-
-    test("accepts custom endpoint URL", async () => {
-        setupFetch([makeResponsesAPIResponse("Custom OK")]);
-        const customUrl = "https://custom.endpoint.com/v1/responses";
-        const model = createOpenAIResponsesLanguageModel("sk-test", "gpt-4", customUrl);
-        await model.complete("test");
-        assert.equal(capturedRequests[0].url, customUrl);
-    });
-
-    test("returns error on non-transient HTTP error", async () => {
-        setupFetch([makeErrorResponse(401, "Unauthorized")]);
-        const model = createOpenAIResponsesLanguageModel("invalid-key", "gpt-4");
-        const result = await model.complete("test");
-        assert.equal(result.success, false);
-        assert.ok(result.message.includes("401"));
     });
 
     test("returns error on unexpected response format", async () => {
@@ -241,18 +227,18 @@ describe("createOpenAIResponsesLanguageModel (Responses API, deprecated)", () =>
             headers: { get: (_name) => null },
             json: () => Promise.resolve({ output: [] }),
         }]);
-        const model = createOpenAIResponsesLanguageModel("sk-test", "gpt-4");
+        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/responses");
         const result = await model.complete("test");
         assert.equal(result.success, false);
         assert.ok(result.message.includes("unexpected response format"));
     });
 
-    test("respects retry-after header on 429 for Responses API", async () => {
+    test("respects retry-after header on 429 for Responses API path", async () => {
         setupFetch([
             makeErrorResponse(429, "Too Many Requests", 0), // Retry-After: 0s (immediate)
             makeResponsesAPIResponse("OK after retry"),
         ]);
-        const model = createOpenAIResponsesLanguageModel("sk-test", "gpt-4");
+        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/responses");
         model.retryMaxAttempts = 3;
         model.retryPauseMs = 1000;
         const result = await model.complete("test");
