@@ -83,6 +83,8 @@ export interface TypeChatLanguageModel {
  * If an `OPENAI_API_KEY` environment variable exists, the `createOpenAILanguageModel` function
  * is used to create the instance. The `OPENAI_ENDPOINT` and `OPENAI_MODEL` environment variables
  * must also be defined or an exception will be thrown.
+ * To use the OpenAI Responses API, set `OPENAI_ENDPOINT` to a URL whose path ends with `/responses`
+ * (e.g. `https://api.openai.com/v1/responses`); otherwise the Chat Completions API is used.
  *
  * If an `AZURE_OPENAI_API_KEY` environment variable exists, the `createAzureOpenAILanguageModel` function
  * is used to create the instance. The `AZURE_OPENAI_ENDPOINT` environment variable must also be defined
@@ -95,8 +97,8 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
     if (env.OPENAI_API_KEY) {
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
-        const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
         const org = env.OPENAI_ORGANIZATION ?? "";
+        const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
         return createOpenAILanguageModel(apiKey, model, endPoint, org);
     }
     if (env.AZURE_OPENAI_API_KEY) {
@@ -109,17 +111,30 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
 
 /**
  * Creates a language model encapsulation of an OpenAI REST API endpoint.
+ *
+ * When `endPoint` (or `useResponsesApi`) indicates the Responses API the function routes through
+ * the `/v1/responses` request/response format; otherwise the Chat Completions format is used.
+ * The Responses API is auto-detected when the endpoint URL path ends with `/responses`
+ * (e.g. `https://api.openai.com/v1/responses`).
  * @param apiKey The OpenAI API key.
- * @param model The model name.
- * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to "https://api.openai.com/v1/chat/completions".
+ * @param model The model name (e.g. `"gpt-4o"`).
+ * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to
+ *   `"https://api.openai.com/v1/chat/completions"`. Supply a `/responses` URL to use the
+ *   Responses API instead.
  * @param org The OpenAI organization id.
+ * @param useResponsesApi When `true`, forces the Responses API regardless of the endpoint URL.
+ *   When `false`, forces Chat Completions. When `undefined` (default), the API variant is
+ *   inferred from the endpoint URL.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = ""): TypeChatLanguageModel {
+export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", useResponsesApi?: boolean): TypeChatLanguageModel {
     const headers = {
         "Authorization": `Bearer ${apiKey}`,
         "OpenAI-Organization": org
     };
+    if ((useResponsesApi ?? isResponsesApiUrl(endPoint))) {
+        return createResponsesFetchLanguageModel(endPoint, headers, { model });
+    }
     return createFetchLanguageModel(endPoint, headers, { model });
 }
 
@@ -181,10 +196,103 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
                 return error(`REST API error ${response.status}: ${response.statusText}`);
             }
-            await sleep(retryPauseMs);
+            await sleep(getRetryDelayMs(response, retryPauseMs, retryPauseMs * retryMaxAttempts));
             retryCount++;
         }
     }
+}
+
+/**
+ * OpenAI Responses API endpoint encapsulation using the fetch API.
+ *
+ * The Responses API uses a different request and response shape from Chat Completions:
+ * - **Request body**: `input` (string or array of `PromptSection`) instead of `messages`.
+ * - **Response body**: text is returned inside `output[n].content[m].text` where the matching
+ *   output item has `type === "message"` and the content item has `type === "output_text"`.
+ *
+ * Example successful response:
+ * ```json
+ * {
+ *   "id": "resp_...",
+ *   "output": [
+ *     {
+ *       "type": "message",
+ *       "role": "assistant",
+ *       "content": [{ "type": "output_text", "text": "Hello!" }]
+ *     }
+ *   ]
+ * }
+ * ```
+ *
+ * @param url The Responses API endpoint URL (path should end with `/responses`).
+ * @param headers HTTP headers to include in every request (e.g. `Authorization`).
+ * @param defaultParams Additional JSON body parameters merged into every request (e.g. `{ model }`).
+ */
+function createResponsesFetchLanguageModel(url: string, headers: object, defaultParams: object) {
+    const model: TypeChatLanguageModel = {
+        complete
+    };
+    return model;
+
+    async function complete(prompt: string | PromptSection[]) {
+        let retryCount = 0;
+        const retryMaxAttempts = model.retryMaxAttempts ?? 3;
+        const retryPauseMs = model.retryPauseMs ?? 1000;
+        const input = typeof prompt === "string" ? prompt : (prompt as PromptSection[]);
+        while (true) {
+            const options = {
+                method: "POST",
+                body: JSON.stringify({
+                    ...defaultParams,
+                    input,
+                    temperature: 0,
+                }),
+                headers: {
+                    "content-type": "application/json",
+                    ...headers
+                }
+            }
+            const response = await fetch(url, options);
+            if (response.ok) {
+                type ResponsesAPIOutputItem = {
+                    type: string;
+                    role?: string;
+                    content: { type: string; text: string }[];
+                };
+                const json = await response.json() as { output: ResponsesAPIOutputItem[] };
+                const message = json.output?.find(o => o.type === "message");
+                const textContent = message?.content?.find(c => c.type === "output_text");
+                if (textContent?.text !== undefined) {
+                    return success(textContent.text);
+                } else {
+                    return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
+                }
+            }
+            if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
+                return error(`REST API error ${response.status}: ${response.statusText}`);
+            }
+            await sleep(getRetryDelayMs(response, retryPauseMs, retryPauseMs * retryMaxAttempts));
+            retryCount++;
+        }
+    }
+}
+
+/**
+ * Returns the number of milliseconds to wait before the next retry attempt.
+ * When the response carries a `Retry-After` header (sent by servers on 429 Too Many Requests
+ * and 503 Service Unavailable), its value (in seconds) is used as the delay, capped at
+ * `maxMs` to avoid waiting longer than the configured total retry budget.
+ * For all other transient errors the default pause is returned.
+ */
+function getRetryDelayMs(response: Response, defaultMs: number, maxMs: number): number {
+    const retryAfter = response.headers.get("retry-after");
+    if (retryAfter) {
+        const seconds = parseInt(retryAfter, 10);
+        if (!isNaN(seconds)) {
+            return Math.min(seconds * 1000, maxMs);
+        }
+    }
+    return defaultMs;
 }
 
 /**
@@ -200,6 +308,21 @@ function isTransientHttpError(code: number): boolean {
             return true;
     }
     return false;
+}
+
+/**
+ * Returns true when the given URL targets the OpenAI Responses API.
+ * Detection is based on whether the URL path ends with `/responses` (before any query string).
+ * This covers both the standard OpenAI endpoint (`https://api.openai.com/v1/responses`) and
+ * Azure OpenAI deployments that end with `/responses?api-version=...`.
+ */
+function isResponsesApiUrl(url: string): boolean {
+    try {
+        return new URL(url).pathname.endsWith("/responses");
+    } catch {
+        // Fallback for relative or non-standard URLs
+        return url.split("?")[0].endsWith("/responses");
+    }
 }
 
 /**
