@@ -215,14 +215,16 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(schemaOf("T", z.literal(false)), /type T = false;/);
         });
 
-        it("emits a union for multi-value literal (array form)", () => {
+        it("emits a union for multi-value literal (array form) — new Zod v4 overload", () => {
+            // z.literal() in Zod v4 accepts an array (ReadonlyArray<Literal>) as a first-class overload
             const out = schemaOf("T", z.literal(["active", "inactive", "pending"]));
             assert.match(out, /type T = "active" \| "inactive" \| "pending";/);
         });
 
-        it("emits 'any' for non-primitive literal values", () => {
-            // null is not string/number/boolean so falls through to "any"
-            const NullLiteral = z.literal(null as any);
+        it("emits 'any' for non-primitive literal values (e.g. null)", () => {
+            // null is a valid Literal in Zod v4 (util.Literal = string | number | boolean | bigint | null | undefined)
+            // but typeof null === "object", so it falls through to the "any" branch
+            const NullLiteral = z.literal(null);
             assert.match(schemaOf("T", NullLiteral), /any/);
         });
 
