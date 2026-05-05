@@ -160,8 +160,10 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
                 return appendTupleType(type);
             case "record":
                 return appendRecordType(type);
-            case "literal":
-                return appendLiteral((type._zod.def as z.core.$ZodLiteralDef<z.core.util.Literal>).values[0]);
+            case "literal": {
+                const litValues = (type._zod.def as z.core.$ZodLiteralDef<z.core.util.Literal>).values;
+                return append(litValues.map(v => typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? JSON.stringify(v) : "any").join(" | "));
+            }
             case "enum":
                 return append(Object.values((type._zod.def as z.core.$ZodEnumDef).entries).map(value => JSON.stringify(value)).join(" | "));
             case "optional":
