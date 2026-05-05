@@ -9,11 +9,11 @@ import { TypeChatJsonValidator } from '../typechat';
  * the `getTypeName` method obtains the name of the given target type in the schema.
  * @param schema A schema object where each property provides a name for an associated Zod type.
  * @param targetType The name in the schema of the target type for JSON validation.
- * @returns A `TypeChatJsonValidator<z.TypeOf<T[K]>>`, where T is the schema and K is the target type name.
+ * @returns A `TypeChatJsonValidator<z.infer<T[K]> & object>`, where T is the schema and K is the target type name.
  */
-export function createZodJsonValidator<T extends Record<string, z.ZodType>, K extends keyof T & string>(schema: T, typeName: K): TypeChatJsonValidator<z.TypeOf<T[K]>> {
+export function createZodJsonValidator<T extends Record<string, z.ZodType>, K extends keyof T & string>(schema: T, typeName: K): TypeChatJsonValidator<z.infer<T[K]> & object> {
     let schemaText: string;
-    const validator: TypeChatJsonValidator<z.TypeOf<T[K]>> = {
+    const validator: TypeChatJsonValidator<z.infer<T[K]> & object> = {
         getSchemaText: () => schemaText ??= getZodSchemaAsTypeScript(schema),
         getTypeName: () => typeName,
         validate
@@ -25,22 +25,22 @@ export function createZodJsonValidator<T extends Record<string, z.ZodType>, K ex
         if (!result.success) {
             return error(result.error.issues.map(({ path, message }) => `${path.map(key => `[${JSON.stringify(key)}]`).join("")}: ${message}`).join("\""));
         }
-        return success(result.data as z.TypeOf<T[K]>);
+        return success(result.data as z.infer<T[K]> & object);
     }
 }
 
-function getTypeKind(type: z.ZodType) {
-    return (type._def as z.ZodTypeDef & { typeName: z.ZodFirstPartyTypeKind }).typeName;
+function getTypeKind(type: z.ZodType): string {
+    return (type._zod.def as z.core.$ZodTypeDef).type;
 }
 
 function getTypeIdentity(type: z.ZodType): object {
     switch (getTypeKind(type)) {
-        case z.ZodFirstPartyTypeKind.ZodObject:
-            return (type._def as z.ZodObjectDef).shape();
-        case z.ZodFirstPartyTypeKind.ZodEnum:
-            return (type._def as z.ZodEnumDef).values;
-        case z.ZodFirstPartyTypeKind.ZodUnion:
-            return (type._def as z.ZodUnionDef).options;
+        case "object":
+            return (type._zod.def as z.core.$ZodObjectDef).shape;
+        case "enum":
+            return (type._zod.def as z.core.$ZodEnumDef).entries;
+        case "union":
+            return (type._zod.def as z.core.$ZodUnionDef).options;
     }
     return type;
 }
@@ -53,11 +53,10 @@ const enum TypePrecedence {
 
 function getTypePrecedence(type: z.ZodType): TypePrecedence {
     switch (getTypeKind(type)) {
-        case z.ZodFirstPartyTypeKind.ZodEnum:
-        case z.ZodFirstPartyTypeKind.ZodUnion:
-        case z.ZodFirstPartyTypeKind.ZodDiscriminatedUnion:
+        case "enum":
+        case "union":
             return TypePrecedence.Union;
-        case z.ZodFirstPartyTypeKind.ZodIntersection:
+        case "intersection":
             return TypePrecedence.Intersection;
     }
     return TypePrecedence.Object;
@@ -82,16 +81,16 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
         if (result) {
             appendNewLine();
         }
-        const description = type._def.description;
+        const description = type.description;
         if (description) {
             for (const comment of description.split("\n")) {
                 append(`// ${comment}`);
                 appendNewLine();
             }
         }
-        if (getTypeKind(type) === z.ZodFirstPartyTypeKind.ZodObject) {
+        if (getTypeKind(type) === "object") {
             append(`interface ${name} `);
-            appendObjectType(type as z.ZodObject<z.ZodRawShape>);
+            appendObjectType(type as z.ZodObject);
         }
         else {
             append(`type ${name} = `);
@@ -130,48 +129,51 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
 
     function appendTypeDefinition(type: z.ZodType) {
         switch (getTypeKind(type)) {
-            case z.ZodFirstPartyTypeKind.ZodString:
+            case "string":
                 return append("string");
-            case z.ZodFirstPartyTypeKind.ZodNumber:
+            case "number":
+            case "int":
                 return append("number");
-            case z.ZodFirstPartyTypeKind.ZodBoolean:
+            case "boolean":
                 return append("boolean");
-            case z.ZodFirstPartyTypeKind.ZodDate:
+            case "date":
                 return append("Date");
-            case z.ZodFirstPartyTypeKind.ZodUndefined:
+            case "undefined":
                 return append("undefined");
-            case z.ZodFirstPartyTypeKind.ZodNull:
+            case "null":
                 return append("null");
-            case z.ZodFirstPartyTypeKind.ZodUnknown:
+            case "unknown":
                 return append("unknown");
-            case z.ZodFirstPartyTypeKind.ZodArray:
+            case "array":
                 return appendArrayType(type);
-            case z.ZodFirstPartyTypeKind.ZodObject:
+            case "object":
                 return appendObjectType(type);
-            case z.ZodFirstPartyTypeKind.ZodUnion:
-                return appendUnionOrIntersectionTypes((type._def as z.ZodUnionDef).options, TypePrecedence.Union);
-            case z.ZodFirstPartyTypeKind.ZodDiscriminatedUnion:
-                return appendUnionOrIntersectionTypes([...(type._def as z.ZodDiscriminatedUnionDef<string>).options.values()], TypePrecedence.Union);
-            case z.ZodFirstPartyTypeKind.ZodIntersection:
-                return appendUnionOrIntersectionTypes((type._def as z.ZodUnionDef).options, TypePrecedence.Intersection);
-            case z.ZodFirstPartyTypeKind.ZodTuple:
+            case "union": {
+                const unionDef = type._zod.def as z.core.$ZodDiscriminatedUnionDef | z.core.$ZodUnionDef;
+                return appendUnionOrIntersectionTypes(unionDef.options as readonly z.ZodType[], TypePrecedence.Union);
+            }
+            case "intersection": {
+                const intersectionDef = type._zod.def as z.core.$ZodIntersectionDef;
+                return appendUnionOrIntersectionTypes([intersectionDef.left as z.ZodType, intersectionDef.right as z.ZodType], TypePrecedence.Intersection);
+            }
+            case "tuple":
                 return appendTupleType(type);
-            case z.ZodFirstPartyTypeKind.ZodRecord:
+            case "record":
                 return appendRecordType(type);
-            case z.ZodFirstPartyTypeKind.ZodLiteral:
-                return appendLiteral((type._def as z.ZodLiteralDef).value);
-            case z.ZodFirstPartyTypeKind.ZodEnum:
-                return append((type._def as z.ZodEnumDef).values.map(value => JSON.stringify(value)).join(" | "));
-            case z.ZodFirstPartyTypeKind.ZodOptional:
-                return appendUnionOrIntersectionTypes([(type._def as z.ZodOptionalDef).innerType, z.undefined()], TypePrecedence.Union);
-            case z.ZodFirstPartyTypeKind.ZodReadonly:
+            case "literal":
+                return appendLiteral((type._zod.def as z.core.$ZodLiteralDef<z.core.util.Literal>).values[0]);
+            case "enum":
+                return append(Object.values((type._zod.def as z.core.$ZodEnumDef).entries).map(value => JSON.stringify(value)).join(" | "));
+            case "optional":
+                return appendUnionOrIntersectionTypes([(type._zod.def as z.core.$ZodOptionalDef).innerType as z.ZodType, z.undefined()], TypePrecedence.Union);
+            case "readonly":
                 return appendReadonlyType(type);
         }
         append("any");
     }
 
     function appendArrayType(arrayType: z.ZodType) {
-        appendType((arrayType._def as z.ZodArrayDef).type, TypePrecedence.Object);
+        appendType((arrayType._zod.def as z.core.$ZodArrayDef).element as z.ZodType, TypePrecedence.Object);
         append("[]");
     }
 
@@ -179,12 +181,12 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
         append("{");
         appendNewLine();
         indent++;
-        for (let [name, type] of Object.entries((objectType._def as z.ZodObjectDef).shape())) {
+        for (let [name, type] of Object.entries((objectType._zod.def as z.core.$ZodObjectDef).shape) as [string, z.ZodType][]) {
             const comment = type.description;
             append(name);
-            if (getTypeKind(type) === z.ZodFirstPartyTypeKind.ZodOptional) {
+            if (getTypeKind(type) === "optional") {
                 append("?");
-                type = (type._def as z.ZodOptionalDef).innerType;
+                type = (type._zod.def as z.core.$ZodOptionalDef).innerType as z.ZodType;
             }
             append(": ");
             appendType(type);
@@ -208,10 +210,11 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
     function appendTupleType(tupleType: z.ZodType) {
         append("[");
         let first = true;
-        for (let type of (tupleType._def as z.ZodTupleDef<z.ZodTupleItems, z.ZodType>).items) {
+        const tupleDef = tupleType._zod.def as z.core.$ZodTupleDef;
+        for (let type of tupleDef.items as z.ZodType[]) {
             if (!first) append(", ");
-            if (getTypeKind(type) === z.ZodFirstPartyTypeKind.ZodOptional) {
-                appendType((type._def as z.ZodOptionalDef).innerType, TypePrecedence.Object);
+            if (getTypeKind(type) === "optional") {
+                appendType((type._zod.def as z.core.$ZodOptionalDef).innerType as z.ZodType, TypePrecedence.Object);
                 append("?");
             }
             else {
@@ -219,11 +222,11 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
             }
             first = false;
         }
-        const rest = (tupleType._def as z.ZodTupleDef<z.ZodTupleItems, z.ZodType>).rest;
+        const rest = tupleDef.rest;
         if (rest) {
             if (!first) append(", ");
             append("...");
-            appendType(rest, TypePrecedence.Object);
+            appendType(rest as z.ZodType, TypePrecedence.Object);
             append("[]");
         }
         append("]");
@@ -231,9 +234,9 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
 
     function appendRecordType(recordType: z.ZodType) {
         append("Record<");
-        appendType((recordType._def as z.ZodRecordDef).keyType);
+        appendType((recordType._zod.def as z.core.$ZodRecordDef).keyType as z.ZodType);
         append(", ");
-        appendType((recordType._def as z.ZodRecordDef).valueType);
+        appendType((recordType._zod.def as z.core.$ZodRecordDef).valueType as z.ZodType);
         append(">");
     }
 
@@ -243,7 +246,7 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
 
     function appendReadonlyType(readonlyType: z.ZodType) {
         append("Readonly<");
-        appendType((readonlyType._def as z.ZodReadonlyDef).innerType);
+        appendType((readonlyType._zod.def as z.core.$ZodReadonlyDef).innerType as z.ZodType);
         append(">");
     }
 }
