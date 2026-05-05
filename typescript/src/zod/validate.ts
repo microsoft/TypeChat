@@ -190,16 +190,26 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
         appendNewLine();
         indent++;
         for (let [name, type] of Object.entries((objectType._zod.def as z.core.$ZodObjectDef).shape) as [string, z.ZodType][]) {
-            const comment = type.description;
-            append(name);
+            let inlineComment: string | undefined;
             if (getTypeKind(type) === "optional") {
+                const wrapperDescription = type.description;
+                if (wrapperDescription) {
+                    for (const line of wrapperDescription.split("\n")) {
+                        append(`// ${line}`);
+                        appendNewLine();
+                    }
+                }
+                append(name);
                 append("?");
                 type = (type._zod.def as z.core.$ZodOptionalDef).innerType as z.ZodType;
+            } else {
+                inlineComment = type.description;
+                append(name);
             }
             append(": ");
             appendType(type);
             append(";");
-            if (comment) append(` // ${comment}`);
+            if (inlineComment) append(` // ${inlineComment}`);
             appendNewLine();
         }
         indent--;
@@ -249,7 +259,7 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
     }
 
     function appendLiteral(value: unknown) {
-        append(typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? JSON.stringify(value) : "any");
+        append(value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? JSON.stringify(value) : "any");
     }
 
     function appendReadonlyType(readonlyType: z.ZodType) {

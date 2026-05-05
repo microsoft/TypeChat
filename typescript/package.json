@@ -21,7 +21,7 @@
   },
   "scripts": {
     "build": "tsc -p src",
-    "test": "npm run build && tsc -p test && node --test out/validate.test.js out/zod.test.js",
+    "test": "npm run build && tsc -p test && node --test out/validate.test.js out/zod.test.js tests/model.test.mjs",
     "build-all": "npm run build --workspaces",
     "prepare": "npm run build-all",
     "prepublishOnly": "node -e \"require('fs').copyFileSync('../SECURITY.md','SECURITY.md')\"",
