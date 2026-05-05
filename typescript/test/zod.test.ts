@@ -221,11 +221,10 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(out, /type T = "active" \| "inactive" \| "pending";/);
         });
 
-        it("emits 'any' for non-primitive literal values (e.g. null)", () => {
+        it("emits 'null' for null literal", () => {
             // null is a valid Literal in Zod v4 (util.Literal = string | number | boolean | bigint | null | undefined)
-            // but typeof null === "object", so it falls through to the "any" branch
             const NullLiteral = z.literal(null);
-            assert.match(schemaOf("T", NullLiteral), /any/);
+            assert.match(schemaOf("T", NullLiteral), /null/);
         });
 
     });
