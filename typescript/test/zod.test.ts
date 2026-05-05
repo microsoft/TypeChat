@@ -99,12 +99,12 @@ describe("getZodSchemaAsTypeScript", () => {
         });
 
         it("does NOT add comment to field comment if the optional wrapper has a description", () => {
-            // The description on the optional wrapper should appear before the outer type, not inline
+            // The description on the optional wrapper should appear before the field, not inline on it
             const out = schemaOf("T", z.object({
                 size: z.string().optional().describe("The default is 'grande'"),
             }));
-            // size should use ? syntax and the inline comment comes from the outer type description
-            assert.match(out, /size\?:/);
+            assert.match(out, /\/\/ The default is 'grande'\s*\r?\n\s*size\?: string;/);
+            assert.doesNotMatch(out, /size\?: string; \/\/ The default is 'grande'/);
         });
 
     });
