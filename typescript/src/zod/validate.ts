@@ -29,7 +29,12 @@ export function createZodJsonValidator<T extends Record<string, z.ZodType>, K ex
     }
 }
 
-function getTypeKind(type: z.ZodType): string {
+// ZodTypeKind is the union of all type-discriminant strings defined by Zod v4.
+// Using this type (rather than plain `string`) means the compiler enforces that
+// every case label in switch statements is a legitimate Zod type kind.
+type ZodTypeKind = z.core.$ZodTypeDef["type"];
+
+function getTypeKind(type: z.ZodType): ZodTypeKind {
     return (type._zod.def as z.core.$ZodTypeDef).type;
 }
 
@@ -54,7 +59,7 @@ const enum TypePrecedence {
 function getTypePrecedence(type: z.ZodType): TypePrecedence {
     switch (getTypeKind(type)) {
         case "enum":
-        case "union":
+        case "union": // covers both z.union() and z.discriminatedUnion() — Zod v4 uses "union" for both
             return TypePrecedence.Union;
         case "intersection":
             return TypePrecedence.Intersection;
@@ -148,7 +153,7 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
                 return appendArrayType(type);
             case "object":
                 return appendObjectType(type);
-            case "union": {
+            case "union": { // covers both z.union() and z.discriminatedUnion() — Zod v4 uses "union" for both; both have an `options` array
                 const unionDef = type._zod.def as z.core.$ZodDiscriminatedUnionDef | z.core.$ZodUnionDef;
                 return appendUnionOrIntersectionTypes(unionDef.options as readonly z.ZodType[], TypePrecedence.Union);
             }
