@@ -258,10 +258,6 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
         append(">");
     }
 
-    function appendLiteral(value: unknown) {
-        append(value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? JSON.stringify(value) : "any");
-    }
-
     function appendReadonlyType(readonlyType: z.ZodType) {
         append("Readonly<");
         appendType((readonlyType._zod.def as z.core.$ZodReadonlyDef).innerType as z.ZodType);
