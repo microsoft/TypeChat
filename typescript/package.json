@@ -21,9 +21,8 @@
   },
   "scripts": {
     "build": "tsc -p src",
-    "test": "npm run build && node --test tests/*.mjs",
+    "test": "npm run build && tsc -p test && node --test out/validate.test.js out/zod.test.js tests/model.test.mjs",
     "build-all": "npm run build --workspaces",
-    "test": "tsc -p test && node --test out/validate.test.js",
     "prepare": "npm run build-all",
     "prepublishOnly": "node -e \"require('fs').copyFileSync('../SECURITY.md','SECURITY.md')\"",
     "postpublish": "node -e \"require('fs').unlinkSync('SECURITY.md')\"",
@@ -47,10 +46,9 @@
     "README.md",
     "SECURITY.md"
   ],
-  "dependencies": {},
   "peerDependencies": {
     "typescript": "^5.3.3",
-    "zod": "^3.22.4"
+    "zod": "^4.4.3"
   },
   "peerDependenciesMeta": {
     "typescript": {
