@@ -6,11 +6,61 @@
 
 version: 2
 updates:
+  # npm — typescript library + examples + docs site.
+  # All security alerts in this repo to date have been against
+  # typescript/package-lock.json, which previously had no ecosystem entry
+  # here, so Dependabot never opened any update PRs for them.
+  - package-ecosystem: "npm"
+    directories:
+      - "/typescript"
+      - "/typescript/examples/*"
+      - "/site"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+    groups:
+      npm-production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      npm-development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
+  - package-ecosystem: "pip"
+    directory: "/python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+    groups:
+      pip-all:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      pip-security:
+        applies-to: security-updates
+        patterns: ["*"]
+
   - package-ecosystem: "devcontainers"
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      devcontainers:
+        patterns: ["*"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+      github-actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
