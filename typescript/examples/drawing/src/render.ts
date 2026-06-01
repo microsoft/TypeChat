@@ -10,7 +10,7 @@ function escapeXml(text: string): string {
 }
 
 function lineDash(style?: Style): string | undefined {
-    switch (style?.line_style) {
+    switch (style?.lineStyle) {
         case "dashed":
             return "6 4";
         case "dotted":
@@ -21,15 +21,15 @@ function lineDash(style?: Style): string | undefined {
 }
 
 function stroke(style?: Style): string {
-    return style?.line_color ?? "black";
+    return style?.lineColor ?? "black";
 }
 
 function strokeWidth(style?: Style): number {
-    return style?.line_thickness ?? 1;
+    return style?.lineThickness ?? 1;
 }
 
 function fill(style?: Style): string {
-    return style?.fill_color ?? "none";
+    return style?.fillColor ?? "none";
 }
 
 function renderBox(item: Box): string {
@@ -47,7 +47,7 @@ function renderEllipse(item: Ellipse): string {
 
 function renderArrow(item: Arrow): string {
     const dash = lineDash(item.style);
-    return `<line x1="${item.start_x}" y1="${item.start_y}" x2="${item.end_x}" y2="${item.end_y}" stroke="${stroke(item.style)}" stroke-width="${strokeWidth(item.style)}"${dash ? ` stroke-dasharray="${dash}"` : ""} marker-end="url(#arrowhead)" />`;
+    return `<line x1="${item.startX}" y1="${item.startY}" x2="${item.endX}" y2="${item.endY}" stroke="${stroke(item.style)}" stroke-width="${strokeWidth(item.style)}"${dash ? ` stroke-dasharray="${dash}"` : ""} marker-end="url(#arrowhead)" />`;
 }
 
 function getCanvasSize(drawing: Drawing): { width: number; height: number } {
@@ -61,8 +61,8 @@ function getCanvasSize(drawing: Drawing): { width: number; height: number } {
                 maxY = Math.max(maxY, item.y + item.height + 40);
                 break;
             case "Arrow":
-                maxX = Math.max(maxX, item.start_x + 40, item.end_x + 40);
-                maxY = Math.max(maxY, item.start_y + 40, item.end_y + 40);
+                maxX = Math.max(maxX, item.startX + 40, item.endX + 40);
+                maxY = Math.max(maxY, item.startY + 40, item.endY + 40);
                 break;
         }
     }

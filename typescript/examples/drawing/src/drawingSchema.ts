@@ -5,13 +5,13 @@ export interface Style {
     // Corner style for boxes.
     corners?: "rounded" | "sharp";
     // Thickness of outlines and arrows.
-    line_thickness?: number;
+    lineThickness?: number;
     // CSS color for outlines and arrows.
-    line_color?: string;
+    lineColor?: string;
     // CSS color used to fill boxes and ellipses.
-    fill_color?: string;
+    fillColor?: string;
     // Style of arrow lines.
-    line_style?: "solid" | "dashed" | "dotted";
+    lineStyle?: "solid" | "dashed" | "dotted";
 }
 
 export interface Box {
@@ -49,17 +49,17 @@ export interface Ellipse {
 export interface Arrow {
     type: "Arrow";
     // Starting X-coordinate.
-    start_x: number;
+    startX: number;
     // Starting Y-coordinate.
-    start_y: number;
+    startY: number;
     // Ending X-coordinate.
-    end_x: number;
+    endX: number;
     // Ending Y-coordinate.
-    end_y: number;
+    endY: number;
     // Optional style settings.
     style?: Style;
     // Optional arrowhead size hint.
-    head_size?: number;
+    headSize?: number;
 }
 
 export interface UnknownText {
