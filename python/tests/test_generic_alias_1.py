@@ -5,7 +5,6 @@ from .utilities import TypeScriptSchemaSnapshotExtension
 
 T = TypeVar("T", covariant=True)
 
-
 class First(Generic[T], TypedDict):
     kind: Literal["first"]
     first_attr: T

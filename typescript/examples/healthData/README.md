@@ -28,3 +28,34 @@ For example, given the following input statement:
 ```
 
 **Output**:
+
+```json
+{
+  "data": {
+    "medication": [
+      {
+        "name": "Claritin",
+        "dose": {
+          "displayText": "unknown"
+        },
+        "frequency": {
+          "displayText": "unknown"
+        },
+        "strength": {
+          "displayText": "unknown"
+        }
+      }
+    ],
+    "condition": [
+      {
+        "name": "Allergies",
+        "startDate": {
+          "displayText": "unknown"
+        },
+        "status": "unknown"
+      }
+    ]
+  },
+  "message": "Can you provide more details about your medication and condition? For example, the dose and frequency of your medication, and the start date and status of your condition."
+}
+```
