@@ -433,6 +433,22 @@ describe("createZodJsonValidator", () => {
             assert.match(result.message, /items/);
         });
 
+        it("separates multiple issues with a newline", () => {
+            const MultiSchema = {
+                Root: z.object({
+                    a: z.number(),
+                    b: z.number(),
+                }),
+            };
+            const v = createZodJsonValidator(MultiSchema, "Root");
+            const result = v.validate({ a: "x", b: "y" });
+            assert.ok(!result.success, "expected failure for two invalid fields");
+            // Two distinct issues should be produced and joined by a newline.
+            assert.match(result.message, /\[("|')a\1\]/);
+            assert.match(result.message, /\[("|')b\1\]/);
+            assert.match(result.message, /\n/);
+        });
+
     });
 
 });
