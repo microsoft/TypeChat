@@ -22,7 +22,7 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
     else:
         try:
             # Use readline to enable input editing and history
-            import readline  # type: ignore
+            import readline  # type: ignore # noqa: F401
         except ImportError:
             pass
         while True:
