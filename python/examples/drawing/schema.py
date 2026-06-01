@@ -17,7 +17,10 @@ class Style:
     line_thickness: Annotated[Optional[int], Doc("Thickness of the lines.")] = None
     line_color: Annotated[Optional[str], Doc("CSS-style color code for line color.")] = None
     fill_color: Annotated[Optional[str], Doc("CSS-style color code for fill color.")] = None
-    line_style: Annotated[Optional[str], Doc("Style of the line: 'solid', 'dashed', 'dotted'.")] = None
+    line_style: Annotated[
+        Optional[Literal["solid", "dashed", "dotted"]],
+        Doc("Style of the line: 'solid', 'dashed', 'dotted'."),
+    ] = None
 
 
 @dataclass
@@ -50,7 +53,7 @@ class Ellipse:
 
 @dataclass
 class Arrow:
-    """A line with a directional arrow at one or both ends, defined by start and end points."""
+    """A line with a directional arrow at the end, defined by start and end points."""
 
     type: Literal["Arrow"]
 
@@ -66,7 +69,7 @@ class Arrow:
 class UnknownText:
     """Used for input that does not match any other specified type."""
 
-    type: Literal["UnknownText"]
+    type: Literal["Unknown"]
 
     text: Annotated[str, Doc("The text that wasn't understood.")]
 

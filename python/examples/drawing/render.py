@@ -42,12 +42,14 @@ def render_drawing(canvas: tk.Canvas, drawing: Drawing):
             canvas.create_text((x1 + x2) / 2, (y1 + y2) / 2, text=ellipse.text, fill="black")
 
     def draw_arrow(arrow: Arrow):
+        line_style = getattr(arrow.style, "line_style", None) or "solid"
+        dash = dash_pattern.get(line_style, dash_pattern["solid"])
         canvas.create_line(
             arrow.start_x,
             arrow.start_y,
             arrow.end_x,
             arrow.end_y,
-            dash=dash_pattern[getattr(arrow.style, "line_style", None) or "solid"],
+            dash=dash,
             arrow=tk.LAST,
             fill=getattr(arrow.style, "line_color", None) or "black",
         )
