@@ -23,12 +23,12 @@ const history: string[] = [];
 
 // Process requests interactively or from the input file specified on the command line
 processRequests("🎨> ", process.argv[2], async (request) => {
-    history.push(request);
-    const response = await translator.translate(history.join("\n"));
+    const response = await translator.translate([...history, request].join("\n"));
     if (!response.success) {
         console.log(response.message);
         return;
     }
+    history.push(request);
 
     const drawing = response.data;
     console.log(JSON.stringify(drawing, undefined, 2));
