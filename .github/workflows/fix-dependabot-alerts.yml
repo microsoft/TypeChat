@@ -1,0 +1,267 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+# Automatically remediate Dependabot security alerts by running the
+# tools/scripts/fix-dependabot-alerts.mjs script, verifying each fix
+# against build + tests, and opening a single squash-PR with the
+# passing changes.
+#
+# Authentication: uses a GitHub App (via actions/create-github-app-token)
+# because the Dependabot alerts REST API isn't reachable with the default
+# GITHUB_TOKEN. Requires repo or org variables:
+#   - DEPENDABOT_APP_ID         (variable)
+#   - DEPENDABOT_APP_PRIVATE_KEY (secret)
+
+name: fix-dependabot-alerts
+
+on:
+  schedule:
+    # Daily at 09:00 UTC
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Dry run — analyse only, don't apply fixes"
+        type: boolean
+        default: false
+      skip-tests:
+        description: "Skip 'npm test' during per-fix verification (build only)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  fix-alerts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Don't leave the default GITHUB_TOKEN in .git/config — the
+          # remediation script invokes ``npm`` against potentially
+          # untrusted dependency updates, and we don't want push
+          # credentials reachable from build/test scripts.
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+          cache-dependency-path: typescript/package-lock.json
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.DEPENDABOT_APP_ID }}
+          private-key: ${{ secrets.DEPENDABOT_APP_PRIVATE_KEY }}
+
+      - name: Verify gh authentication
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh auth status
+          # Fail fast if the Dependabot API isn't reachable — otherwise
+          # the script would see 0 alerts and silently report "nothing
+          # to do", masking an infra outage as a clean run.
+          if ! gh api "repos/${{ github.repository }}/dependabot/alerts?per_page=1" --jq 'length'; then
+            echo "::error::Dependabot API probe failed — aborting before silently misreporting alerts"
+            exit 1
+          fi
+
+      # Restore prior rollback-state so packages rolled back in earlier
+      # runs (build/test failures) aren't retried until cooldown expires
+      # or the underlying lockfile SHA changes.
+      #
+      # Cache keys must be unique per save (caches are immutable per key),
+      # so we save under a run-id-suffixed key and restore from the prefix.
+      - name: Restore rollback state
+        id: restore-state
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/fix-dependabot-alerts-rollback-state.json
+          key: fix-dep-rollback-state-v1-${{ github.run_id }}
+          restore-keys: |
+            fix-dep-rollback-state-v1-
+
+      - name: Run remediation script
+        id: fix
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DEP_ROLLBACK_STATE_PATH: ${{ runner.temp }}/fix-dependabot-alerts-rollback-state.json
+        run: |
+          FLAGS=""
+          if [ "${{ inputs.dry-run }}" != "true" ]; then
+            FLAGS="$FLAGS --auto-fix"
+          fi
+          if [ "${{ inputs.skip-tests }}" = "true" ]; then
+            FLAGS="$FLAGS --skip-tests"
+          fi
+          node tools/scripts/fix-dependabot-alerts.mjs $FLAGS
+
+      # Always persist the (possibly updated) rollback state, even if
+      # later steps fail — otherwise a rollback recorded this run would
+      # be forgotten and the same broken upgrade re-tried tomorrow.
+      - name: Save rollback state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/fix-dependabot-alerts-rollback-state.json
+          # ``run_id`` is reused across job re-runs; include
+          # ``run_attempt`` so each attempt gets a unique (immutable)
+          # cache key. The restore step uses a shared prefix so any
+          # prior attempt's state is still picked up.
+          key: fix-dep-rollback-state-v1-${{ github.run_id }}-${{ github.run_attempt }}
+
+      # ── Final clean build verification ──────────────────────────────
+      #
+      # The per-fix incremental verification uses ``npm ci`` against an
+      # already-warm node_modules; tsc consumes ``.tsbuildinfo`` and may
+      # skip rechecking files that didn't change locally even if a
+      # transitive .d.ts upgrade would have broken them. A full clean
+      # build catches those (see microsoft/TypeAgent PR #2422 for the
+      # analogous pnpm/fluid-build case).
+      - name: Final clean build verification
+        if: ${{ steps.fix.outputs.changes == 'true' && inputs.dry-run != 'true' }}
+        id: build
+        working-directory: typescript
+        run: |
+          rm -rf node_modules out
+          npm ci --no-audit --no-fund --ignore-scripts
+          # ``npm test`` already runs ``npm run build`` as its first
+          # step (see typescript/package.json), so we only call build
+          # explicitly in --skip-tests mode to avoid duplicating it.
+          if [ "${{ inputs.skip-tests }}" = "true" ]; then
+            npm run build
+          else
+            npm test
+          fi
+          echo "build_ok=true" >> "$GITHUB_OUTPUT"
+
+      # ── Create PR ───────────────────────────────────────────────────
+      #
+      # App tokens expire after 1 hour; the build/verify phase can
+      # outrun that. Re-mint immediately before any late ``gh`` calls.
+      - name: Refresh app token
+        if: ${{ steps.fix.outputs.changes == 'true' && steps.build.outputs.build_ok == 'true' }}
+        id: app-token-pr
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.DEPENDABOT_APP_ID }}
+          private-key: ${{ secrets.DEPENDABOT_APP_PRIVATE_KEY }}
+
+      - name: Create pull request
+        if: ${{ steps.fix.outputs.changes == 'true' && steps.build.outputs.build_ok == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token-pr.outputs.token }}
+        run: |
+          BRANCH="automated/fix-dependabot-alerts-$(date +%Y%m%d)-${{ github.run_number }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+
+          # Belt-and-suspenders: only commit/push if there are real
+          # working-tree changes. ``changes=true`` from the script means
+          # "applied at least one fix"; an upstream no-op update could
+          # still produce no diff.
+          if git diff --cached --quiet; then
+            echo "No actual file changes to commit despite applied fixes — skipping PR."
+            exit 0
+          fi
+
+          git commit -m "fix: remediate Dependabot security alerts
+
+          Automated by fix-dependabot-alerts workflow.
+
+          Applied:${{ steps.fix.outputs.applied_packages }}
+          Rolled back:${{ steps.fix.outputs.rolled_back_packages }}
+          Unfixable: ${{ steps.fix.outputs.unfixable_count }} package(s)
+
+          Co-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          # Push using the App token explicitly — we disabled
+          # ``persist-credentials`` on checkout, so .git/config has no
+          # creds to fall back on.
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git push origin "$BRANCH"
+
+          APPLIED="${{ steps.fix.outputs.applied_packages }}"
+          OVERRIDES="${{ steps.fix.outputs.applied_overrides }}"
+          ROLLED="${{ steps.fix.outputs.rolled_back_packages }}"
+          UNFIXABLE="${{ steps.fix.outputs.unfixable_packages }}"
+          COOLDOWN="${{ steps.fix.outputs.cooldown_packages }}"
+
+          BODY="## Automated Dependabot Alert Remediation
+
+          This PR was generated by the \`fix-dependabot-alerts\` workflow.
+          Each fix was applied individually and verified against \`npm ci\`, \`npm run build\`, and \`npm test\` before inclusion.
+
+          ### Summary
+          - **Applied (${{ steps.fix.outputs.applied_count }}):**${APPLIED:- (none)}
+          - **Applied via root \`overrides\`:**${OVERRIDES:- (none)}
+          - **Rolled back (${{ steps.fix.outputs.rolled_back_count }}):**${ROLLED:- (none)}
+          - **Unfixable via lockfile bump / overrides (${{ steps.fix.outputs.unfixable_count }}):**${UNFIXABLE:- (none)}
+          - **Skipped (recent rollback cooldown, ${{ steps.fix.outputs.cooldown_count }}):**${COOLDOWN:- (none)}
+
+          > Packages marked **Unfixable** require a parent-package upgrade — the advisory's safe version is outside every direct parent's declared semver range, and a root \`overrides\` entry was either silently ignored by npm or would force an incompatible version. Triage manually.
+
+          > Packages added under \`overrides\` are tracked technical debt — npm will hold them at the pinned version until the entry is removed, which may mask future upstream regressions. Remove the override once a parent has shipped a compatible release.
+
+          ### How this works
+          1. Reads open Dependabot alerts via the REST API.
+          2. For each alert, attempts in order: \`npm update <pkg> --package-lock-only\`, then root \`overrides\` entry.
+          3. Verifies every resolved instance in \`package-lock.json\` is ≥ the advisory's \`first_patched_version\`.
+          4. Runs \`npm ci\`, \`npm run build\`, and \`npm test\`; rolls back on failure and records a 7-day cooldown.
+          5. Only fixes that pass all phases land in this PR.
+
+          ### Review checklist
+          - [ ] Verify no unrelated lockfile churn
+          - [ ] Investigate any newly-rolled-back packages separately
+          - [ ] If \`overrides\` were added, confirm the pinned version is acceptable policy
+          "
+
+          # Create the new PR FIRST, capture its number, THEN close
+          # superseded PRs. Otherwise a transient ``gh pr create`` failure
+          # could leave the repo with no open remediation PR.
+          NEW_PR=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "fix: remediate Dependabot security alerts ($(date +%Y-%m-%d))" \
+            --body "$BODY" \
+            | tail -1)
+          echo "Created $NEW_PR"
+          NEW_PR_NUM=$(echo "$NEW_PR" | grep -oE '[0-9]+$' || true)
+
+          # Best-effort labels (won't fail the workflow if a label is
+          # missing — the PR itself is the important artifact).
+          if [ -n "$NEW_PR_NUM" ]; then
+            gh pr edit "$NEW_PR_NUM" --add-label "dependencies,security,automated" \
+              || echo "::warning::Could not apply all labels to PR #$NEW_PR_NUM"
+          fi
+
+          # Dedup older auto-PRs from this workflow. Match by branch
+          # prefix using a jq filter (the GH issue-search ``head:`` /
+          # ``in:branch`` qualifiers are not reliable for prefix
+          # matching). Exclude the PR we just created.
+          PREV_PRS=$(gh pr list \
+            --state open \
+            --json number,headRefName \
+            --jq '.[] | select(.headRefName | startswith("automated/fix-dependabot-alerts-")) | select(.headRefName != "'"$BRANCH"'") | .number')
+          if [ -n "$PREV_PRS" ]; then
+            echo "Closing superseded Dependabot fix PRs: $PREV_PRS"
+            for PR in $PREV_PRS; do
+              gh pr close "$PR" \
+                --delete-branch \
+                --comment "Superseded by #${NEW_PR_NUM:-newer PR}." \
+                || echo "::warning::Failed to close PR #$PR"
+            done
+          fi
