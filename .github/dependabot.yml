@@ -4,11 +4,23 @@
 # but NOT routine weekly version-update PRs. Setting
 # open-pull-requests-limit: 0 on each ecosystem block disables version
 # updates while keeping the ecosystem registered so security-update PRs
-# can still be opened automatically when an alert fires.
+# can still be opened automatically when an alert fires. (Security
+# updates have a separate, fixed limit of 10 that is unaffected by
+# open-pull-requests-limit.)
 #
 # Routine non-security upgrades are handled out-of-band (manually or by
 # a separate workflow); this file's role is to keep the security pipe
 # unblocked without flooding the repo with churn.
+#
+# Note: devcontainers is intentionally absent -- Dependabot does not
+# support security updates for that ecosystem (only version updates),
+# so a security-only config has nothing to declare for it.
+#
+# Repo-level prerequisites (Settings > Code security):
+#   - Dependency graph: enabled
+#   - Dependabot alerts: enabled
+#   - Dependabot security updates: enabled
+#   - Grouped security updates: enabled
 #
 # Docs: https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
 
@@ -26,6 +38,12 @@ updates:
     open-pull-requests-limit: 0
     labels:
       - "dependencies"
+    # Group SemVer minor/patch security alerts so multiple simultaneous
+    # advisories in this ecosystem bundle into a single PR. SemVer-major
+    # security bumps fall through to Dependabot's normal ungrouped
+    # behavior so they can be reviewed individually for breaking changes
+    # (independent of advisory severity — this is purely a SemVer-level
+    # filter).
     groups:
       npm-security:
         applies-to: security-updates
@@ -42,17 +60,6 @@ updates:
       - "dependencies"
     groups:
       pip-security:
-        applies-to: security-updates
-        patterns: ["*"]
-        update-types: ["minor", "patch"]
-
-  - package-ecosystem: "devcontainers"
-    directory: "/"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 0
-    groups:
-      devcontainers-security:
         applies-to: security-updates
         patterns: ["*"]
         update-types: ["minor", "patch"]
