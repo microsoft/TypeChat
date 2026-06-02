@@ -1,16 +1,77 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for more information:
-# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
-# https://containers.dev/guide/dependabot
+# Dependabot configuration for microsoft/TypeChat.
+#
+# Per ecosystem: routine minor/patch updates are grouped into a single
+# weekly PR; security updates ship as their own grouped PR; major-version
+# bumps fall through ungrouped (one PR per package) for breaking-change
+# review.
+#
+# Docs: https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
 
 version: 2
 updates:
+  # npm — typescript library + examples + docs site.
+  # All security alerts in this repo to date have been against
+  # typescript/package-lock.json, which previously had no ecosystem entry
+  # here, so Dependabot never opened any update PRs for them.
+  - package-ecosystem: "npm"
+    directories:
+      - "/typescript"
+      - "/typescript/examples/*"
+      - "/site"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+    # Group routine minor/patch bumps; security updates grouped separately
+    # so they can be prioritised. Major-version bumps fall through as
+    # one-PR-per-package so they can be reviewed for breaking changes.
+    groups:
+      npm-production:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+      npm-development:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+      npm-security:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "pip"
+    directory: "/python"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels:
+      - "dependencies"
+    groups:
+      pip-all:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      pip-security:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: "devcontainers"
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      devcontainers:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      github-actions-security:
+        applies-to: security-updates
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
