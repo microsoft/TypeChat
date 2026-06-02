@@ -1,14 +1,15 @@
 # Dependabot configuration for microsoft/TypeChat.
 #
-# Security-only mode: we want Dependabot alerts (security updates) to flow,
-# but NOT routine weekly version-update PRs. Setting
-# open-pull-requests-limit: 0 on each ecosystem block disables version
-# updates while keeping the ecosystem registered so security-update PRs
-# can still be opened automatically when an alert fires.
+# Single-PR-per-ecosystem mode: every routine version bump (major, minor,
+# patch) is bundled into ONE grouped PR per ecosystem per weekly run.
+# Security updates ship as their own grouped PR so they aren't buried
+# under routine churn.
 #
-# Routine non-security upgrades are handled out-of-band (manually or by
-# a separate workflow); this file's role is to keep the security pipe
-# unblocked without flooding the repo with churn.
+# Tradeoff: one large PR is easier to review at a glance than many small
+# ones, but if it fails CI the cause is harder to bisect because the
+# compounded breaking changes (e.g. dotenv 16->17 + sqlite3 5->6) all
+# land at once. If a routine PR keeps failing, drop the offending
+# package(s) from the PR's commit list and let it land without them.
 #
 # Docs: https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
 
@@ -23,10 +24,12 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 0
     labels:
       - "dependencies"
     groups:
+      npm-all:
+        patterns: ["*"]
+        update-types: ["major", "minor", "patch"]
       npm-security:
         applies-to: security-updates
         patterns: ["*"]
@@ -37,10 +40,12 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 0
     labels:
       - "dependencies"
     groups:
+      pip-all:
+        patterns: ["*"]
+        update-types: ["major", "minor", "patch"]
       pip-security:
         applies-to: security-updates
         patterns: ["*"]
@@ -50,14 +55,19 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 0
+    groups:
+      devcontainers-all:
+        patterns: ["*"]
+        update-types: ["major", "minor", "patch"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 0
     groups:
+      github-actions-all:
+        patterns: ["*"]
+        update-types: ["major", "minor", "patch"]
       github-actions-security:
         applies-to: security-updates
         patterns: ["*"]
