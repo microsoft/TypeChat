@@ -137,8 +137,12 @@ jobs:
         run: |
           rm -rf node_modules out
           npm ci --no-audit --no-fund --ignore-scripts
-          npm run build
-          if [ "${{ inputs.skip-tests }}" != "true" ]; then
+          # ``npm test`` already runs ``npm run build`` as its first
+          # step (see typescript/package.json), so we only call build
+          # explicitly in --skip-tests mode to avoid duplicating it.
+          if [ "${{ inputs.skip-tests }}" = "true" ]; then
+            npm run build
+          else
             npm test
           fi
           echo "build_ok=true" >> "$GITHUB_OUTPUT"

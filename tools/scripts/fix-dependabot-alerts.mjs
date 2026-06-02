@@ -148,9 +148,14 @@ function mustRun(cmd, args, opts = {}) {
 
 function parseSemver(v) {
     if (!v) return null;
-    const m = String(v).match(/^v?(\d+)\.(\d+)\.(\d+)/);
+    // Capture [major, minor, patch, prereleaseTag-or-empty].
+    // Per semver, a version with a prerelease tag is LOWER than the
+    // same version without (1.2.3-beta.1 < 1.2.3). This matters for
+    // security verification: a vulnerable prerelease must not be
+    // treated as satisfying the patched release.
+    const m = String(v).match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?/);
     if (!m) return null;
-    return [Number(m[1]), Number(m[2]), Number(m[3])];
+    return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] || ""];
 }
 
 function semverGte(a, b) {
@@ -161,7 +166,21 @@ function semverGte(a, b) {
         if (pa[i] > pb[i]) return true;
         if (pa[i] < pb[i]) return false;
     }
-    return true;
+    // Numeric parts equal — compare prerelease tags. Per semver:
+    //   * no prerelease > any prerelease       (1.2.3   > 1.2.3-beta)
+    //   * any prerelease < no prerelease       (1.2.3-x < 1.2.3)
+    //   * same prerelease => equal             (1.2.3-x = 1.2.3-x)
+    //   * different prereleases: we conservatively treat as NOT >=
+    //     unless the strings are exactly equal, since correct
+    //     lexical comparison would require parsing dot-separated
+    //     identifiers and we deliberately avoid that complexity here.
+    //     This errs on the side of failing verification (safe).
+    const preA = pa[3];
+    const preB = pb[3];
+    if (preA === preB) return true; // both "" or identical prerelease
+    if (preA === "") return true; // a is release, b is prerelease
+    if (preB === "") return false; // a is prerelease, b is release
+    return false; // distinct prereleases — refuse to claim >=
 }
 
 // ── Dependabot alerts ────────────────────────────────────────────────────
@@ -433,10 +452,22 @@ function attemptUpdate(workspaceDir, pkg, minVersion) {
 function attemptOverride(workspaceDir, pkg, minVersion) {
     const wsRoot = join(REPO_ROOT, workspaceDir);
     const pkgPath = join(wsRoot, "package.json");
-    const pkgJson = JSON.parse(readFileSync(pkgPath, "utf8"));
+    const original = readFileSync(pkgPath, "utf8");
+    const pkgJson = JSON.parse(original);
     pkgJson.overrides ||= {};
-    pkgJson.overrides[pkg] = `>=${minVersion}`;
-    writeFileSync(pkgPath, JSON.stringify(pkgJson, null, 4) + "\n");
+    // Pin to the exact ``first_patched_version`` rather than ``>=X``.
+    // A range override silently picks up future major upgrades, which
+    // can introduce unrelated breakage; an exact pin keeps the
+    // remediation minimal and deterministic. Dependabot will surface a
+    // newer override when a future advisory requires it.
+    pkgJson.overrides[pkg] = minVersion;
+    // Preserve the file's existing indentation so we don't reformat
+    // the whole file and create noisy diffs. Detect 2-space vs 4-space
+    // vs tabs from the first indented line; default to 2 (most common).
+    const indentMatch = original.match(/^([ \t]+)"/m);
+    const indent = indentMatch ? indentMatch[1] : "  ";
+    const trailingNewline = original.endsWith("\n") ? "\n" : "";
+    writeFileSync(pkgPath, JSON.stringify(pkgJson, null, indent) + trailingNewline);
     const r = run(
         "npm",
         ["install", "--package-lock-only", "--no-audit", "--no-fund"],
@@ -483,15 +514,20 @@ function buildAndTest(workspaceDir) {
     if (!ci.ok) {
         return { ok: false, phase: "install", output: ci.stderr || ci.stdout };
     }
-    const build = run("npm", ["run", "build"], { cwd: wsRoot, env });
-    if (!build.ok) {
-        return {
-            ok: false,
-            phase: "build",
-            output: build.stderr || build.stdout,
-        };
-    }
-    if (!SKIP_TESTS) {
+    // TypeChat's ``npm test`` already runs ``npm run build`` as its
+    // first step, so we don't repeat it when tests are enabled. When
+    // ``--skip-tests`` is set we still need an explicit build to
+    // catch type errors introduced by a dep upgrade.
+    if (SKIP_TESTS) {
+        const build = run("npm", ["run", "build"], { cwd: wsRoot, env });
+        if (!build.ok) {
+            return {
+                ok: false,
+                phase: "build",
+                output: build.stderr || build.stdout,
+            };
+        }
+    } else {
         const test = run("npm", ["test"], { cwd: wsRoot, env });
         if (!test.ok) {
             return {
