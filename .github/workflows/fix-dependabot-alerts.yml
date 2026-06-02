@@ -159,27 +159,20 @@ jobs:
           app-id: ${{ vars.DEPENDABOT_APP_ID }}
           private-key: ${{ secrets.DEPENDABOT_APP_PRIVATE_KEY }}
 
-      - name: Diagnose App token (TEMP)
-        if: ${{ steps.fix.outputs.changes == 'true' && steps.build.outputs.build_ok == 'true' }}
-        env:
-          GH_TOKEN: ${{ steps.app-token-pr.outputs.token }}
-        run: |
-          set +e
-          echo "=== Token permissions on ${{ github.repository }} ==="
-          gh api "repos/${{ github.repository }}" --jq '.permissions'
-          echo "(exit=$?)"
-          echo "=== Installation repos (count + first 5) ==="
-          gh api /installation/repositories --jq '{total: .total_count, sample: [.repositories[].full_name][:5]}'
-          echo "(exit=$?)"
-          echo "=== Git refs read probe (same install-scope as push) ==="
-          gh api "repos/${{ github.repository }}/git/refs/heads/main" --jq '.object.sha'
-          echo "(exit=$?)"
-          echo "=== End diag ==="
-
       - name: Create pull request
         if: ${{ steps.fix.outputs.changes == 'true' && steps.build.outputs.build_ok == 'true' }}
         env:
+          # GH_TOKEN is the App token — used by the ``gh`` CLI for
+          # ``gh pr create`` / labelling / closing superseded PRs so the
+          # PR appears under the bot's identity.
           GH_TOKEN: ${{ steps.app-token-pr.outputs.token }}
+          # GIT_PUSH_TOKEN is the workflow's default GITHUB_TOKEN, scoped
+          # via the workflow-level ``permissions: contents: write`` block.
+          # We use it only at the very end, after all untrusted ``npm``
+          # scripts have finished running, to avoid persisting any push
+          # credential in .git/config (where dependency build scripts
+          # could read it).
+          GIT_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="automated/fix-dependabot-alerts-$(date +%Y%m%d)-${{ github.run_number }}"
           git config user.name "github-actions[bot]"
@@ -205,15 +198,12 @@ jobs:
           Unfixable: ${{ steps.fix.outputs.unfixable_count }} package(s)
 
           Co-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
-          # Push using the App token explicitly — we disabled
-          # ``persist-credentials`` on checkout, so .git/config has no
-          # creds to fall back on.
-          # TEMP DIAG: print the effective App-token permissions on this
-          # repo and the install's repo selection before attempting the
-          # push. Remove once the permission issue is resolved.
-          echo "(see Diagnose App token step output above for permissions)"
-
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          # Push using the workflow's default GITHUB_TOKEN (scoped to
+          # contents:write at the workflow level). Configured here, not
+          # via actions/checkout's ``persist-credentials``, so the token
+          # isn't reachable from the npm install / build / test phase
+          # earlier in the job.
+          git remote set-url origin "https://x-access-token:${GIT_PUSH_TOKEN}@github.com/${{ github.repository }}.git"
           git push origin "$BRANCH"
 
           APPLIED="${{ steps.fix.outputs.applied_packages }}"
