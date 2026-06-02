@@ -159,6 +159,23 @@ jobs:
           app-id: ${{ vars.DEPENDABOT_APP_ID }}
           private-key: ${{ secrets.DEPENDABOT_APP_PRIVATE_KEY }}
 
+      - name: Diagnose App token (TEMP)
+        if: ${{ steps.fix.outputs.changes == 'true' && steps.build.outputs.build_ok == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token-pr.outputs.token }}
+        run: |
+          set +e
+          echo "=== Token permissions on ${{ github.repository }} ==="
+          gh api "repos/${{ github.repository }}" --jq '.permissions'
+          echo "(exit=$?)"
+          echo "=== Installation repos (count + first 5) ==="
+          gh api /installation/repositories --jq '{total: .total_count, sample: [.repositories[].full_name][:5]}'
+          echo "(exit=$?)"
+          echo "=== Git refs read probe (same install-scope as push) ==="
+          gh api "repos/${{ github.repository }}/git/refs/heads/main" --jq '.object.sha'
+          echo "(exit=$?)"
+          echo "=== End diag ==="
+
       - name: Create pull request
         if: ${{ steps.fix.outputs.changes == 'true' && steps.build.outputs.build_ok == 'true' }}
         env:
@@ -191,6 +208,11 @@ jobs:
           # Push using the App token explicitly — we disabled
           # ``persist-credentials`` on checkout, so .git/config has no
           # creds to fall back on.
+          # TEMP DIAG: print the effective App-token permissions on this
+          # repo and the install's repo selection before attempting the
+          # push. Remove once the permission issue is resolved.
+          echo "(see Diagnose App token step output above for permissions)"
+
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git push origin "$BRANCH"
 
