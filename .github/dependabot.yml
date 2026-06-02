@@ -20,6 +20,9 @@ updates:
       day: "monday"
     labels:
       - "dependencies"
+    # Group routine minor/patch bumps; security updates grouped separately
+    # so they can be prioritised. Major-version bumps fall through as
+    # one-PR-per-package so they can be reviewed for breaking changes.
     groups:
       npm-production:
         dependency-type: "production"
@@ -30,6 +33,7 @@ updates:
       npm-security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "pip"
     directory: "/python"
@@ -45,6 +49,7 @@ updates:
       pip-security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "devcontainers"
     directory: "/"
@@ -53,6 +58,7 @@ updates:
     groups:
       devcontainers:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -61,6 +67,8 @@ updates:
     groups:
       github-actions:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
       github-actions-security:
         applies-to: security-updates
         patterns: ["*"]
+        update-types: ["minor", "patch"]
