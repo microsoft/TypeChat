@@ -64,6 +64,21 @@ export interface TypeChatJsonTranslator<T extends object> {
 }
 
 /**
+ * Options for generating JSON schema from TypeScript source code.
+ */
+export interface JsonSchemaOptions {
+    /**
+     * Filename to use in error messages.
+     */
+    fileName?: string;
+
+    /**
+     * Whether to return Error on warnings.
+     */
+    ignoreWarnings?: boolean;
+}
+
+/**
  * An object that represents a TypeScript schema for JSON objects.
  */
 export interface TypeChatJsonValidator<T extends object> {
@@ -75,6 +90,10 @@ export interface TypeChatJsonValidator<T extends object> {
      * Return the name of the JSON object target type in the schema.
      */
     getTypeName(): string;
+    /**
+     * Return the JSON schema as a JavaScript object if supported by the validator.
+     */
+    getJsonSchema?(options?: JsonSchemaOptions): Result<object>;
     /**
      * Validates the given JSON object according to the associated TypeScript schema. Returns a
      * `Success<T>` object containing the JSON object if validation was successful. Otherwise, returns
