@@ -159,7 +159,7 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
     test("uses Responses API when useResponsesApi=true regardless of URL", async () => {
         setupFetch([makeResponsesAPIResponse("Forced!")]);
         // Passing a chat/completions URL but forcing Responses API via the flag
-        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/chat/completions", "", true);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/chat/completions", "", { useResponsesApi: true });
         const result = await model.complete("test");
         assert.equal(result.success, true);
         assert.equal(result.data, "Forced!");

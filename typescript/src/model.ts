@@ -94,6 +94,14 @@ export interface LanguageModelOptions {
      * honored, so setting those (e.g. in a `.env` file) is usually all that is required.
      */
     proxyUrl?: string;
+
+    /**
+     * Selects the OpenAI API variant. When `true`, the Responses API (`/v1/responses`) is used
+     * regardless of the endpoint URL; when `false`, the Chat Completions API is used. When omitted
+     * (default), the variant is inferred from the endpoint URL (a path ending in `/responses`
+     * selects the Responses API). Only applies to `createOpenAILanguageModel`.
+     */
+    useResponsesApi?: boolean;
 }
 
 /**
@@ -139,7 +147,7 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
         const org = env.OPENAI_ORGANIZATION ?? "";
         const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
-        return createOpenAILanguageModel(apiKey, model, endPoint, org, undefined, options);
+        return createOpenAILanguageModel(apiKey, model, endPoint, org, options);
     }
     if (env.AZURE_OPENAI_API_KEY) {
         const apiKey = env.AZURE_OPENAI_API_KEY ?? missingEnvironmentVariable("AZURE_OPENAI_API_KEY");
@@ -152,7 +160,7 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
 /**
  * Creates a language model encapsulation of an OpenAI REST API endpoint.
  *
- * When `endPoint` (or `useResponsesApi`) indicates the Responses API the function routes through
+ * When `endPoint` (or `options.useResponsesApi`) indicates the Responses API the function routes through
  * the `/v1/responses` request/response format; otherwise the Chat Completions format is used.
  * The Responses API is auto-detected when the endpoint URL path ends with `/responses`
  * (e.g. `https://api.openai.com/v1/responses`).
@@ -162,19 +170,17 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  *   `"https://api.openai.com/v1/chat/completions"`. Supply a `/responses` URL to use the
  *   Responses API instead.
  * @param org The OpenAI organization id.
- * @param useResponsesApi When `true`, forces the Responses API regardless of the endpoint URL.
- *   When `false`, forces Chat Completions. When `undefined` (default), the API variant is
- *   inferred from the endpoint URL.
- * @param options Optional settings such as a proxy URL. See {@link LanguageModelOptions}.
+ * @param options Optional settings such as a proxy URL or the API variant to use.
+ *   See {@link LanguageModelOptions}.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", useResponsesApi?: boolean, options?: LanguageModelOptions): TypeChatLanguageModel {
+export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", options?: LanguageModelOptions): TypeChatLanguageModel {
     const headers = {
         "Authorization": `Bearer ${apiKey}`,
         "OpenAI-Organization": org
     };
     const proxy = resolveProxySettings(options);
-    if ((useResponsesApi ?? isResponsesApiUrl(endPoint))) {
+    if ((options?.useResponsesApi ?? isResponsesApiUrl(endPoint))) {
         return createResponsesFetchLanguageModel(endPoint, headers, { model }, proxy);
     }
     return createFetchLanguageModel(endPoint, headers, { model }, proxy);
