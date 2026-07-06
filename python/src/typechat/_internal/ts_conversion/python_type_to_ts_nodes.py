@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import ast
 from collections import OrderedDict
 import inspect
 import sys
+import textwrap
 import typing
 import typing_extensions
 from dataclasses import MISSING, Field, dataclass
@@ -152,6 +154,26 @@ _LIST_TYPES: set[object] = {
 # }
 
 
+def _extract_inline_field_comments(py_type: type) -> dict[str, str]:
+    """Return a mapping of field name → inline # comment for a TypedDict or dataclass."""
+    try:
+        source_lines, _ = inspect.getsourcelines(py_type)
+        tree = ast.parse(textwrap.dedent("".join(source_lines)))
+        comments: dict[str, str] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                for stmt in node.body:
+                    if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                        line = source_lines[stmt.end_lineno - 1]
+                        if "#" in line:
+                            comment = line[line.index("#") + 1:].strip().rstrip("\n")
+                            if comment:
+                                comments[stmt.target.id] = comment
+        return comments
+    except Exception:
+        return {}
+
+
 def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTranslationResult:
     # TODO: handle conflicting names
 
@@ -292,10 +314,10 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         errors.append(f"'{py_type}' cannot be used as a type annotation.")
         return AnyTypeReferenceNode
 
-    def declare_property(name: str, py_annotation: type | TypeAliasType, is_typeddict_attribute: bool, optionality_default: bool):
+    def declare_property(name: str, py_annotation: type | TypeAliasType, is_typeddict_attribute: bool, optionality_default: bool, fallback_comment: str = ""):
         """
         Declare a property for a given type.
-        If 'optionality_default' is 
+        If 'optionality_default' is
         """
         current_annotation: object = py_annotation
         origin: object
@@ -332,7 +354,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             optional = optionality_default
 
         type_annotation = convert_to_type_node(skip_annotations(current_annotation))
-        return PropertyDeclarationNode(name, optional, comment or "", type_annotation)
+        return PropertyDeclarationNode(name, optional, comment or fallback_comment, type_annotation)
 
     def reserve_name(val: type | TypeAliasType):
         type_name = val.__name__
@@ -371,6 +393,8 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                     base_attributes.setdefault(prop, set()).add(type_hint)
             bases = [convert_to_type_node(base) for base in raw_but_filtered_bases]
 
+            inline_comments = _extract_inline_field_comments(py_type)
+
             properties: list[PropertyDeclarationNode | IndexSignatureDeclarationNode] = []
             if is_typeddict(py_type):
                 for attr_name, type_hint in annotated_members.items():
@@ -378,7 +402,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                         continue
 
                     assume_optional = cast(TypeOfTypedDict, py_type).__total__ is False
-                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=True, optionality_default=assume_optional)
+                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=True, optionality_default=assume_optional, fallback_comment=inline_comments.get(attr_name, ""))
                     properties.append(prop)
             else:
                 # When a dataclass is created with no explicit docstring, @dataclass will
@@ -391,7 +415,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                 for attr_name, field in cast(Dataclassish, py_type).__dataclass_fields__.items():
                     type_hint = annotated_members[attr_name]
                     optional = not(field.default is MISSING and field.default_factory is MISSING)
-                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional)
+                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional, fallback_comment=inline_comments.get(attr_name, ""))
                     properties.append(prop)
 
             reserve_name(py_type)
