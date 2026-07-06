@@ -109,7 +109,7 @@ Proxy support uses [`undici`](https://www.npmjs.com/package/undici) (which also 
 built-in `fetch`). It is an optional dependency loaded only when a proxy is configured, so install
 it when you need this: `npm install undici`. When calling `createOpenAILanguageModel` or
 `createAzureOpenAILanguageModel` directly, pass the proxy explicitly via the `options` argument:
-`createOpenAILanguageModel(apiKey, model, endPoint, org, undefined, { proxyUrl })`.
+`createOpenAILanguageModel(apiKey, model, endPoint, org, { proxyUrl })` (or `createAzureOpenAILanguageModel(apiKey, endPoint, { proxyUrl })`).
 
 ## Step 4: Run the examples
 
