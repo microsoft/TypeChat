@@ -1,0 +1,18 @@
+{
+	"folders": [
+		{
+			"name": "TypeChat Root",
+			"path": "./"
+		},
+		{
+			"name": "Python",
+			"path": "./python"
+		},
+		{
+			"name": "TypeScript",
+			"path": "./typescript"
+		},
+	],
+	"settings": {
+	}
+}

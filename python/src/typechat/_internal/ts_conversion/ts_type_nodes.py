@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing_extensions import TypeAlias
 
-TypeNode: TypeAlias = "TypeReferenceNode | UnionTypeNode | LiteralTypeNode | ArrayTypeNode"
+TypeNode: TypeAlias = "TypeReferenceNode | UnionTypeNode | LiteralTypeNode | ArrayTypeNode | TupleTypeNode"
 
 @dataclass
 class IdentifierNode:
@@ -30,6 +30,10 @@ class LiteralTypeNode:
 @dataclass
 class ArrayTypeNode:
     element_type: TypeNode
+
+@dataclass
+class TupleTypeNode:
+    element_types: list[TypeNode]
 
 @dataclass
 class InterfaceDeclarationNode:

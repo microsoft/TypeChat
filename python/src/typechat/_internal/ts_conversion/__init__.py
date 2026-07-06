@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing_extensions import TypeAliasType
 
 from typechat._internal.ts_conversion.python_type_to_ts_nodes import python_type_to_typescript_nodes
 from typechat._internal.ts_conversion.ts_node_to_string import ts_declaration_to_str
@@ -19,7 +20,7 @@ class TypeScriptSchemaConversionResult:
     errors: list[str]
     """Any errors that occurred during conversion."""
 
-def python_type_to_typescript_schema(py_type: object) -> TypeScriptSchemaConversionResult:
+def python_type_to_typescript_schema(py_type: type | TypeAliasType) -> TypeScriptSchemaConversionResult:
     """Converts a Python type to a TypeScript schema."""
 
     node_conversion_result = python_type_to_typescript_nodes(py_type)

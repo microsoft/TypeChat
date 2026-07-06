@@ -1,32 +1,54 @@
 # TypeChat
 
-<!--
-[![PyPI - Version](https://img.shields.io/pypi/v/typechat.svg)](https://pypi.org/project/typechat)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/typechat.svg)](https://pypi.org/project/typechat)
--->
-
------
-
-# TypeChat
-
 TypeChat is a library that makes it easy to build natural language interfaces using types.
 
-## Installation
+Building natural language interfaces has traditionally been difficult.
+These apps often relied on complex decision trees to determine intent and collect the required inputs to take action.
+Large language models (LLMs) have made this easier by enabling us to take natural language input from a user and match to intent.
+This has introduced its own challenges, including the need to constrain the model's reply for safety,
+structure responses from the model for further processing, and ensuring that the reply from the model is valid.
+Prompt engineering aims to solve these problems, but comes with a steep learning curve and increased fragility as the prompt increases in size.
 
-TypeChat for Python is not yet on PyPI, but you can try our [examples](./examples/) by cloning this repository.
+TypeChat replaces _prompt engineering_ with _schema engineering_.
 
-You will need [Python 3.12](https://www.python.org/downloads/release/python-3121/) and [hatch](https://hatch.pypa.io/1.6/install/).
+Simply define types that represent the intents supported in your natural language application.
+That could be as simple as an interface for categorizing sentiment or more complex examples like types for a shopping cart or music application.
+For example, to add additional intents to a schema, a developer can add additional types into a discriminated union.
+To make schemas hierarchical, a developer can use a "meta-schema" to choose one or more sub-schemas based on user input.
 
+After defining your types, TypeChat takes care of the rest by:
+
+1. Constructing a prompt to the LLM using types.
+2. Validating the LLM response conforms to the schema. If the validation fails, repair the non-conforming output through further language model interaction.
+3. Summarizing succinctly (without use of a LLM) the instance and confirm that it aligns with user intent.
+
+Types are all you need!
+
+## Getting Started
+
+Install TypeChat:
+
+```sh
+pip install typechat
 ```
+
+You can also develop TypeChat from source, which needs [Python >=3.11](https://www.python.org/downloads/),
+[hatch](https://hatch.pypa.io/1.6/install/), and [Node.js >=20](https://nodejs.org/en/download):
+
+```sh
 git clone https://github.com/microsoft/TypeChat
 cd TypeChat/python
 hatch shell
-python examples/sentiment/demo.py
+npm ci
 ```
 
-## License
+To see TypeChat in action, we recommend exploring the
+[TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/python/examples).
+You can try them on your local machine or in a GitHub Codespace.
 
-`typechat` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+To learn more about TypeChat, visit the
+[documentation](https://microsoft.github.io/TypeChat/docs/python/basic-usage/)
+which includes more information on TypeChat and how to get started.
 
 ## Contributing
 

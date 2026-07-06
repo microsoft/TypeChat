@@ -1,0 +1,8 @@
+src/
+examples/
+node_modules/
+*.map
+*.ts
+!*.d.ts
+tsconfig.json
+.gitignore
