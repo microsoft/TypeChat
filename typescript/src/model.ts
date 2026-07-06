@@ -77,6 +77,44 @@ export interface TypeChatLanguageModel {
 }
 
 /**
+ * Optional settings accepted by the language model factory functions.
+ */
+export interface LanguageModelOptions {
+    /**
+     * URL of an HTTP or HTTPS proxy to route model requests through
+     * (for example `"http://127.0.0.1:7890"`). This is useful in environments where the model
+     * endpoint can only be reached via a proxy.
+     *
+     * Requests are dispatched through the proxy using an `undici` `ProxyAgent`. `undici` is an
+     * optional dependency that is imported only when a proxy is configured; install it with
+     * `npm install undici`.
+     *
+     * When you use {@link createLanguageModel}, proxy configuration is read automatically from the
+     * standard `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` environment variables, and `NO_PROXY` is
+     * honored, so setting those (e.g. in a `.env` file) is usually all that is required.
+     */
+    proxyUrl?: string;
+}
+
+/**
+ * Internal proxy configuration threaded to the fetch helpers.
+ * - `url`: an explicit proxy URL supplied via {@link LanguageModelOptions.proxyUrl}.
+ * - `env`: values collected from the standard proxy environment variables, applied per request by
+ *   an `undici` `EnvHttpProxyAgent` (which also honors `NO_PROXY` and the http/https split).
+ */
+type ProxySettings =
+    | { kind: "url"; url: string }
+    | { kind: "env"; httpProxy: string | undefined; httpsProxy: string | undefined; noProxy: string | undefined };
+
+/**
+ * {@link LanguageModelOptions} plus internal, pre-resolved proxy settings passed down by
+ * {@link createLanguageModel}. Not part of the public API.
+ */
+interface InternalModelOptions extends LanguageModelOptions {
+    proxy?: ProxySettings;
+}
+
+/**
  * Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
  * chosen by environment variables.
  *
@@ -94,17 +132,19 @@ export interface TypeChatLanguageModel {
  * @returns An instance of `TypeChatLanguageModel`.
  */
 export function createLanguageModel(env: Record<string, string | undefined>): TypeChatLanguageModel {
+    const proxy = proxySettingsFromEnv(env);
+    const options: InternalModelOptions | undefined = proxy ? { proxy } : undefined;
     if (env.OPENAI_API_KEY) {
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
         const org = env.OPENAI_ORGANIZATION ?? "";
         const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
-        return createOpenAILanguageModel(apiKey, model, endPoint, org);
+        return createOpenAILanguageModel(apiKey, model, endPoint, org, undefined, options);
     }
     if (env.AZURE_OPENAI_API_KEY) {
         const apiKey = env.AZURE_OPENAI_API_KEY ?? missingEnvironmentVariable("AZURE_OPENAI_API_KEY");
         const endPoint = env.AZURE_OPENAI_ENDPOINT ?? missingEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
-        return createAzureOpenAILanguageModel(apiKey, endPoint);
+        return createAzureOpenAILanguageModel(apiKey, endPoint, options);
     }
     missingEnvironmentVariable("OPENAI_API_KEY or AZURE_OPENAI_API_KEY");
 }
@@ -125,17 +165,19 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  * @param useResponsesApi When `true`, forces the Responses API regardless of the endpoint URL.
  *   When `false`, forces Chat Completions. When `undefined` (default), the API variant is
  *   inferred from the endpoint URL.
+ * @param options Optional settings such as a proxy URL. See {@link LanguageModelOptions}.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", useResponsesApi?: boolean): TypeChatLanguageModel {
+export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", useResponsesApi?: boolean, options?: LanguageModelOptions): TypeChatLanguageModel {
     const headers = {
         "Authorization": `Bearer ${apiKey}`,
         "OpenAI-Organization": org
     };
+    const proxy = resolveProxySettings(options);
     if ((useResponsesApi ?? isResponsesApiUrl(endPoint))) {
-        return createResponsesFetchLanguageModel(endPoint, headers, { model });
+        return createResponsesFetchLanguageModel(endPoint, headers, { model }, proxy);
     }
-    return createFetchLanguageModel(endPoint, headers, { model });
+    return createFetchLanguageModel(endPoint, headers, { model }, proxy);
 }
 
 /**
@@ -144,34 +186,38 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
  *   "https://{your-resource-name}.openai.azure.com/openai/deployments/{your-deployment-name}/chat/completions?api-version={API-version}".
  *   Example deployment names are "gpt-35-turbo" and "gpt-4". An example API versions is "2023-05-15".
  * @param apiKey The Azure OpenAI API key.
+ * @param options Optional settings such as a proxy URL. See {@link LanguageModelOptions}.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string): TypeChatLanguageModel {
+export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string, options?: LanguageModelOptions): TypeChatLanguageModel {
     const headers = {
         // Needed when using managed identity
         "Authorization": `Bearer ${apiKey}`,
         // Needed when using regular API key
         "api-key": apiKey
     };
-    return createFetchLanguageModel(endPoint, headers, {});
+    return createFetchLanguageModel(endPoint, headers, {}, resolveProxySettings(options));
 }
 
 /**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
-function createFetchLanguageModel(url: string, headers: object, defaultParams: object) {
+function createFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings) {
+    let dispatcherPromise: Promise<RequestInit["dispatcher"]> | undefined;
     const model: TypeChatLanguageModel = {
         complete
     };
     return model;
 
     async function complete(prompt: string | PromptSection[]) {
+        dispatcherPromise ??= resolveProxyDispatcher(proxy);
+        const dispatcher = await dispatcherPromise;
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
         const messages = typeof prompt === "string" ? [{ role: "user", content: prompt }] : prompt;
         while (true) {
-            const options = {
+            const options: RequestInit = {
                 method: "POST",
                 body: JSON.stringify({
                     ...defaultParams,
@@ -183,6 +229,9 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
                     "content-type": "application/json",
                     ...headers
                 }
+            };
+            if (dispatcher) {
+                options.dispatcher = dispatcher;
             }
             const response = await fetch(url, options);
             if (response.ok) {
@@ -228,19 +277,22 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
  * @param headers HTTP headers to include in every request (e.g. `Authorization`).
  * @param defaultParams Additional JSON body parameters merged into every request (e.g. `{ model }`).
  */
-function createResponsesFetchLanguageModel(url: string, headers: object, defaultParams: object) {
+function createResponsesFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings) {
+    let dispatcherPromise: Promise<RequestInit["dispatcher"]> | undefined;
     const model: TypeChatLanguageModel = {
         complete
     };
     return model;
 
     async function complete(prompt: string | PromptSection[]) {
+        dispatcherPromise ??= resolveProxyDispatcher(proxy);
+        const dispatcher = await dispatcherPromise;
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
         const input = typeof prompt === "string" ? prompt : (prompt as PromptSection[]);
         while (true) {
-            const options = {
+            const options: RequestInit = {
                 method: "POST",
                 body: JSON.stringify({
                     ...defaultParams,
@@ -251,6 +303,9 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
                     "content-type": "application/json",
                     ...headers
                 }
+            };
+            if (dispatcher) {
+                options.dispatcher = dispatcher;
             }
             const response = await fetch(url, options);
             if (response.ok) {
@@ -330,6 +385,82 @@ function isResponsesApiUrl(url: string): boolean {
  */
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Collects proxy configuration from the standard proxy environment variables, or returns
+ * `undefined` when none are set. `HTTPS_PROXY`/`HTTP_PROXY` select the proxy per request protocol,
+ * `ALL_PROXY` is the fallback for both, and `NO_PROXY` lists hosts that bypass the proxy. Both
+ * upper- and lower-case names are recognized; matching is applied per request by an
+ * `EnvHttpProxyAgent`.
+ */
+function proxySettingsFromEnv(env: Record<string, string | undefined>): ProxySettings | undefined {
+    const allProxy = env.ALL_PROXY ?? env.all_proxy;
+    const httpsProxy = env.HTTPS_PROXY ?? env.https_proxy ?? allProxy;
+    const httpProxy = env.HTTP_PROXY ?? env.http_proxy ?? allProxy;
+    if (!httpsProxy && !httpProxy) {
+        return undefined;
+    }
+    return { kind: "env", httpProxy, httpsProxy, noProxy: env.NO_PROXY ?? env.no_proxy };
+}
+
+/**
+ * Resolves the {@link ProxySettings} for a set of options: an explicit `proxyUrl` becomes a
+ * single-URL proxy, while {@link createLanguageModel} passes pre-resolved environment settings.
+ */
+function resolveProxySettings(options: LanguageModelOptions | undefined): ProxySettings | undefined {
+    const internal = options as InternalModelOptions | undefined;
+    if (internal?.proxy) {
+        return internal.proxy;
+    }
+    if (options?.proxyUrl) {
+        return { kind: "url", url: options.proxyUrl };
+    }
+    return undefined;
+}
+
+/**
+ * Dynamically imports the optional `undici` package, translating a missing-module error into an
+ * actionable message. `undici` also powers Node's built-in `fetch`, so it is the natural choice for
+ * proxy dispatching and is imported only when a proxy is actually configured.
+ */
+async function importUndici() {
+    try {
+        return await import("undici");
+    } catch (e) {
+        if (e instanceof Error && /Cannot find module|ERR_MODULE_NOT_FOUND/.test(e.message)) {
+            throw new Error(
+                `A proxy was configured, but the optional "undici" package is not installed. ` +
+                `Run "npm install undici" to enable proxy support.`
+            );
+        }
+        throw e;
+    }
+}
+
+/**
+ * Lazily constructs an `undici` dispatcher for the given proxy settings, or returns `undefined`
+ * when no proxy is configured. Absent settings are a no-op, so an agent is never accidentally
+ * constructed from an empty proxy string. Node's `fetch` honors an undici `dispatcher` per request.
+ */
+async function resolveProxyDispatcher(proxy: ProxySettings | undefined): Promise<RequestInit["dispatcher"]> {
+    if (!proxy) {
+        return undefined;
+    }
+    const { ProxyAgent, EnvHttpProxyAgent } = await importUndici();
+    // `undici` bundles its own dispatcher types, which are structurally identical to the
+    // `undici-types` copy that Node's global `fetch`/`RequestInit` use but nominally distinct;
+    // bridge the two with a cast.
+    if (proxy.kind === "url") {
+        return new ProxyAgent(proxy.url) as unknown as RequestInit["dispatcher"];
+    }
+    // Env-driven: EnvHttpProxyAgent applies NO_PROXY and the http/https split per request.
+    const envOptions = {
+        ...(proxy.httpProxy ? { httpProxy: proxy.httpProxy } : {}),
+        ...(proxy.httpsProxy ? { httpsProxy: proxy.httpsProxy } : {}),
+        ...(proxy.noProxy ? { noProxy: proxy.noProxy } : {})
+    };
+    return new EnvHttpProxyAgent(envOptions) as unknown as RequestInit["dispatcher"];
 }
 
 /**

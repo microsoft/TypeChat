@@ -92,6 +92,25 @@ AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_KEY=...
 ```
 
+### Using a proxy (optional)
+
+If the model endpoint can only be reached through a proxy (for example in restricted regions),
+`createLanguageModel` honors the standard `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` environment
+variables, and `NO_PROXY` for hosts that should bypass the proxy — set them (e.g. in your `.env`
+file) and requests are routed accordingly:
+
+```ini
+HTTPS_PROXY=http://127.0.0.1:7890
+# Optional: comma-separated hosts that should bypass the proxy
+NO_PROXY=localhost,127.0.0.1
+```
+
+Proxy support uses [`undici`](https://www.npmjs.com/package/undici) (which also powers Node's
+built-in `fetch`). It is an optional dependency loaded only when a proxy is configured, so install
+it when you need this: `npm install undici`. When calling `createOpenAILanguageModel` or
+`createAzureOpenAILanguageModel` directly, pass the proxy explicitly via the `options` argument:
+`createOpenAILanguageModel(apiKey, model, endPoint, org, undefined, { proxyUrl })`.
+
 ## Step 4: Run the examples
 
 Examples can be found in the `examples` directory.
