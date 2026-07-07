@@ -1,4 +1,4 @@
-import { Result, success, error } from "./result";
+import { CompletionInfo, CompletionFinishReason, TokenUsage, Result, success, error } from "./result";
 
 /**
  * Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for
@@ -241,9 +241,20 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             }
             const response = await fetch(url, options);
             if (response.ok) {
-                const json = await response.json() as { choices: { message: PromptSection }[] };
+                const json = await response.json() as {
+                    choices: { message: PromptSection; finish_reason?: string | null }[];
+                    model?: string;
+                    usage?: ChatCompletionsUsage;
+                };
                 if (typeof json.choices[0].message.content === "string") {
-                    return success(json.choices[0].message.content ?? "");
+                    const usage = json.usage && normalizeChatUsage(json.usage);
+                    const info = completionInfo({
+                        model: json.model,
+                        usage,
+                        finishReason: normalizeChatFinishReason(json.choices[0].finish_reason),
+                        raw: json as Record<string, unknown>
+                    });
+                    return success(json.choices[0].message.content ?? "", info);
                 } else {
                     return error(`REST API unexpected response format: ${JSON.stringify(json.choices[0].message.content)}`);
                 }
@@ -320,11 +331,24 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
                     role?: string;
                     content: { type: string; text: string }[];
                 };
-                const json = await response.json() as { output: ResponsesAPIOutputItem[] };
+                const json = await response.json() as {
+                    output: ResponsesAPIOutputItem[];
+                    model?: string;
+                    status?: string;
+                    incomplete_details?: { reason?: string } | null;
+                    usage?: ResponsesUsage;
+                };
                 const message = json.output?.find(o => o.type === "message");
                 const textContent = message?.content?.find(c => c.type === "output_text");
                 if (textContent?.text !== undefined) {
-                    return success(textContent.text);
+                    const usage = json.usage && normalizeResponsesUsage(json.usage);
+                    const info = completionInfo({
+                        model: json.model,
+                        usage,
+                        finishReason: normalizeResponsesFinishReason(json.status, json.incomplete_details?.reason),
+                        raw: json as Record<string, unknown>
+                    });
+                    return success(textContent.text, info);
                 } else {
                     return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
                 }
@@ -335,6 +359,144 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
             await sleep(getRetryDelayMs(response, retryPauseMs, retryPauseMs * retryMaxAttempts));
             retryCount++;
         }
+    }
+}
+
+/**
+ * Shape of the `usage` object in an OpenAI Chat Completions response.
+ */
+type ChatCompletionsUsage = {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+    completion_tokens_details?: { reasoning_tokens?: number };
+};
+
+/**
+ * Shape of the `usage` object in an OpenAI Responses API response.
+ */
+type ResponsesUsage = {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+    input_tokens_details?: { cached_tokens?: number };
+    output_tokens_details?: { reasoning_tokens?: number };
+};
+
+/**
+ * Normalizes a Chat Completions `usage` object into a {@link TokenUsage}, including cached prompt
+ * and reasoning token details when present.
+ */
+function normalizeChatUsage(usage: ChatCompletionsUsage): TokenUsage {
+    const result: TokenUsage = {
+        promptTokens: usage.prompt_tokens ?? 0,
+        completionTokens: usage.completion_tokens ?? 0,
+        totalTokens: usage.total_tokens ?? 0
+    };
+    const cached = usage.prompt_tokens_details?.cached_tokens;
+    if (cached !== undefined) {
+        result.cachedPromptTokens = cached;
+    }
+    const reasoning = usage.completion_tokens_details?.reasoning_tokens;
+    if (reasoning !== undefined) {
+        result.reasoningTokens = reasoning;
+    }
+    return result;
+}
+
+/**
+ * Normalizes a Responses API `usage` object into a {@link TokenUsage}, including cached prompt and
+ * reasoning token details when present.
+ */
+function normalizeResponsesUsage(usage: ResponsesUsage): TokenUsage {
+    const result: TokenUsage = {
+        promptTokens: usage.input_tokens ?? 0,
+        completionTokens: usage.output_tokens ?? 0,
+        totalTokens: usage.total_tokens ?? 0
+    };
+    const cached = usage.input_tokens_details?.cached_tokens;
+    if (cached !== undefined) {
+        result.cachedPromptTokens = cached;
+    }
+    const reasoning = usage.output_tokens_details?.reasoning_tokens;
+    if (reasoning !== undefined) {
+        result.reasoningTokens = reasoning;
+    }
+    return result;
+}
+
+/**
+ * Builds a normalized {@link CompletionInfo} from the fields reported by an API response, omitting
+ * any that are `undefined`. Returns `undefined` when no fields are present, so no `info` is attached
+ * to the result.
+ */
+function completionInfo(fields: {
+    model?: string | undefined;
+    usage?: TokenUsage | undefined;
+    finishReason?: CompletionFinishReason | undefined;
+    raw?: Record<string, unknown> | undefined;
+}): CompletionInfo | undefined {
+    const info: CompletionInfo = {};
+    if (fields.model !== undefined) {
+        info.model = fields.model;
+    }
+    if (fields.usage !== undefined) {
+        info.usage = fields.usage;
+    }
+    if (fields.finishReason !== undefined) {
+        info.finishReason = fields.finishReason;
+    }
+    if (fields.raw !== undefined) {
+        info.raw = fields.raw;
+    }
+    return Object.keys(info).length > 0 ? info : undefined;
+}
+
+/**
+ * Maps a Chat Completions `finish_reason` to a normalized {@link CompletionFinishReason}, or
+ * `undefined` when the API omits it.
+ */
+function normalizeChatFinishReason(reason: string | null | undefined): CompletionFinishReason | undefined {
+    switch (reason) {
+        case "stop":
+            return "stop";
+        case "length":
+            return "length";
+        case "content_filter":
+            return "content_filter";
+        case "tool_calls":
+        case "function_call":
+            return "tool_calls";
+        case null:
+        case undefined:
+            return undefined;
+        default:
+            return "other";
+    }
+}
+
+/**
+ * Maps a Responses API `status` (and optional `incomplete_details.reason`) to a normalized
+ * {@link CompletionFinishReason}, or `undefined` when the API omits the status.
+ */
+function normalizeResponsesFinishReason(status: string | undefined, incompleteReason: string | undefined): CompletionFinishReason | undefined {
+    switch (status) {
+        case "completed":
+            return "stop";
+        case "incomplete":
+            switch (incompleteReason) {
+                case "max_output_tokens":
+                    return "length";
+                case "content_filter":
+                    return "content_filter";
+                default:
+                    return "other";
+            }
+        case undefined:
+            return undefined;
+        default:
+            return "other";
     }
 }
 

@@ -24,5 +24,7 @@ processRequests("😀> ", process.argv[2], async (request) => {
         console.log(response.message);
         return;
     }
-    console.log(`The sentiment is ${response.data.sentiment}`);
+    const usage = response.info?.usage;
+    const tokens = usage ? ` (used ${usage.totalTokens} tokens)` : "";
+    console.log(`The sentiment is ${response.data.sentiment}${tokens}`);
 });

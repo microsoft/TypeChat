@@ -125,6 +125,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
         const preamble: PromptSection[] = typeof promptPreamble === "string" ? [{ role: "user", content: promptPreamble }] : promptPreamble ?? [];
         let prompt: PromptSection[] = [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }];
         let attemptRepair = typeChat.attemptRepair;
+        let repairAttempts = 0;
         while (true) {
             const response = await model.complete(prompt);
             if (!response.success) {
@@ -150,7 +151,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             const schemaValidation = validator.validate(jsonObject);
             const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
             if (validation.success) {
-                return validation;
+                return { ...validation, info: { ...response.info, repairAttempts } };
             }
             if (!attemptRepair) {
                 return error(`JSON validation failed: ${validation.message}\n${jsonText}`);
@@ -158,6 +159,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             prompt.push({ role: "assistant", content: responseText });
             prompt.push({ role: "user", content: typeChat.createRepairPrompt(validation.message) });
             attemptRepair = false;
+            repairAttempts++;
         }
     }
 }

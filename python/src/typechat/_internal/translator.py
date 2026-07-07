@@ -3,7 +3,7 @@ from typing_extensions import Generic, TypeVar
 import pydantic_core
 
 from typechat._internal.model import PromptSection, TypeChatLanguageModel
-from typechat._internal.result import Failure, Result, Success
+from typechat._internal.result import CompletionInfo, Failure, Result, Success
 from typechat._internal.ts_conversion import python_type_to_typescript_schema
 from typechat._internal.validator import TypeChatValidator
 
@@ -90,6 +90,9 @@ class TypeChatJsonTranslator(Generic[T]):
                 else:
                     result = self.validator.validate_object(parsed_response)
                     if isinstance(result, Success):
+                        info = completion_response.info if completion_response.info is not None else CompletionInfo()
+                        info.repair_attempts = num_repairs_attempted
+                        result.info = info
                         return result
                     error_message = result.message
             else:

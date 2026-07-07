@@ -9,7 +9,7 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 
 // Load the compiled module from dist
-import { createOpenAILanguageModel, createLanguageModel } from "../dist/index.js";
+import { createOpenAILanguageModel, createLanguageModel, createJsonTranslator } from "../dist/index.js";
 
 // ---------------------------------------------------------------------------
 // Helpers: build mock Response objects
@@ -124,6 +124,95 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
         assert.equal(result.data, "The answer is 42.");
     });
 
+    test("exposes normalized token usage, model, finish reason, and raw via result.info", async () => {
+        setupFetch([{
+            ok: true,
+            status: 200,
+            headers: { get: (_name) => null },
+            json: () => Promise.resolve({
+                id: "chatcmpl-123",
+                object: "chat.completion",
+                model: "gpt-4-0613",
+                system_fingerprint: "fp_abc123",
+                choices: [{ message: { role: "assistant", content: "Hi!" }, finish_reason: "stop" }],
+                usage: { prompt_tokens: 11, completion_tokens: 7, total_tokens: 18 },
+            }),
+        }]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("Say hi");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "Hi!");
+        assert.ok(result.info, "Expected info to be present");
+        assert.equal(result.info.model, "gpt-4-0613");
+        assert.equal(result.info.finishReason, "stop");
+        assert.deepEqual(result.info.usage, {
+            promptTokens: 11,
+            completionTokens: 7,
+            totalTokens: 18,
+        });
+        // Raw passthrough exposes provider-specific fields not normalized elsewhere.
+        assert.equal(result.info.raw.id, "chatcmpl-123");
+        assert.equal(result.info.raw.system_fingerprint, "fp_abc123");
+    });
+
+    test("maps finish_reason 'length' to a normalized 'length' finish reason", async () => {
+        setupFetch([{
+            ok: true,
+            status: 200,
+            headers: { get: (_name) => null },
+            json: () => Promise.resolve({
+                id: "chatcmpl-len",
+                object: "chat.completion",
+                choices: [{ message: { role: "assistant", content: "truncated..." }, finish_reason: "length" }],
+            }),
+        }]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("write a long essay");
+        assert.equal(result.success, true);
+        assert.equal(result.info.finishReason, "length");
+    });
+
+    test("normalizes cached prompt and reasoning token details when present", async () => {
+        setupFetch([{
+            ok: true,
+            status: 200,
+            headers: { get: (_name) => null },
+            json: () => Promise.resolve({
+                object: "chat.completion",
+                choices: [{ message: { role: "assistant", content: "Hi!" }, finish_reason: "stop" }],
+                usage: {
+                    prompt_tokens: 100,
+                    completion_tokens: 40,
+                    total_tokens: 140,
+                    prompt_tokens_details: { cached_tokens: 80 },
+                    completion_tokens_details: { reasoning_tokens: 25 },
+                },
+            }),
+        }]);
+        const model = createOpenAILanguageModel("sk-test", "o1");
+        const result = await model.complete("think hard");
+        assert.equal(result.success, true);
+        assert.deepEqual(result.info.usage, {
+            promptTokens: 100,
+            completionTokens: 40,
+            totalTokens: 140,
+            cachedPromptTokens: 80,
+            reasoningTokens: 25,
+        });
+    });
+
+    test("attaches raw response even when usage/model are absent", async () => {
+        setupFetch([makeChatCompletionsResponse("No meta")]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, true);
+        assert.ok(result.info, "Expected info with raw passthrough");
+        assert.equal(result.info.model, undefined);
+        assert.equal(result.info.usage, undefined);
+        assert.ok(result.info.raw, "Expected raw response body");
+        assert.equal(result.info.raw.object, "chat.completion");
+    });
+
     test("accepts PromptSection array as input", async () => {
         setupFetch([makeChatCompletionsResponse("OK")]);
         const model = createOpenAILanguageModel("sk-test", "gpt-4");
@@ -218,6 +307,37 @@ describe("createOpenAILanguageModel (Responses API path)", () => {
         const result = await model.complete("What is the answer?");
         assert.equal(result.success, true);
         assert.equal(result.data, "The answer is 42.");
+    });
+
+    test("exposes normalized token usage (input/output tokens), finish reason, and raw via result.info", async () => {
+        setupFetch([{
+            ok: true,
+            status: 200,
+            headers: { get: (_name) => null },
+            json: () => Promise.resolve({
+                id: "resp-123",
+                object: "response",
+                status: "completed",
+                model: "gpt-4.1-2025-04-14",
+                output: [
+                    { type: "message", role: "assistant", content: [{ type: "output_text", text: "Hi!" }] },
+                ],
+                usage: { input_tokens: 20, output_tokens: 5, total_tokens: 25 },
+            }),
+        }]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4", "https://api.openai.com/v1/responses");
+        const result = await model.complete("Say hi");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "Hi!");
+        assert.ok(result.info, "Expected info to be present");
+        assert.equal(result.info.model, "gpt-4.1-2025-04-14");
+        assert.equal(result.info.finishReason, "stop");
+        assert.deepEqual(result.info.usage, {
+            promptTokens: 20,
+            completionTokens: 5,
+            totalTokens: 25,
+        });
+        assert.equal(result.info.raw.id, "resp-123");
     });
 
     test("returns error on unexpected response format", async () => {
@@ -322,6 +442,48 @@ describe("createLanguageModel environment variable routing", () => {
 
     test("throws when OPENAI_API_KEY and AZURE_OPENAI_API_KEY are both missing", () => {
         assert.throws(() => createLanguageModel({}), /Missing environment variable/);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// createJsonTranslator repair metrics
+// ---------------------------------------------------------------------------
+
+describe("createJsonTranslator repair metrics", () => {
+    after(teardownFetch);
+
+    // Minimal validator expecting { value: number } - avoids needing the TS compiler.
+    const validator = {
+        getSchemaText: () => "interface X { value: number }\n",
+        getTypeName: () => "X",
+        validate: (obj) =>
+            obj && typeof obj.value === "number"
+                ? { success: true, data: obj }
+                : { success: false, message: "value must be a number" },
+    };
+
+    test("reports repairAttempts = 0 when the first response validates", async () => {
+        setupFetch([makeChatCompletionsResponse('{ "value": 42 }')]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const translator = createJsonTranslator(model, validator);
+        const result = await translator.translate("give me 42");
+        assert.equal(result.success, true);
+        assert.equal(result.data.value, 42);
+        assert.equal(result.info.repairAttempts, 0);
+    });
+
+    test("reports repairAttempts = 1 after one repair", async () => {
+        setupFetch([
+            makeChatCompletionsResponse('{ "value": "not a number" }'),
+            makeChatCompletionsResponse('{ "value": 42 }'),
+        ]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const translator = createJsonTranslator(model, validator);
+        const result = await translator.translate("give me 42");
+        assert.equal(result.success, true);
+        assert.equal(result.data.value, 42);
+        assert.equal(result.info.repairAttempts, 1);
+        assert.equal(capturedRequests.length, 2, "Expected an initial request plus one repair");
     });
 });
 
