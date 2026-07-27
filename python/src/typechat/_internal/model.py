@@ -1,4 +1,5 @@
 import asyncio
+import json
 from types import TracebackType
 from typing_extensions import AsyncContextManager, Literal, Protocol, Self, TypedDict, cast, override
 
@@ -35,6 +36,11 @@ _TRANSIENT_ERROR_CODES = [
     504,
 ]
 
+class _ResponseTooLargeError(Exception):
+    """Raised when a model response body exceeds the configured maximum size."""
+    def __init__(self, max_bytes: int):
+        super().__init__(f"REST API response exceeded the maximum allowed size of {max_bytes} bytes")
+
 class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
     url: str
     headers: dict[str, str]
@@ -46,6 +52,11 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
     # Specifies how long a request should wait in seconds
     # before timing out with a Failure.
     timeout_seconds = 10
+    # Specifies the maximum size, in bytes, of a response body that will be read from the
+    # model endpoint (the default is 100 MB). A larger response is rejected without being fully
+    # buffered in memory, preventing a malicious or malfunctioning endpoint from exhausting memory.
+    # Set to 0 or a negative value to disable the limit.
+    max_response_bytes: int = 100 * 1024 * 1024
     _async_client: httpx.AsyncClient
 
     def __init__(self, url: str, headers: dict[str, str], default_params: dict[str, str]):
@@ -74,27 +85,58 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         retry_count = 0
         while True:
             try:
-                response = await self._async_client.post(
+                async with self._async_client.stream(
+                    "POST",
                     self.url,
                     headers=headers,
                     json=body,
-                    timeout=self.timeout_seconds
-                )
-                if response.is_success:
-                    json_result = cast(
-                        dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
-                        response.json()
-                    )
-                    return Success(json_result["choices"][0]["message"]["content"] or "")
+                    timeout=self.timeout_seconds,
+                ) as response:
+                    if response.is_success:
+                        raw = await self._read_capped(response)
+                        json_result = cast(
+                            dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
+                            json.loads(raw)
+                        )
+                        return Success(json_result["choices"][0]["message"]["content"] or "")
 
-                if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
-                    return Failure(f"REST API error {response.status_code}: {response.reason_phrase}")
+                    if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
+                        return Failure(f"REST API error {response.status_code}: {response.reason_phrase}")
+            except _ResponseTooLargeError as e:
+                return Failure(str(e))
             except Exception as e:
                 if retry_count >= self.max_retry_attempts:
                     return Failure(str(e) or f"{repr(e)} raised from within internal TypeChat language model.")
 
             await asyncio.sleep(self.retry_pause_seconds)
             retry_count += 1
+
+    async def _read_capped(self, response: httpx.Response) -> bytes:
+        """
+        Reads a response body while enforcing `max_response_bytes`. The body is read incrementally
+        and the read is aborted as soon as the accumulated size exceeds the limit, so an oversized
+        response is never fully buffered in memory. A non-positive limit disables the check.
+        """
+        max_bytes = self.max_response_bytes
+        if max_bytes <= 0:
+            return await response.aread()
+
+        # Fail fast when the server advertises an oversized body up front.
+        content_length = response.headers.get("content-length")
+        if content_length is not None:
+            try:
+                advertised = int(content_length)
+            except ValueError:
+                advertised = None
+            if advertised is not None and advertised > max_bytes:
+                raise _ResponseTooLargeError(max_bytes)
+
+        buffer = bytearray()
+        async for chunk in response.aiter_bytes():
+            buffer.extend(chunk)
+            if len(buffer) > max_bytes:
+                raise _ResponseTooLargeError(max_bytes)
+        return bytes(buffer)
 
     @override
     async def __aenter__(self) -> Self:
