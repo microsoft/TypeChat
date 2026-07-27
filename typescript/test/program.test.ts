@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateJsonProgram, createModuleTextFromProgram, Program } from "../dist/ts/index.js";
+import { evaluateJsonProgram, createModuleTextFromProgram, Program, FunctionCall } from "../dist/ts/index.js";
 
 // ---------------------------------------------------------------------------
 // evaluateJsonProgram result-reference bounds checking
@@ -102,5 +102,134 @@ describe("createModuleTextFromProgram result references", () => {
             ],
         });
         assert.equal(result.success, false);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// @func name validation (source injection / unchecked dispatch)
+// ---------------------------------------------------------------------------
+
+describe("@func name validation", () => {
+    const maliciousProgram: Program = {
+        "@steps": [
+            { "@func": "play('x'); /*", "@args": [] },
+            { "@func": "deleteEverything", "@args": ["rm", "-rf", 0] },
+            { "@func": "*/ api.play", "@args": ["x"] },
+        ],
+    };
+
+    it("createModuleTextFromProgram rejects a comment-injection @func value", () => {
+        const result = createModuleTextFromProgram(maliciousProgram);
+        assert.equal(result.success, false);
+    });
+
+    it("createModuleTextFromProgram accepts a normal valid program", () => {
+        const result = createModuleTextFromProgram({
+            "@steps": [
+                { "@func": "first", "@args": [] },
+                { "@func": "second", "@args": [{ "@ref": 0 }] },
+            ],
+        });
+        assert.equal(result.success, true);
+        assert.match((result as { data: string }).data, /api\.first\(\)/);
+        assert.match((result as { data: string }).data, /api\.second\(step1\)/);
+    });
+
+    it("evaluateJsonProgram throws instead of dispatching a comment-injection @func value", async () => {
+        const calls: Array<{ func: string; args: unknown[] }> = [];
+        await assert.rejects(
+            evaluateJsonProgram(maliciousProgram, async (func, args) => {
+                calls.push({ func, args });
+                return undefined;
+            }),
+            /Invalid function name/
+        );
+        assert.equal(calls.length, 0, "no function should have been dispatched");
+    });
+
+    for (const badName of ["constructor", "__proto__", "toString", "valueOf", "hasOwnProperty"]) {
+        it(`evaluateJsonProgram throws instead of dispatching prototype member "${badName}"`, async () => {
+            const program: Program = { "@steps": [{ "@func": badName, "@args": [] }] };
+            let dispatched = false;
+            await assert.rejects(
+                evaluateJsonProgram(program, async (func, args) => {
+                    dispatched = true;
+                    return undefined;
+                }),
+                /Invalid function name/
+            );
+            assert.equal(dispatched, false);
+        });
+    }
+
+    it("evaluateJsonProgram dispatches a normal valid program correctly", async () => {
+        const calls: Array<{ func: string; args: unknown[] }> = [];
+        const result = await evaluateJsonProgram(
+            {
+                "@steps": [
+                    { "@func": "first", "@args": [] },
+                    { "@func": "second", "@args": [{ "@ref": 0 }] },
+                ],
+            },
+            async (func, args) => {
+                calls.push({ func, args });
+                return `${func}-result`;
+            }
+        );
+        assert.deepEqual(calls[0], { func: "first", args: [] });
+        assert.deepEqual(calls[1], { func: "second", args: ["first-result"] });
+        assert.equal(result, "second-result");
+    });
+
+    it("createModuleTextFromProgram rejects a call object with a non-array @args", () => {
+        const result = createModuleTextFromProgram({
+            "@steps": [
+                { "@func": "first", "@args": "not-an-array" as unknown as [] },
+            ],
+        });
+        assert.equal(result.success, false);
+    });
+
+    it("createModuleTextFromProgram rejects a call object with extra unexpected keys", () => {
+        const result = createModuleTextFromProgram({
+            "@steps": [
+                { "@func": "first", "@args": [], "extra": true } as unknown as FunctionCall,
+            ],
+        });
+        assert.equal(result.success, false);
+    });
+
+    it("evaluateJsonProgram throws instead of dispatching a call object with a non-array @args", async () => {
+        const program = {
+            "@steps": [
+                { "@func": "first", "@args": "not-an-array" },
+            ],
+        } as unknown as Program;
+        let dispatched = false;
+        await assert.rejects(
+            evaluateJsonProgram(program, async (func, args) => {
+                dispatched = true;
+                return undefined;
+            }),
+            /Invalid function call/
+        );
+        assert.equal(dispatched, false);
+    });
+
+    it("evaluateJsonProgram throws instead of dispatching a call object with extra unexpected keys", async () => {
+        const program = {
+            "@steps": [
+                { "@func": "first", "@args": [], "extra": true },
+            ],
+        } as unknown as Program;
+        let dispatched = false;
+        await assert.rejects(
+            evaluateJsonProgram(program, async (func, args) => {
+                dispatched = true;
+                return undefined;
+            }),
+            /Invalid function call/
+        );
+        assert.equal(dispatched, false);
     });
 });
