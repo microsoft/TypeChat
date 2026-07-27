@@ -160,10 +160,10 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
     async function evaluateObject(obj: Record<string, unknown>) {
         if (obj.hasOwnProperty("@ref")) {
             const index = obj["@ref"];
-            if (typeof index === "number" && Number.isInteger(index) && index >= 0 && index < results.length) {
+            if (Object.keys(obj).length === 1 && typeof index === "number" && Number.isInteger(index) && index >= 0 && index < results.length) {
                 return results[index];
             }
-            throw new Error(`Invalid result reference: ${JSON.stringify(index)}`);
+            throw new Error(`Invalid result reference: ${String(index)}`);
         }
         else if (obj.hasOwnProperty("@func")) {
             const func = obj["@func"];

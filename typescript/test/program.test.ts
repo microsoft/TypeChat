@@ -16,7 +16,7 @@ describe("evaluateJsonProgram result references", () => {
         return { result, calls };
     }
 
-    it("resolves a valid forward reference", async () => {
+    it("resolves a valid reference to a preceding step", async () => {
         const program: Program = {
             "@steps": [
                 { "@func": "first" },
@@ -89,6 +89,16 @@ describe("createModuleTextFromProgram result references", () => {
             "@steps": [
                 { "@func": "first" },
                 { "@func": "second", "@args": [{ "@ref": 0.5 }] },
+            ],
+        });
+        assert.equal(result.success, false);
+    });
+
+    it("rejects an out-of-upper-bound index", () => {
+        const result = createModuleTextFromProgram({
+            "@steps": [
+                { "@func": "first" },
+                { "@func": "second", "@args": [{ "@ref": 5 }] },
             ],
         });
         assert.equal(result.success, false);
