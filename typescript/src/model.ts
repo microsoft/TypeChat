@@ -69,6 +69,21 @@ export interface TypeChatLanguageModel {
      */
     retryPauseMs?: number;
     /**
+     * Optional property that specifies the timeout, in milliseconds, applied to each HTTP request
+     * made to the model endpoint (the default is 600000ms, i.e. 10 minutes). A request - including
+     * reading its response body - is aborted if it does not complete within this time, preventing a
+     * slow or unresponsive endpoint from causing `complete` to hang indefinitely and exhaust
+     * resources. Set to 0 or a negative value to disable the timeout.
+     */
+    timeoutMs?: number;
+    /**
+     * Optional property that specifies the maximum size, in bytes, of a response body accepted from
+     * the model endpoint (the default is 104857600, i.e. 100 MB). A larger response is rejected
+     * without being fully buffered in memory, preventing a malicious or malfunctioning endpoint from
+     * exhausting memory. Set to 0 or a negative value to disable the limit.
+     */
+    maxResponseBytes?: number;
+    /**
      * Obtains a completion from the language model for the given prompt.
      * @param prompt A prompt string or an array of prompt sections. If a string is specified,
      *   it is converted into a single "user" role prompt section.
@@ -206,6 +221,20 @@ export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string,
 }
 
 /**
+ * Default per-request timeout applied when a model does not set {@link TypeChatLanguageModel.timeoutMs}.
+ * Ten minutes matches common LLM client defaults, allowing slow completions while still preventing a
+ * request from hanging indefinitely.
+ */
+const defaultTimeoutMs = 600000;
+
+/**
+ * Default maximum response body size (100 MB) applied when a model does not set
+ * {@link TypeChatLanguageModel.maxResponseBytes}. Generous enough for any legitimate completion while
+ * still preventing an endpoint from exhausting memory with an unbounded response.
+ */
+const defaultMaxResponseBytes = 100 * 1024 * 1024;
+
+/**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
 function createFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings) {
@@ -221,6 +250,8 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
+        const timeoutMs = model.timeoutMs ?? defaultTimeoutMs;
+        const maxResponseBytes = model.maxResponseBytes ?? defaultMaxResponseBytes;
         const messages = typeof prompt === "string" ? [{ role: "user", content: prompt }] : prompt;
         while (true) {
             const options: RequestInit = {
@@ -241,11 +272,12 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             }
             const response = await fetch(url, options);
             if (response.ok) {
-                const json = await response.json() as { choices: { message: PromptSection }[] };
-                if (typeof json.choices[0].message.content === "string") {
-                    return success(json.choices[0].message.content ?? "");
+                const json = await response.json() as { choices?: { message?: PromptSection }[] } | null;
+                const content = json?.choices?.[0]?.message?.content;
+                if (typeof content === "string") {
+                    return success(content);
                 } else {
-                    return error(`REST API unexpected response format: ${JSON.stringify(json.choices[0].message.content)}`);
+                    return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
                 }
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
@@ -296,6 +328,8 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
+        const timeoutMs = model.timeoutMs ?? defaultTimeoutMs;
+        const maxResponseBytes = model.maxResponseBytes ?? defaultMaxResponseBytes;
         const input = typeof prompt === "string" ? prompt : (prompt as PromptSection[]);
         while (true) {
             const options: RequestInit = {
@@ -313,14 +347,29 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
             if (dispatcher) {
                 options.dispatcher = dispatcher;
             }
-            const response = await fetch(url, options);
+            let response: Response;
+            try {
+                response = await fetchWithTimeout(url, options, timeoutMs);
+            } catch (e) {
+                if (retryCount >= retryMaxAttempts) {
+                    return error(`REST API fetch error: ${getErrorMessage(e)}`);
+                }
+                await sleep(retryPauseMs);
+                retryCount++;
+                continue;
+            }
             if (response.ok) {
                 type ResponsesAPIOutputItem = {
                     type: string;
                     role?: string;
                     content: { type: string; text: string }[];
                 };
-                const json = await response.json() as { output: ResponsesAPIOutputItem[] };
+                let json: { output: ResponsesAPIOutputItem[] };
+                try {
+                    json = await readResponseJson(response, maxResponseBytes) as { output: ResponsesAPIOutputItem[] };
+                } catch (e) {
+                    return error(`REST API response error: ${getErrorMessage(e)}`);
+                }
                 const message = json.output?.find(o => o.type === "message");
                 const textContent = message?.content?.find(c => c.type === "output_text");
                 if (textContent?.text !== undefined) {
@@ -384,6 +433,59 @@ function isResponsesApiUrl(url: string): boolean {
         // Fallback for relative or non-standard URLs
         return url.split("?")[0].endsWith("/responses");
     }
+}
+
+/**
+ * Performs a `fetch` request that is aborted if it does not complete within `timeoutMs`
+ * milliseconds. Because the abort signal stays attached to the returned response, the timeout also
+ * bounds the time spent reading the response body. A non-positive `timeoutMs` disables the timeout.
+ * Enforcing a timeout prevents a slow or unresponsive endpoint from causing the request to hang
+ * indefinitely and exhaust resources.
+ */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+    if (timeoutMs > 0) {
+        options.signal = AbortSignal.timeout(timeoutMs);
+    }
+    return fetch(url, options);
+}
+
+/**
+ * Reads and JSON-parses a response body while enforcing a maximum size in bytes. When the runtime
+ * exposes a readable stream body (as Node's `fetch` does) and `maxBytes` is positive, the body is
+ * read incrementally and the read is aborted as soon as the accumulated size exceeds `maxBytes`, so
+ * an oversized response is never fully buffered in memory. When no stream body is available or the
+ * limit is disabled, this falls back to `response.json()`.
+ */
+async function readResponseJson(response: Response, maxBytes: number): Promise<unknown> {
+    const body = response.body;
+    if (maxBytes > 0 && body && typeof body.getReader === "function") {
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let received = 0;
+        let text = "";
+        while (true) {
+            const result = await reader.read();
+            if (result.done) {
+                break;
+            }
+            received += result.value.byteLength;
+            if (received > maxBytes) {
+                await reader.cancel().catch(() => { /* ignore cancellation errors */ });
+                throw new Error(`REST API response exceeded the maximum allowed size of ${maxBytes} bytes`);
+            }
+            text += decoder.decode(result.value, { stream: true });
+        }
+        text += decoder.decode();
+        return JSON.parse(text);
+    }
+    return response.json();
+}
+
+/**
+ * Extracts a human-readable message from a value thrown by `fetch` or response processing.
+ */
+function getErrorMessage(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
 }
 
 /**

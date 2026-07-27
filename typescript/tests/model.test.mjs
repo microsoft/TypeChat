@@ -29,6 +29,15 @@ function makeChatCompletionsResponse(content) {
     };
 }
 
+function makeJsonResponse(body) {
+    return {
+        ok: true,
+        status: 200,
+        headers: { get: (_name) => null },
+        json: () => Promise.resolve(body),
+    };
+}
+
 function makeResponsesAPIResponse(text) {
     return {
         ok: true,
@@ -143,6 +152,50 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
         const result = await model.complete("test");
         assert.equal(result.success, false);
         assert.ok(result.message.includes("401"));
+    });
+
+    // Regression tests: a 200 OK response whose body does not conform to the
+    // expected Chat Completions shape must return a recoverable error rather
+    // than throwing a TypeError (which would reject the promise and can lead to
+    // a Denial of Service in callers that expect a Result).
+    test("returns error when choices array is missing", async () => {
+        setupFetch([makeJsonResponse({ id: "chatcmpl-123" })]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
+    });
+
+    test("returns error when choices array is empty", async () => {
+        setupFetch([makeJsonResponse({ choices: [] })]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
+    });
+
+    test("returns error when message is missing from choice", async () => {
+        setupFetch([makeJsonResponse({ choices: [{}] })]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
+    });
+
+    test("returns error when content is not a string", async () => {
+        setupFetch([makeJsonResponse({ choices: [{ message: { role: "assistant", content: null } }] })]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
+    });
+
+    test("returns error when response body is JSON null", async () => {
+        setupFetch([makeJsonResponse(null)]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
     });
 
     test("auto-detects Responses API from a /responses endpoint URL", async () => {
