@@ -108,7 +108,7 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
     function objectToString(obj: Record<string, unknown>) {
         if (obj.hasOwnProperty("@ref")) {
             const index = obj["@ref"];
-            if (typeof index === "number" && index < currentStep && Object.keys(obj).length === 1) {
+            if (typeof index === "number" && Number.isInteger(index) && index >= 0 && index < currentStep && Object.keys(obj).length === 1) {
                 return `step${index + 1}`;
             }
         }
@@ -160,9 +160,10 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
     async function evaluateObject(obj: Record<string, unknown>) {
         if (obj.hasOwnProperty("@ref")) {
             const index = obj["@ref"];
-            if (typeof index === "number" && index < results.length) {
+            if (Object.keys(obj).length === 1 && typeof index === "number" && Number.isInteger(index) && index >= 0 && index < results.length) {
                 return results[index];
             }
+            throw new Error(`Invalid result reference: ${String(index)}`);
         }
         else if (obj.hasOwnProperty("@func")) {
             const func = obj["@func"];
