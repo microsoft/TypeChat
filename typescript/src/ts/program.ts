@@ -69,10 +69,11 @@ export type ResultReference = {
 };
 
 /**
- * Determines whether a function name is safe to use as an `@func` value. The name must be a strict
- * JS identifier and must not be a member of `Object.prototype` (e.g. `constructor`, `__proto__`,
- * `toString`, `valueOf`, `hasOwnProperty`), which could otherwise be used to escape the intended
- * API surface during code generation or dispatch.
+ * Determines whether a function name is safe to use as an `@func` value. The name must be a plain
+ * ASCII identifier — a letter, underscore, or `$`, followed by letters, digits, underscores, or `$`
+ * — and must not be a member of `Object.prototype` (e.g. `constructor`, `__proto__`, `toString`,
+ * `valueOf`, `hasOwnProperty`), which could otherwise be used to escape the intended API surface
+ * during code generation or dispatch.
  */
 function isValidFunctionName(name: unknown): name is string {
     return typeof name === "string" &&
@@ -179,13 +180,15 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
         }
         else if (obj.hasOwnProperty("@func")) {
             const func = obj["@func"];
-            const args = obj.hasOwnProperty("@args") ? obj["@args"] : [];
+            const hasArgs = obj.hasOwnProperty("@args");
+            const args = hasArgs ? obj["@args"] : [];
             if (!isValidFunctionName(func)) {
                 throw new Error(`Invalid function name: ${JSON.stringify(func)}`);
             }
-            if (Array.isArray(args)) {
-                return await onCall(func, await evaluateArray(args));
+            if (!Array.isArray(args) || Object.keys(obj).length !== (hasArgs ? 2 : 1)) {
+                throw new Error(`Invalid function call: ${JSON.stringify(obj)}`);
             }
+            return await onCall(func, await evaluateArray(args));
         }
         else if (Array.isArray(obj)) {
             return evaluateArray(obj);
