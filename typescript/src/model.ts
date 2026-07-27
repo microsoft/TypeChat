@@ -270,9 +270,24 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             if (dispatcher) {
                 options.dispatcher = dispatcher;
             }
-            const response = await fetch(url, options);
+            let response: Response;
+            try {
+                response = await fetchWithTimeout(url, options, timeoutMs);
+            } catch (e) {
+                if (retryCount >= retryMaxAttempts) {
+                    return error(`REST API fetch error: ${getErrorMessage(e)}`);
+                }
+                await sleep(retryPauseMs);
+                retryCount++;
+                continue;
+            }
             if (response.ok) {
-                const json = await response.json() as { choices?: { message?: PromptSection }[] } | null;
+                let json: { choices?: { message?: PromptSection }[] } | null;
+                try {
+                    json = await readResponseJson(response, maxResponseBytes) as { choices?: { message?: PromptSection }[] } | null;
+                } catch (e) {
+                    return error(`REST API response error: ${getErrorMessage(e)}`);
+                }
                 const content = json?.choices?.[0]?.message?.content;
                 if (typeof content === "string") {
                     return success(content);
