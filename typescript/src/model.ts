@@ -379,13 +379,22 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
                     role?: string;
                     content: { type: string; text: string }[];
                 };
-                let json: { output: ResponsesAPIOutputItem[] };
+                let json: unknown;
                 try {
-                    json = await readResponseJson(response, maxResponseBytes) as { output: ResponsesAPIOutputItem[] };
+                    json = await readResponseJson(response, maxResponseBytes);
                 } catch (e) {
                     return error(`REST API response error: ${getErrorMessage(e)}`);
                 }
-                const message = json.output?.find(o => o.type === "message");
+                if (
+                    json === null ||
+                    typeof json !== "object" ||
+                    !("output" in json) ||
+                    !Array.isArray((json as { output?: unknown }).output)
+                ) {
+                    return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
+                }
+                const output = (json as { output: ResponsesAPIOutputItem[] }).output;
+                const message = output.find(o => o.type === "message");
                 const textContent = message?.content?.find(c => c.type === "output_text");
                 if (textContent?.text !== undefined) {
                     return success(textContent.text);
