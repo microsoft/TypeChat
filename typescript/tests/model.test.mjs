@@ -29,6 +29,15 @@ function makeChatCompletionsResponse(content) {
     };
 }
 
+function makeJsonResponse(body) {
+    return {
+        ok: true,
+        status: 200,
+        headers: { get: (_name) => null },
+        json: () => Promise.resolve(body),
+    };
+}
+
 function makeResponsesAPIResponse(text) {
     return {
         ok: true,
@@ -143,6 +152,50 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
         const result = await model.complete("test");
         assert.equal(result.success, false);
         assert.ok(result.message.includes("401"));
+    });
+
+    // Regression tests: a 200 OK response whose body does not conform to the
+    // expected Chat Completions shape must return a recoverable error rather
+    // than throwing a TypeError (which would reject the promise and can lead to
+    // a Denial of Service in callers that expect a Result).
+    test("returns error when choices array is missing", async () => {
+        setupFetch([makeJsonResponse({ id: "chatcmpl-123" })]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
+    });
+
+    test("returns error when choices array is empty", async () => {
+        setupFetch([makeJsonResponse({ choices: [] })]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
+    });
+
+    test("returns error when message is missing from choice", async () => {
+        setupFetch([makeJsonResponse({ choices: [{}] })]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
+    });
+
+    test("returns error when content is not a string", async () => {
+        setupFetch([makeJsonResponse({ choices: [{ message: { role: "assistant", content: null } }] })]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
+    });
+
+    test("returns error when response body is JSON null", async () => {
+        setupFetch([makeJsonResponse(null)]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("unexpected response format"));
     });
 
     test("auto-detects Responses API from a /responses endpoint URL", async () => {
@@ -322,6 +375,114 @@ describe("createLanguageModel environment variable routing", () => {
 
     test("throws when OPENAI_API_KEY and AZURE_OPENAI_API_KEY are both missing", () => {
         assert.throws(() => createLanguageModel({}), /Missing environment variable/);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Request timeout and response size limits (DoS hardening)
+// ---------------------------------------------------------------------------
+
+// Mirrors the error fetch throws when an AbortSignal.timeout() fires.
+function makeTimeoutError() {
+    return new DOMException("The operation timed out.", "TimeoutError");
+}
+
+// Builds a Response-like object whose body is a ReadableStream (as Node's fetch returns), so the
+// size-limited streaming read path is exercised. json() throws to prove it is not used.
+function makeStreamingResponse(payload, chunkSize = 16) {
+    const bytes = new TextEncoder().encode(payload);
+    return {
+        ok: true,
+        status: 200,
+        headers: { get: (_name) => null },
+        json: () => {
+            throw new Error("json() should not be called when a stream body is present");
+        },
+        body: new ReadableStream({
+            start(controller) {
+                for (let i = 0; i < bytes.length; i += chunkSize) {
+                    controller.enqueue(bytes.subarray(i, i + chunkSize));
+                }
+                controller.close();
+            },
+        }),
+    };
+}
+
+describe("request timeout and response size limits", () => {
+    after(teardownFetch);
+
+    test("attaches an AbortSignal to each request by default", async () => {
+        setupFetch([makeChatCompletionsResponse("OK")]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        await model.complete("test");
+        const signal = capturedRequests[0].options.signal;
+        assert.ok(signal, "Expected an AbortSignal on the request options");
+        assert.equal(typeof signal.aborted, "boolean", "Expected an AbortSignal-like object");
+    });
+
+    test("omits the AbortSignal when timeoutMs is set to 0", async () => {
+        setupFetch([makeChatCompletionsResponse("OK")]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        model.timeoutMs = 0;
+        await model.complete("test");
+        assert.equal(capturedRequests[0].options.signal, undefined, "Expected no AbortSignal when the timeout is disabled");
+    });
+
+    test("returns an error when every attempt times out", async () => {
+        let attempts = 0;
+        globalThis.fetch = async () => {
+            attempts++;
+            throw makeTimeoutError();
+        };
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        model.retryMaxAttempts = 2;
+        model.retryPauseMs = 0;
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("fetch error"), `Unexpected message: ${result.message}`);
+        assert.equal(attempts, 3, "Expected the initial attempt plus 2 retries");
+    });
+
+    test("retries after a transient fetch failure and then succeeds", async () => {
+        let attempts = 0;
+        globalThis.fetch = async () => {
+            attempts++;
+            if (attempts === 1) {
+                throw makeTimeoutError();
+            }
+            return makeChatCompletionsResponse("Recovered");
+        };
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        model.retryMaxAttempts = 3;
+        model.retryPauseMs = 0;
+        const result = await model.complete("test");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "Recovered");
+        assert.equal(attempts, 2, "Expected one failure followed by one success");
+    });
+
+    test("rejects a response body that exceeds maxResponseBytes", async () => {
+        const payload = JSON.stringify({
+            choices: [{ message: { role: "assistant", content: "x".repeat(500) } }],
+        });
+        setupFetch([makeStreamingResponse(payload)]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        model.maxResponseBytes = 50;
+        const result = await model.complete("test");
+        assert.equal(result.success, false);
+        assert.ok(result.message.includes("maximum allowed size"), `Unexpected message: ${result.message}`);
+    });
+
+    test("reads a streaming response body within maxResponseBytes", async () => {
+        const payload = JSON.stringify({
+            choices: [{ message: { role: "assistant", content: "Streamed!" } }],
+        });
+        setupFetch([makeStreamingResponse(payload)]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        const result = await model.complete("test");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "Streamed!");
     });
 });
 
