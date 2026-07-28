@@ -12,18 +12,23 @@ import typechat
 from typechat._internal.model import HttpxLanguageModel
 
 
+class _MockHttpxLanguageModel(HttpxLanguageModel):
+    def use_mock_transport(self, handler: Callable[[httpx.Request], httpx.Response]) -> None:
+        self._async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
 def _make_model(handler: Callable[[httpx.Request], httpx.Response]) -> HttpxLanguageModel:
-    model = HttpxLanguageModel(
+    model = _MockHttpxLanguageModel(
         url="https://example.invalid/v1/chat/completions",
         headers={},
         default_params={"model": "gpt-test"},
     )
     # Route the model's requests through a mock transport instead of the network.
-    model._async_client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    model.use_mock_transport(handler)
     return model
 
 
-def _completion_payload(content: str) -> dict:
+def _completion_payload(content: str) -> dict[str, list[dict[str, dict[str, str]]]]:
     return {"choices": [{"message": {"role": "assistant", "content": content}}]}
 
 
