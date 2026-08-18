@@ -74,3 +74,5 @@ updates:
         applies-to: security-updates
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    cooldown:
+      default-days: 7
