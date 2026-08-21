@@ -8,11 +8,10 @@ import { TypeChatJsonValidator } from "../typechat";
 type SyncModule = typeof import('typescript/unstable/sync', { with: { 'resolution-mode': 'import' } });
 type FileSystemModule = typeof import('typescript/unstable/fs', { with: { 'resolution-mode': 'import' } });
 type AstIsModule = typeof import('typescript/unstable/ast/is', { with: { 'resolution-mode': 'import' } });
-type AstModule = { SourceFile: import('typescript/unstable/ast', { with: { 'resolution-mode': 'import' } }).SourceFile };
 
 type Checker = InstanceType<SyncModule['Checker']>;
-type Diagnostic = ReturnType<InstanceType<SyncModule['Program']>['getSyntacticDiagnostics']>[number];
-type SourceFile = AstModule['SourceFile'];
+type Diagnostic = import('typescript/unstable/sync', { with: { 'resolution-mode': 'import' } }).Diagnostic;
+type SourceFile = import('typescript/unstable/ast', { with: { 'resolution-mode': 'import' } }).SourceFile;
 
 const requireEsm = createRequire(__filename);
 const { API, NodeBuilderFlags, SymbolFlags }: SyncModule = requireEsm('typescript/unstable/sync');
