@@ -75,6 +75,10 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
     });
     const api = new API({ fs: fileSystem, cwd: "/" });
     api.updateSnapshot({ openProjects: [configFileName] });
+    if (!fileSystem.writeFile) {
+        throw new Error("The TypeScript virtual file system doesn't support writing files.");
+    }
+    const writeJsonFile = fileSystem.writeFile;
     const validator: TypeScriptJsonValidator<T> = {
         getSchemaText: () => schema,
         getTypeName: () => typeName,
@@ -89,9 +93,12 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
         if (!moduleResult.success) {
             return moduleResult;
         }
-        fileSystem.writeFile!(jsonFileName, moduleResult.data);
+        writeJsonFile(jsonFileName, moduleResult.data);
         const snapshot = api.updateSnapshot({ fileChanges: { changed: [jsonFileName] } });
-        const project = snapshot.getProject(configFileName)!;
+        const project = snapshot.getProject(configFileName);
+        if (!project) {
+            return error(`The TypeScript schema project '${configFileName}' couldn't be loaded.`);
+        }
         const program = project.program;
         const syntacticDiagnostics = program.getSyntacticDiagnostics();
         const programDiagnostics = syntacticDiagnostics.length ? syntacticDiagnostics : program.getSemanticDiagnostics();
@@ -139,7 +146,8 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
             if (isVariableStatement(stmt)) {
                 for (const decl of stmt.declarationList.declarations) {
                     // Match the specific declaration that spans the diagnostic position.
-                    if (decl.pos <= position && position <= decl.end &&
+                    // Use getStart() to exclude leading trivia from the range check.
+                    if (decl.getStart(file) <= position && position <= decl.end &&
                             decl.type && isTypeReferenceNode(decl.type) && decl.initializer) {
                         const targetType = checker.getTypeAtLocation(decl.type);
                         const sourceType = checker.getTypeAtLocation(decl.initializer);
