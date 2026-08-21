@@ -247,6 +247,30 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
         assert.equal(result.data, "OK after 503 retry");
         assert.equal(capturedRequests.length, 2, "Expected 2 requests: initial + 1 retry");
     });
+
+    test("uses the configured pause for a negative retry-after header", async () => {
+        setupFetch([
+            makeErrorResponse(429, "Too Many Requests", -1000),
+            makeChatCompletionsResponse("OK after retry"),
+        ]);
+        const model = createOpenAILanguageModel("sk-test", "gpt-4");
+        model.retryMaxAttempts = 3;
+        model.retryPauseMs = 1000;
+        const scheduledDelays = [];
+        const originalSetTimeout = globalThis.setTimeout;
+        globalThis.setTimeout = (callback, delay, ...args) => {
+            scheduledDelays.push(delay);
+            queueMicrotask(() => callback(...args));
+        };
+        try {
+            const result = await model.complete("test");
+            assert.equal(result.success, true);
+            assert.equal(result.data, "OK after retry");
+            assert.deepEqual(scheduledDelays, [1000]);
+        } finally {
+            globalThis.setTimeout = originalSetTimeout;
+        }
+    });
 });
 
 // ---------------------------------------------------------------------------
