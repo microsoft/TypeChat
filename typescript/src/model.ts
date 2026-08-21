@@ -422,7 +422,7 @@ function getRetryDelayMs(response: Response, defaultMs: number, maxMs: number): 
     const retryAfter = response.headers.get("retry-after");
     if (retryAfter) {
         const seconds = parseInt(retryAfter, 10);
-        if (!isNaN(seconds)) {
+        if (Number.isFinite(seconds) && seconds >= 0) {
             return Math.min(seconds * 1000, maxMs);
         }
     }
