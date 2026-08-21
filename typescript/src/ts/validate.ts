@@ -5,6 +5,7 @@ import { TypeChatJsonValidator } from "../typechat";
 // TypeScript 7 ships as an ES module, while this package is emitted as CommonJS. Node's
 // `require(esm)` support (Node >=22.12) lets us load it synchronously, and `resolution-mode`
 // makes the TypeScript compiler resolve the ESM-only types from a CommonJS file.
+// TODO: Revisit these `typescript/unstable/*` imports once a stable API is available.
 type SyncModule = typeof import('typescript/unstable/sync', { with: { 'resolution-mode': 'import' } });
 type FileSystemModule = typeof import('typescript/unstable/fs', { with: { 'resolution-mode': 'import' } });
 type AstIsModule = typeof import('typescript/unstable/ast/is', { with: { 'resolution-mode': 'import' } });
