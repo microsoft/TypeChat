@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           # Don't leave the default GITHUB_TOKEN in .git/config — the
@@ -51,7 +51,7 @@ jobs:
           # credentials reachable from build/test scripts.
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: "npm"
@@ -59,7 +59,7 @@ jobs:
 
       - name: Generate GitHub App token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ vars.DEPENDABOT_APP_ID }}
           private-key: ${{ secrets.DEPENDABOT_APP_PRIVATE_KEY }}
@@ -85,7 +85,7 @@ jobs:
       # so we save under a run-id-suffixed key and restore from the prefix.
       - name: Restore rollback state
         id: restore-state
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/fix-dependabot-alerts-rollback-state.json
           key: fix-dep-rollback-state-v1-${{ github.run_id }}
@@ -113,7 +113,7 @@ jobs:
       # be forgotten and the same broken upgrade re-tried tomorrow.
       - name: Save rollback state
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/fix-dependabot-alerts-rollback-state.json
           # ``run_id`` is reused across job re-runs; include
@@ -154,7 +154,7 @@ jobs:
       - name: Refresh app token
         if: ${{ steps.fix.outputs.changes == 'true' && steps.build.outputs.build_ok == 'true' }}
         id: app-token-pr
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1.12.0
         with:
           app-id: ${{ vars.DEPENDABOT_APP_ID }}
           private-key: ${{ secrets.DEPENDABOT_APP_PRIVATE_KEY }}
