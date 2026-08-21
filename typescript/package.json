@@ -38,7 +38,7 @@
     "./interactive": "./dist/interactive/index.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.19.0"
   },
   "files": [
     "dist",
@@ -47,8 +47,8 @@
     "SECURITY.md"
   ],
   "peerDependencies": {
-    "typescript": "^5.3.3",
-    "undici": "^6.0.0",
+    "typescript": "^7.0.2",
+    "undici": "^8.10.0",
     "zod": "^4.4.3"
   },
   "peerDependenciesMeta": {
@@ -63,8 +63,8 @@
     }
   },
   "devDependencies": {
-    "@types/node": "^20.10.4",
-    "undici": "^6.27.0"
+    "@types/node": "^26.2.0",
+    "undici": "^8.10.0"
   },
   "workspaces": [
     "./",
