@@ -47,7 +47,7 @@
     "SECURITY.md"
   ],
   "peerDependencies": {
-    "typescript": "^7.0.2",
+    "typescript": "^5.3.3",
     "undici": "^8.10.0",
     "zod": "^4.4.3"
   },
@@ -64,6 +64,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
+    "typescript": "^5.9.3",
     "undici": "^8.10.0"
   },
   "workspaces": [
