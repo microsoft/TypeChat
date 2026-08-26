@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import json
 from collections.abc import Sequence
 from typing import Any, TypeAlias, TypedDict, cast
 from typing_extensions import (
@@ -138,10 +139,8 @@ The programs can call functions from the API defined in the following TypeScript
 ```
 {self._api_declaration_str}
 ```
-The following is a user request:
-'''
-{intent}
-'''
+The following is a user request encoded as a JSON string:
+{json.dumps(intent, ensure_ascii=False)}
 The following is the user request translated into a JSON program object with 2 spaces of indentation and no properties with the value undefined:
 """
         return prompt
@@ -149,10 +148,8 @@ The following is the user request translated into a JSON program object with 2 s
     @override
     def _create_repair_prompt(self, validation_error: str) -> str:
         prompt = F"""
-The JSON program object is invalid for the following reason:
-'''
-{validation_error}
-'''
+The JSON program object is invalid. The following is the validation error encoded as a JSON string:
+{json.dumps(validation_error, ensure_ascii=False)}
 The following is a revised JSON program object:
 """
         return prompt

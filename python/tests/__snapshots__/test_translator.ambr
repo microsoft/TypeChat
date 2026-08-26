@@ -16,10 +16,8 @@
             }
             
             ```
-            The following is a user request:
-            '''
-            Get me stuff.
-            '''
+            The following is a user request encoded as a JSON string:
+            "Get me stuff."
             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
   
           ''',
@@ -50,10 +48,8 @@
             }
             
             ```
-            The following is a user request:
-            '''
-            Get me stuff.
-            '''
+            The following is a user request encoded as a JSON string:
+            "Get me stuff."
             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
   
           ''',
@@ -80,10 +76,8 @@
             }
             
             ```
-            The following is a user request:
-            '''
-            Get me stuff.
-            '''
+            The following is a user request encoded as a JSON string:
+            "Get me stuff."
             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
   
           ''',
@@ -96,14 +90,8 @@
         dict({
           'content': '''
             
-            The above JSON object is invalid for the following reason:
-            '''
-            Error: expected `,` or `}` at line 1 column 16
-            
-            Attempted to parse:
-            
-            { "a": "hello" "b": true }
-            '''
+            The above JSON object is invalid. The following is the validation error encoded as a JSON string:
+            "Error: expected `,` or `}` at line 1 column 16\n\nAttempted to parse:\n\n{ \"a\": \"hello\" \"b\": true }"
             The following is a revised JSON object:
   
           ''',
@@ -134,10 +122,8 @@
             }
             
             ```
-            The following is a user request:
-            '''
-            Get me stuff.
-            '''
+            The following is a user request encoded as a JSON string:
+            "Get me stuff."
             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
   
           ''',
@@ -164,10 +150,8 @@
             }
             
             ```
-            The following is a user request:
-            '''
-            Get me stuff.
-            '''
+            The following is a user request encoded as a JSON string:
+            "Get me stuff."
             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
   
           ''',
@@ -180,11 +164,8 @@
         dict({
           'content': '''
             
-            The above JSON object is invalid for the following reason:
-            '''
-            Validation path `c` failed for value `{"a": "hello", "b": true}` because:
-              Field required
-            '''
+            The above JSON object is invalid. The following is the validation error encoded as a JSON string:
+            "Validation path `c` failed for value `{\"a\": \"hello\", \"b\": true}` because:\n  Field required"
             The following is a revised JSON object:
   
           ''',
@@ -223,10 +204,8 @@
             }
             
             ```
-            The following is a user request:
-            '''
-            Get me stuff.
-            '''
+            The following is a user request encoded as a JSON string:
+            "Get me stuff."
             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
   
           ''',
@@ -261,10 +240,8 @@
             }
             
             ```
-            The following is a user request:
-            '''
-            Get me stuff.
-            '''
+            The following is a user request encoded as a JSON string:
+            "Get me stuff."
             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
   
           ''',
@@ -277,11 +254,8 @@
         dict({
           'content': '''
             
-            The above JSON object is invalid for the following reason:
-            '''
-            Validation path `c` failed for value `{"a": "hello", "b": true}` because:
-              Field required
-            '''
+            The above JSON object is invalid. The following is the validation error encoded as a JSON string:
+            "Validation path `c` failed for value `{\"a\": \"hello\", \"b\": true}` because:\n  Field required"
             The following is a revised JSON object:
   
           ''',
@@ -316,10 +290,8 @@
             }
             
             ```
-            The following is a user request:
-            '''
-            Get me stuff.
-            '''
+            The following is a user request encoded as a JSON string:
+            "Get me stuff."
             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
   
           ''',
@@ -350,10 +322,8 @@
             }
             
             ```
-            The following is a user request:
-            '''
-            Get me stuff.
-            '''
+            The following is a user request encoded as a JSON string:
+            "Get me stuff."
             The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
   
           ''',
@@ -366,11 +336,8 @@
         dict({
           'content': '''
             
-            The above JSON object is invalid for the following reason:
-            '''
-            Validation path `c` failed for value `{"a": "hello", "b": true}` because:
-              Field required
-            '''
+            The above JSON object is invalid. The following is the validation error encoded as a JSON string:
+            "Validation path `c` failed for value `{\"a\": \"hello\", \"b\": true}` because:\n  Field required"
             The following is a revised JSON object:
   
           ''',

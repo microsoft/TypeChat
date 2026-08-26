@@ -58,10 +58,8 @@ IMPORTANT CONTEXT for the user request:
 {history_str}
 
 user:
-The following is a user request:
-'''
-{intent}
-'''
+The following is a user request encoded as a JSON string:
+{json.dumps(intent, ensure_ascii=False)}
     The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
 """
         return prompt

@@ -1,3 +1,5 @@
+import json
+
 from typing_extensions import Generic, TypeVar
 
 import pydantic_core
@@ -106,20 +108,16 @@ You are a service that translates user requests into JSON objects of type "{self
 ```
 {self.schema_str}
 ```
-The following is a user request:
-'''
-{intent}
-'''
+The following is a user request encoded as a JSON string:
+{json.dumps(intent, ensure_ascii=False)}
 The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
 """
         return prompt
 
     def _create_repair_prompt(self, validation_error: str) -> str:
         prompt = f"""
-The above JSON object is invalid for the following reason:
-'''
-{validation_error}
-'''
+The above JSON object is invalid. The following is the validation error encoded as a JSON string:
+{json.dumps(validation_error, ensure_ascii=False)}
 The following is a revised JSON object:
 """
         return prompt
