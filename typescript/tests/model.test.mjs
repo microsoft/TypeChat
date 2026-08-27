@@ -346,6 +346,14 @@ describe("createOpenAILanguageModel (Responses API path)", () => {
 describe("createLanguageModel environment variable routing", () => {
     after(teardownFetch);
 
+    test("calls the configured API when credentials are available", { skip: !process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL }, async () => {
+        const model = createLanguageModel(process.env);
+        const result = await model.complete("Reply with the single word: pong");
+        assert.equal(result.success, true, result.message);
+        assert.equal(typeof result.data, "string");
+        assert.notEqual(result.data.trim(), "");
+    });
+
     test("defaults to Chat Completions API", async () => {
         setupFetch([makeChatCompletionsResponse("OK")]);
         const model = createLanguageModel({
