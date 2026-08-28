@@ -110,14 +110,14 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
     function createRequestPrompt(request: string) {
         return `You are a service that translates user requests into JSON objects of type "${validator.getTypeName()}" according to the following TypeScript definitions:\n` +
             `\`\`\`\n${validator.getSchemaText()}\`\`\`\n` +
-            `The following is a user request:\n` +
-            `"""\n${request}\n"""\n` +
+            `The following is a user request encoded as a JSON string:\n` +
+            `${JSON.stringify(request)}\n` +
             `The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:\n`;
     }
 
     function createRepairPrompt(validationError: string) {
-        return `The JSON object is invalid for the following reason:\n` +
-            `"""\n${validationError}\n"""\n` +
+        return `The JSON object is invalid. The following is the validation error encoded as a JSON string:\n` +
+            `${JSON.stringify(validationError)}\n` +
             `The following is a revised JSON object:\n`;
     }
 

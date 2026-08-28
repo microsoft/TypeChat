@@ -49,7 +49,7 @@ export function createAgentRouter<T extends object>(model: TypeChatLanguageModel
     async function routeRequest(request:string): Promise<void> {
         const initClasses = JSON.stringify(router._taskTypes, undefined, 2);
         const fullRequest = `
-Classify "${request}" using the following classification table:\n
+Classify the following user request encoded as a JSON string:\n${JSON.stringify(request)}\nUsing the following classification table:\n
 ${initClasses}\n`;
         const response = await router._taskClassifier.translate(request, [{
             role: "assistant", content: `${fullRequest}`

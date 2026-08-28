@@ -66,10 +66,8 @@ IMPORTANT CONTEXT for the user request:
 ${historyStr}
 
 user:
-The following is a user request:
-'''
-${intent}
-'''
+The following is a user request encoded as a JSON string:
+${JSON.stringify(intent)}
 The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
 """
 `;

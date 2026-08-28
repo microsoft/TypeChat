@@ -2,6 +2,10 @@ import { Result, error, success } from "../result";
 import { TypeChatLanguageModel } from "../model";
 import { createTypeScriptJsonValidator } from "./validate";
 import { TypeChatJsonTranslator, createJsonTranslator } from "../typechat";
+import {
+    createProgramRepairPrompt,
+    createProgramRequestPrompt,
+} from "./programPrompt";
 
 const programSchemaText = `// A program consists of a sequence of function calls that are evaluated in order.
 export type Program = {
@@ -216,23 +220,8 @@ export function createProgramTranslator(model: TypeChatLanguageModel, schema: st
     const validator = createTypeScriptJsonValidator<Program>(schema, "Program");
     validator.createModuleTextFromJson = createModuleTextFromProgram;
     const translator = createJsonTranslator<Program>(model, validator);
-    translator.createRequestPrompt = createRequestPrompt;
-    translator.createRepairPrompt = createRepairPrompt;
+    translator.createRequestPrompt = request =>
+        createProgramRequestPrompt(request, programSchemaText, validator.getSchemaText());
+    translator.createRepairPrompt = createProgramRepairPrompt;
     return translator;
-
-    function createRequestPrompt(request: string) {
-        return `You are a service that translates user requests into programs represented as JSON using the following TypeScript definitions:\n` +
-            `\`\`\`\n${programSchemaText}\`\`\`\n` +
-            `The programs can call functions from the API defined in the following TypeScript definitions:\n` +
-            `\`\`\`\n${validator.getSchemaText()}\`\`\`\n` +
-            `The following is a user request:\n` +
-            `"""\n${request}\n"""\n` +
-            `The following is the user request translated into a JSON program object with 2 spaces of indentation and no properties with the value undefined:\n`;
-    }
-
-    function createRepairPrompt(validationError: string) {
-        return `The JSON program object is invalid for the following reason:\n` +
-            `"""\n${validationError}\n"""\n` +
-            `The following is a revised JSON program object:\n`;
-    }
 }

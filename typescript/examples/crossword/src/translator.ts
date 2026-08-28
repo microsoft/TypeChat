@@ -41,10 +41,8 @@ export function createCrosswordActionTranslator<T extends object>(
       {
         type: "text",
         text: `
-                The following is a user request:
-                '''
-                ${request}
-                '''
+                The following is a user request encoded as a JSON string:
+                ${JSON.stringify(request)}
                 The following is the assistant's response translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:   
             `,
       },
