@@ -9,7 +9,7 @@ import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
 
 // Load the compiled module from dist
-import { createOpenAILanguageModel, createLanguageModel } from "../dist/index.js";
+import { createOpenAILanguageModel, createAzureOpenAILanguageModel, createLanguageModel } from "../dist/index.js";
 
 // ---------------------------------------------------------------------------
 // Helpers: build mock Response objects
@@ -270,6 +270,28 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
         } finally {
             globalThis.setTimeout = originalSetTimeout;
         }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// createAzureOpenAILanguageModel
+// ---------------------------------------------------------------------------
+
+describe("createAzureOpenAILanguageModel", () => {
+    after(teardownFetch);
+
+    test("sends both Authorization Bearer and api-key headers", async () => {
+        setupFetch([makeChatCompletionsResponse("Hello from Azure!")]);
+        const model = createAzureOpenAILanguageModel(
+            "azure-test-key",
+            "https://example.openai.azure.com/openai/deployments/gpt-4/chat/completions?api-version=2023-05-15"
+        );
+        const result = await model.complete("Say hello");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "Hello from Azure!");
+        const headers = capturedRequests[0].options.headers;
+        assert.equal(headers["Authorization"], "Bearer azure-test-key");
+        assert.equal(headers["api-key"], "azure-test-key");
     });
 });
 
