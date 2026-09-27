@@ -267,7 +267,10 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                         )
                         return ArrayTypeNode(AnyTypeReferenceNode)
 
-                    return ArrayTypeNode(convert_to_type_node(type_args[0]))
+                    element_type = convert_to_type_node(type_args[0])
+                    if isinstance(element_type, UnionTypeNode):
+                        return TypeReferenceNode(IdentifierNode("Array"), [element_type])
+                    return ArrayTypeNode(element_type)
 
                 return TupleTypeNode([convert_to_type_node(py_type_arg) for py_type_arg in type_args])
 
