@@ -47,6 +47,26 @@ def test_translator_with_immediate_pass(snapshot: Any):
     
     assert m.conversation == snapshot
 
+@dataclass
+class TupleUnionResponse:
+    values: tuple[int | str, ...]
+    optional_values: tuple[str | None, ...]
+    choices: tuple[Literal["yes", "no"], ...]
+
+
+def test_translator_with_variadic_tuple_unions():
+    model = FixedModel([
+        '{"values": [1, "two"], "optional_values": ["three", null], "choices": ["yes", "no"]}',
+    ])
+    validator = typechat.TypeChatValidator(TupleUnionResponse)
+    translator = typechat.TypeChatJsonTranslator(model, validator, TupleUnionResponse)
+
+    result = asyncio.run(translator.translate("Get tuple values."))
+
+    assert result == typechat.Success(TupleUnionResponse((1, "two"), ("three", None), ("yes", "no")))
+    assert len(model.conversation) == 2
+
+
 def test_translator_with_single_failure(snapshot: Any):
     m = FixedModel([
         '{ "a": "hello", "b": true }',
