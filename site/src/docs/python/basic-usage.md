@@ -83,7 +83,7 @@ def create_azure_openai_language_model(api_key: str, endpoint: str): ...
 For even more convenience, TypeChat also provides a function to infer whether
 you're using OpenAI or Azure OpenAI.
 
-```ts
+```py
 def create_language_model(
     vals: dict[str, str | None]
 ) -> TypeChatLanguageModel: ...
@@ -93,6 +93,29 @@ With `create_language_model`, you can populate your environment variables and
 pass them in.
 Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get
 a model of the appropriate type.
+
+#### Using OpenAI-compatible gateways
+
+TypeChat works with any service that exposes the OpenAI Chat Completions API.
+To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
+point `create_openai_language_model` at the gateway's endpoint via the
+`endpoint` argument:
+
+```py
+model = create_openai_language_model(
+    api_key, model, endpoint="https://api.orcarouter.ai/v1/chat/completions"
+)
+```
+
+With `create_language_model`, set the `OPENAI_ENDPOINT` environment variable to
+the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
+`OPENAI_MODEL`:
+
+```
+OPENAI_API_KEY=<your API key>
+OPENAI_MODEL=<model name>
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+```
 
 The `TypeChatLanguageModel` returned by these functions has a few writable
 attributes you might find useful:

@@ -92,6 +92,13 @@ AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_KEY=...
 ```
 
+The examples also work against any OpenAI-compatible gateway, such as [OrcaRouter](https://www.orcarouter.ai), by pointing `OPENAI_ENDPOINT` at the gateway's Chat Completions URL in addition to the OpenAI variables above:
+
+```
+# Optional: use an OpenAI-compatible gateway instead of api.openai.com
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+```
+
 ## Step 4: Run the examples
 
 Examples can be found in the `typescript/examples` directory.
