@@ -180,7 +180,7 @@ def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
         api_key = required_var("OPENAI_API_KEY")
         model = required_var("OPENAI_MODEL")
         endpoint = vals.get("OPENAI_ENDPOINT", None) or "https://api.openai.com/v1/chat/completions"
-        org = vals.get("OPENAI_ORG", None) or ""
+        org = vals.get("OPENAI_ORGANIZATION", None) or vals.get("OPENAI_ORG", None) or ""
         return create_openai_language_model(api_key, model, endpoint, org)
 
     elif vals.get("AZURE_OPENAI_API_KEY", None):
