@@ -157,10 +157,10 @@ def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
     Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
     chosen by a dictionary of variables (typically just `os.environ`).
 
-    If an `OPENAI_API_KEY` environment variable exists, an OpenAI model is constructed.
+    If an `OPENAI_API_KEY` environment variable is set and non-empty, an OpenAI model is constructed.
     The `OPENAI_ENDPOINT` and `OPENAI_MODEL` environment variables must also be defined or an error will be raised.
 
-    If an `AZURE_OPENAI_API_KEY` environment variable exists, an Azure OpenAI model is constructed.
+    Otherwise, if an `AZURE_OPENAI_API_KEY` environment variable is set and non-empty, an Azure OpenAI model is constructed.
     The `AZURE_OPENAI_ENDPOINT` environment variable must also be defined or an exception will be thrown.
 
     If none of these key variables are defined, an exception is thrown.
@@ -176,14 +176,14 @@ def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
             raise ValueError(f"Missing environment variable {name}.")
         return val
 
-    if "OPENAI_API_KEY" in vals:
+    if vals.get("OPENAI_API_KEY", None):
         api_key = required_var("OPENAI_API_KEY")
         model = required_var("OPENAI_MODEL")
         endpoint = vals.get("OPENAI_ENDPOINT", None) or "https://api.openai.com/v1/chat/completions"
         org = vals.get("OPENAI_ORG", None) or ""
         return create_openai_language_model(api_key, model, endpoint, org)
 
-    elif "AZURE_OPENAI_API_KEY" in vals:
+    elif vals.get("AZURE_OPENAI_API_KEY", None):
         api_key=required_var("AZURE_OPENAI_API_KEY")
         endpoint=required_var("AZURE_OPENAI_ENDPOINT")
         return create_azure_openai_language_model(api_key, endpoint)
