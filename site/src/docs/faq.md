@@ -43,4 +43,4 @@ TypeChat is _very_ reliable. Large language models have proven they do well when
 
 ### What languages does TypeChat support?
 
-TypeChat is available for TypeScript and JavaScript, and for Python. Developers interested in support for additional languages can engage in discussion on TypeChat's repo in GitHub Discussions.
+TypeChat is available for TypeScript and JavaScript, for Python, and for C#/.NET. Developers interested in support for additional languages can engage in discussion on TypeChat's repo in GitHub Discussions.
