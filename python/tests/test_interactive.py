@@ -66,3 +66,14 @@ def test_reads_ascii_input_file_under_non_utf8_default_encoding(tmp_path: Path):
     requests = _collect(input_file_name)
 
     assert [line.rstrip("\n") for line in requests] == ["one cappuccino please"]
+
+
+@pytest.mark.usefixtures("default_encoding_is_cp1252")
+def test_reads_cp1252_representable_input_file_without_corrupting_it(tmp_path: Path):
+    # The UTF-8 bytes of "café" decode under cp1252 as "cafÃ©" rather than raising, so a
+    # non-UTF-8 read corrupts this line silently instead of failing.
+    input_file_name = _write_utf8(tmp_path, "one café please")
+
+    requests = _collect(input_file_name)
+
+    assert [line.rstrip("\n") for line in requests] == ["one café please"]
