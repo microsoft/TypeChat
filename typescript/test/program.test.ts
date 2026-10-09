@@ -2,6 +2,39 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { evaluateJsonProgram, createModuleTextFromProgram, Program, FunctionCall } from "../dist/ts/index.js";
 
+describe("program objects with own property names", () => {
+    const programs: Array<[string, Program]> = [
+        ["a literal hasOwnProperty field", {
+            "@steps": [{ "@func": "identity", "@args": [{ hasOwnProperty: "user data", value: 7 }] }],
+        }],
+        ["a null-prototype call and argument", {
+            "@steps": [Object.assign(Object.create(null), {
+                "@func": "identity",
+                "@args": [Object.assign(Object.create(null), { hasOwnProperty: "user data", value: 7 })],
+            })],
+        }],
+    ];
+
+    for (const [name, program] of programs) {
+        it(`generates a module for ${name}`, () => {
+            const result = createModuleTextFromProgram(program);
+            assert.ok(result.success);
+            assert.equal(result.data,
+                'import { API } from "./schema";\nfunction program(api: API) {\n' +
+                '  return api.identity({ "hasOwnProperty": "user data", "value": 7 });\n}');
+        });
+
+        it(`evaluates ${name} without losing the argument`, async () => {
+            const result = await evaluateJsonProgram(program, async (func, args) => {
+                assert.equal(func, "identity");
+                assert.deepEqual(args, [{ hasOwnProperty: "user data", value: 7 }]);
+                return args[0];
+            });
+            assert.deepEqual(result, { hasOwnProperty: "user data", value: 7 });
+        });
+    }
+});
+
 // ---------------------------------------------------------------------------
 // evaluateJsonProgram result-reference bounds checking
 // ---------------------------------------------------------------------------

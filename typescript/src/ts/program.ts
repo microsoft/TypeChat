@@ -98,7 +98,7 @@ function isValidFunctionName(name: unknown): name is string {
  */
 export function createModuleTextFromProgram(jsonObject: object): Result<string> {
     const steps = (jsonObject as Program)["@steps"];
-    if (!(Array.isArray(steps) && steps.every(step => typeof step === "object" && step !== null && step.hasOwnProperty("@func")))) {
+    if (!(Array.isArray(steps) && steps.every(step => typeof step === "object" && step !== null && Object.prototype.hasOwnProperty.call(step, "@func")))) {
         return error("JSON object is not a valid program");
     }
     let hasError = false;
@@ -119,15 +119,15 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
     }
 
     function objectToString(obj: Record<string, unknown>) {
-        if (obj.hasOwnProperty("@ref")) {
+        if (Object.prototype.hasOwnProperty.call(obj, "@ref")) {
             const index = obj["@ref"];
             if (typeof index === "number" && Number.isInteger(index) && index >= 0 && index < currentStep && Object.keys(obj).length === 1) {
                 return `step${index + 1}`;
             }
         }
-        else if (obj.hasOwnProperty("@func")) {
+        else if (Object.prototype.hasOwnProperty.call(obj, "@func")) {
             const func = obj["@func"];
-            const hasArgs = obj.hasOwnProperty("@args");
+            const hasArgs = Object.prototype.hasOwnProperty.call(obj, "@args");
             const args = hasArgs ? obj["@args"] : [];
             if (isValidFunctionName(func) && (Array.isArray(args)) && Object.keys(obj).length === (hasArgs ? 2 : 1)) {
                 return `api.${func}(${arrayToString(args)})`;
@@ -171,16 +171,16 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
     }
 
     async function evaluateObject(obj: Record<string, unknown>) {
-        if (obj.hasOwnProperty("@ref")) {
+        if (Object.prototype.hasOwnProperty.call(obj, "@ref")) {
             const index = obj["@ref"];
             if (Object.keys(obj).length === 1 && typeof index === "number" && Number.isInteger(index) && index >= 0 && index < results.length) {
                 return results[index];
             }
             throw new Error(`Invalid result reference: ${String(index)}`);
         }
-        else if (obj.hasOwnProperty("@func")) {
+        else if (Object.prototype.hasOwnProperty.call(obj, "@func")) {
             const func = obj["@func"];
-            const hasArgs = obj.hasOwnProperty("@args");
+            const hasArgs = Object.prototype.hasOwnProperty.call(obj, "@args");
             const args = hasArgs ? obj["@args"] : [];
             if (!isValidFunctionName(func)) {
                 throw new Error(`Invalid function name: ${JSON.stringify(func)}`);
