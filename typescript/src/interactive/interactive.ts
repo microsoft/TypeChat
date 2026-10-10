@@ -13,7 +13,7 @@ export async function processRequests(interactivePrompt: string, inputFileName: 
     if (inputFileName) {
         const lines = fs.readFileSync(inputFileName).toString().split(/\r?\n/);
         for (const line of lines) {
-            if (line.length && !line.startsWith("# ")) {
+            if (line.length && line !== "#" && !line.startsWith("# ")) {
                 console.log(interactivePrompt + line);
                 await processRequest(line);
             }

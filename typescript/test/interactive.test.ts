@@ -44,6 +44,11 @@ describe("processRequests with an input file", () => {
         assert.deepEqual(requests, ["first request", "second request"]);
     });
 
+    it("skips a comment line that is only #", async () => {
+        const { requests } = await run("#\n# a comment\nfirst request\n#\n");
+        assert.deepEqual(requests, ["first request"]);
+    });
+
     it("keeps a request that only starts with #", async () => {
         const { requests } = await run("#1 priority order\n");
         assert.deepEqual(requests, ["#1 priority order"]);
