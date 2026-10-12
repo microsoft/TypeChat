@@ -60,6 +60,24 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
+### Website changes
+
+The website source is in [site](./site). From the repository root:
+
+```sh
+npm --prefix site ci
+npm --prefix site run build
+npm --prefix site run serve
+```
+
+For UI changes, check keyboard navigation, including visible focus in Windows high-contrast themes.
+Focus indicators should have at least 3:1 contrast against the adjacent background.
+Check reflow at a 320 x 256 CSS-pixel viewport, equivalent to 400% zoom at 1280 x 1024.
+Also apply text-spacing overrides: line height of 1.5, letter spacing of 0.12em, word spacing of
+0.16em, and paragraph spacing of 2em. The install command must remain readable and its copy button
+visible and keyboard-operable. With JavaScript disabled, the command should remain readable and the
+inactive copy button should be hidden.
+
 ## Trademarks
 
 This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 

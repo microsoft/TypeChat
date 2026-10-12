@@ -9,7 +9,7 @@
     copyButton?.addEventListener("click", async () => {
         clearTimeout(lastTimeout);
         try {
-            await navigator.clipboard?.writeText("npm install typechat");
+            await navigator.clipboard.writeText("npm install typechat");
             copyButton.textContent = "✅";
             copyButton.title = copyButton.ariaLabel = "Command copied."
         }
