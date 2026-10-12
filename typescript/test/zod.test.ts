@@ -1,5 +1,9 @@
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import { createZodJsonValidator, getZodSchemaAsTypeScript } from "../dist/zod/index.js";
 
@@ -9,14 +13,81 @@ import { createZodJsonValidator, getZodSchemaAsTypeScript } from "../dist/zod/in
 
 /** Runs getZodSchemaAsTypeScript on a single named type and returns the result. */
 function schemaOf<T extends z.ZodType>(name: string, type: T): string {
-    return getZodSchemaAsTypeScript({ [name]: type });
+    return schemasOf({ [name]: type });
 }
+
+const generatedSchemas: string[] = [];
+
+function schemasOf(schema: Record<string, z.ZodType>): string {
+    const text = getZodSchemaAsTypeScript(schema);
+    generatedSchemas.push(text);
+    return text;
+}
+
+function assertSchemasCompile(schemas: readonly string[]): void {
+    const directory = mkdtempSync(join(tmpdir(), "typechat-zod-schema-"));
+    try {
+        const files = schemas.map((schema, index) => {
+            const fileName = `schema-${index}.ts`;
+            writeFileSync(join(directory, fileName), `${schema}\nexport {};\n`);
+            return fileName;
+        });
+        writeFileSync(join(directory, "tsconfig.json"), JSON.stringify({
+            compilerOptions: {
+                target: "es2021",
+                lib: ["es2021"],
+                module: "node16",
+                strict: true,
+                skipLibCheck: true,
+                noEmit: true,
+                types: []
+            },
+            files
+        }));
+        const compiler = join(dirname(require.resolve("typescript/package.json")), "bin", "tsc");
+        const result = spawnSync(process.execPath, [compiler, "-p", directory, "--pretty", "false"], {
+            encoding: "utf8"
+        });
+        if (result.error) {
+            throw result.error;
+        }
+        assert.equal(result.status, 0, `Generated schema text failed TypeScript compilation:\n${result.stdout}${result.stderr}`);
+    }
+    finally {
+        rmSync(directory, { recursive: true, force: true });
+    }
+}
+
+// Compile outputs together rather than starting a compiler for every assertion.
+after(() => {
+    if (generatedSchemas.length) {
+        assertSchemasCompile(generatedSchemas);
+    }
+});
 
 // ---------------------------------------------------------------------------
 // getZodSchemaAsTypeScript — primitive types
 // ---------------------------------------------------------------------------
 
 describe("getZodSchemaAsTypeScript", () => {
+
+    describe("compiler-backed schema checks", () => {
+
+        it("rejects invalid tuple syntax", () => {
+            assert.throws(
+                () => assertSchemasCompile(['type T = [string, "a" | "b"?];']),
+                /error TS/
+            );
+        });
+
+        it("rejects unresolved type references", () => {
+            assert.throws(
+                () => assertSchemasCompile(["type T = MissingType;"]),
+                /Cannot find name 'MissingType'/
+            );
+        });
+
+    });
 
     describe("primitive types emit the correct TypeScript keyword", () => {
 
@@ -294,7 +365,7 @@ describe("getZodSchemaAsTypeScript", () => {
         it("uses the name of a schema entry when that type appears inline", () => {
             const Inner = z.object({ value: z.string() });
             const Outer = z.object({ inner: Inner });
-            const out = getZodSchemaAsTypeScript({ Inner, Outer });
+            const out = schemasOf({ Inner, Outer });
             // Outer should reference Inner by name, not inline the definition again
             assert.match(out, /inner: Inner;/);
         });
@@ -302,7 +373,7 @@ describe("getZodSchemaAsTypeScript", () => {
         it("uses enum name in referencing object", () => {
             const Status = z.enum(["active", "inactive"]);
             const User = z.object({ status: Status });
-            const out = getZodSchemaAsTypeScript({ Status, User });
+            const out = schemasOf({ Status, User });
             assert.match(out, /status: Status;/);
         });
 
@@ -327,7 +398,7 @@ describe("getZodSchemaAsTypeScript", () => {
         });
 
         it("separates multiple type declarations with a blank line", () => {
-            const out = getZodSchemaAsTypeScript({
+            const out = schemasOf({
                 A: z.string(),
                 B: z.number(),
             });
@@ -377,13 +448,16 @@ describe("createZodJsonValidator", () => {
         it("returns the TypeScript source for the schema", () => {
             const v = createZodJsonValidator(SentimentSchema, "SentimentResponse");
             const text = v.getSchemaText();
+            generatedSchemas.push(text);
             assert.match(text, /interface SentimentResponse/);
             assert.match(text, /"negative" \| "neutral" \| "positive"/);
         });
 
         it("is memoized (returns the same string reference on repeated calls)", () => {
             const v = createZodJsonValidator(SentimentSchema, "SentimentResponse");
-            assert.strictEqual(v.getSchemaText(), v.getSchemaText());
+            const text = v.getSchemaText();
+            generatedSchemas.push(text);
+            assert.strictEqual(v.getSchemaText(), text);
         });
     });
 

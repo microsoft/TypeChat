@@ -33,6 +33,9 @@ npm install
 npm run build
 ```
 
+Run the test suite with `npm test`. The Zod schema tests also compile their generated
+TypeScript schema text to check for syntax errors and unresolved type references.
+
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
