@@ -215,6 +215,8 @@ typechat.evaluateJsonProgram(jsonProgram, async (func, args) => {
 });
 ```
 
+The evaluator never calls the API functions itself; it delegates each step to this callback. That leaves the host in control: the callback can validate each call as thoroughly as needed before deciding what to do.
+
 Notice that this callback is `async`.
 We *could* use the asynchronous versions of `readFile` and `writeFile` if we wanted to without making any changes to the schema.
 Asynchronicity is abstracted away in the API, simplifying the schema for the language model.
