@@ -6,7 +6,7 @@ class UnknownText(TypedDict):
     Use this type for order items that match nothing else
     """
 
-    itemType: Literal["UnknownText"]
+    itemType: Literal["Unknown"]
     text: Annotated[str, "The text that wasn't understood"]
 
 

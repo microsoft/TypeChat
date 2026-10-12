@@ -1,0 +1,63 @@
+#
+# Conversations with a Health Data Agent
+# For each conversation: 
+# You start with the first line 
+# Then type the next line in response
+#
+
+# ================
+# USE GPT4
+# ================
+# Conversation:
+i want to record my shingles
+August 2016
+It lasted 3 months
+I also broke my foot
+I broke it in high school
+2001
+The foot took a year to be ok
+
+# Conversation: 
+klaritin
+2 tablets 3 times a day
+300 mg
+actually that is 1 tablet
+@clear
+
+# Conversation: 
+klaritin
+1 pill, morning and before bedtime
+Can't remember
+Actually, that is 3 tablets
+500 mg
+@clear
+
+#Conversation
+I am taking binadryl now
+As needed. Groceery store strength
+That is all I have
+I also got allergies. Pollen
+@clear
+
+# Conversation: 
+Robotussin
+1 cup
+Daily, as needed
+Robotussin with Codeine
+Put down strength as I don't know
+@clear
+
+# Conversation: 
+Hey
+Melatonin
+1 3mg tablet every night
+@clear
+
+# Conversation: 
+I got the flu
+Started 2 weeks ago
+Its gone now. Only lasted about a week
+I took some sudafed though
+I took 2 sudafed twice a day. Regular strength
+@clear
+

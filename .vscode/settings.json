@@ -1,0 +1,6 @@
+{
+    // TODO:
+    // * https://github.com/microsoft/vscode-python/issues/23078
+    // * https://github.com/microsoft/vscode/issues/197603
+    "python.envFile": "${workspaceFolder}/.file-that-should-hopefully-not-exist"
+}
