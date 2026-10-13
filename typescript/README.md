@@ -43,6 +43,11 @@ The `typechat`, `typechat/ts`, `typechat/zod`, and `typechat/interactive` entry 
 select the matching JavaScript build and TypeScript declarations automatically.
 Both builds target ES2021 and require Node.js 22.19.0 or newer.
 
+For compatibility with earlier CommonJS-only releases, native ESM default imports
+(`import typechat from "typechat"`) and dynamic imports' `.default` properties remain
+supported for all four entry points. Default imports also preserve the exported
+TypeScript types, such as `typechat.Result<T>`.
+
 You can also build TypeChat from source:
 
 ```sh
@@ -55,8 +60,9 @@ npm run build
 The build emits CommonJS JavaScript and declarations in `dist`, and native ESM
 JavaScript and declarations in `dist/esm`.
 
-Run the test suite with `npm test`. Package tests verify both module formats and
-their declaration resolution using only the files included in the npm package.
+Run the test suite with `npm test`. Package tests verify named and default imports,
+both module formats, and their declaration resolution using only the files included
+in the npm package.
 The Zod schema tests also compile their generated TypeScript schema text to check
 for syntax errors and unresolved type references.
 

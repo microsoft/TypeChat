@@ -68,8 +68,11 @@ function runConsumer(consumer, fileName, source) {
 describe("published package", () => {
     test("includes both builds and their declarations for every entry point", () => {
         for (const [, entry] of entryPoints) {
-            for (const prefix of ["dist", "dist/esm"]) {
-                for (const extension of [".js", ".d.ts"]) {
+            for (const [prefix, extensions] of [
+                ["dist", [".js", ".d.ts"]],
+                ["dist/esm", [".mjs", ".d.mts"]],
+            ]) {
+                for (const extension of extensions) {
                     assert.ok(packedFiles.includes(`${prefix}/${entry}${extension}`));
                 }
             }
@@ -83,7 +86,7 @@ describe("published package", () => {
         const expected = entryPoints.map(([specifier, entry]) => ({
             specifier,
             cjs: join(stagedPackage, "dist", `${entry}.js`),
-            esm: pathToFileURL(join(stagedPackage, "dist", "esm", `${entry}.js`)).href,
+            esm: pathToFileURL(join(stagedPackage, "dist", "esm", `${entry}.mjs`)).href,
         }));
         runConsumer(withPeers, "exports.mjs", `
             import assert from "node:assert/strict";
@@ -94,22 +97,46 @@ describe("published package", () => {
                 assert.equal(import.meta.resolve(specifier), esm);
                 const commonjs = require(specifier);
                 const native = await import(specifier);
-                assert.equal("default" in native, false);
-                assert.deepEqual(Object.keys(native).sort(), Object.keys(commonjs).sort());
+                const { default: defaultExport, ...namedExports } = native;
+                assert.equal("default" in commonjs, false);
+                assert.deepEqual(Object.keys(namedExports).sort(), Object.keys(commonjs).sort());
+                assert.deepEqual(Object.keys(defaultExport).sort(), Object.keys(commonjs).sort());
+                for (const name of Object.keys(commonjs)) {
+                    assert.equal(defaultExport[name], native[name]);
+                }
             }
+        `);
+    });
+
+    test("preserves native ESM default imports for every entry point", () => {
+        runConsumer(withPeers, "default-imports.mjs", `
+            import assert from "node:assert/strict";
+            import core, { success } from "typechat";
+            import ts, { createTypeScriptJsonValidator } from "typechat/ts";
+            import adapter, { createZodJsonValidator } from "typechat/zod";
+            import interactive, { processRequests } from "typechat/interactive";
+            assert.equal(core.success, success);
+            assert.equal(ts.createTypeScriptJsonValidator, createTypeScriptJsonValidator);
+            assert.equal(adapter.createZodJsonValidator, createZodJsonValidator);
+            assert.equal(interactive.processRequests, processRequests);
+            assert.deepEqual(core.success("ok"), { success: true, data: "ok" });
         `);
     });
 
     for (const format of ["cjs", "esm"]) {
         test(`${format} core and interactive entry points load without optional peers`, () => {
             const imports = format === "esm"
-                ? `import { success, getData } from "typechat";
-                   import { processRequests } from "typechat/interactive";`
-                : `const { success, getData } = require("typechat");
-                   const { processRequests } = require("typechat/interactive");`;
+                ? `import core, { success, getData } from "typechat";
+                   import interactive, { processRequests } from "typechat/interactive";`
+                : `const core = require("typechat");
+                   const interactive = require("typechat/interactive");
+                   const { success, getData } = core;
+                   const { processRequests } = interactive;`;
             runConsumer(withoutPeers, `core.${format === "esm" ? "mjs" : "cjs"}`, `
                 ${imports}
                 ${format === "esm" ? 'import assert from "node:assert/strict";' : 'const assert = require("node:assert/strict");'}
+                assert.equal(core.success, success);
+                assert.equal(interactive.processRequests, processRequests);
                 assert.deepEqual(success("ok"), { success: true, data: "ok" });
                 assert.equal(getData(success("ok")), "ok");
                 assert.equal(typeof processRequests, "function");
@@ -168,16 +195,16 @@ describe("published package", () => {
     for (const module of ["node16", "nodenext"]) {
         test(`resolves format-specific declarations using ${module}`, () => {
             const source = `
-                import {
+                import core, {
                     createJsonTranslator, success, type Result, type Success,
                     type TypeChatLanguageModel, type TypeChatJsonTranslator
                 } from "typechat";
-                import {
+                import ts, {
                     createTypeScriptJsonValidator, evaluateJsonProgram,
                     type TypeScriptJsonValidator, type Program
                 } from "typechat/ts";
-                import { createZodJsonValidator } from "typechat/zod";
-                import { processRequests } from "typechat/interactive";
+                import adapter, { createZodJsonValidator } from "typechat/zod";
+                import interactive, { processRequests } from "typechat/interactive";
                 import { z } from "zod";
                 interface Value { value: string; }
                 const model: TypeChatLanguageModel = { complete: async () => success('{"value":"ok"}') };
@@ -191,10 +218,24 @@ describe("published package", () => {
                 const program: Program = { "@steps": [] };
                 evaluateJsonProgram(program, async () => "ok");
                 processRequests("> ", undefined, async request => { const text: string = request; });
+                const defaultValidator: ts.TypeScriptJsonValidator<Value> = ts.createTypeScriptJsonValidator<Value>(
+                    validator.getSchemaText(), validator.getTypeName()
+                );
+                const defaultTranslator: core.TypeChatJsonTranslator<Value> = core.createJsonTranslator(model, defaultValidator);
+                const defaultResult: core.Result<Value> = adapter.createZodJsonValidator(
+                    { Value: z.object({ value: z.string() }) }, "Value"
+                ).validate({ value: "ok" });
+                const defaultProgram: ts.Program = program;
+                ts.evaluateJsonProgram(defaultProgram, async () => "ok");
+                interactive.processRequests("> ", undefined, async request => { const text: string = request; });
                 // @ts-expect-error The result must preserve its data type.
                 const invalid: Success<number> = success("ok");
                 // @ts-expect-error Request callbacks must return a promise.
                 processRequests("> ", undefined, () => 1);
+                // @ts-expect-error Default imports must preserve their result types.
+                const invalidDefault: core.Success<number> = core.success("ok");
+                // @ts-expect-error Default imports must preserve callback types.
+                interactive.processRequests("> ", undefined, () => 1);
             `;
             for (const extension of ["cts", "mts"]) {
                 writeFileSync(join(withPeers, `consumer.${extension}`), source);
@@ -222,8 +263,8 @@ describe("published package", () => {
             assert.equal(result.status, 0, `${diagnostics}\n${result.stderr}`);
             const trace = result.stdout.replaceAll("\\", "/");
             for (const [specifier, entry] of entryPoints) {
-                for (const prefix of ["dist", "dist/esm"]) {
-                    const declaration = join(stagedPackage, prefix, `${entry}.d.ts`).replaceAll("\\", "/");
+                for (const [prefix, extension] of [["dist", ".d.ts"], ["dist/esm", ".d.mts"]]) {
+                    const declaration = join(stagedPackage, prefix, `${entry}${extension}`).replaceAll("\\", "/");
                     assert.ok(
                         trace.includes(`Module name '${specifier}' was successfully resolved to '${declaration}'`),
                         `${specifier} must resolve ${declaration}`

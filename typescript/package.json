@@ -33,13 +33,13 @@
   },
   "type": "commonjs",
   "main": "./dist/index.js",
-  "module": "./dist/esm/index.js",
+  "module": "./dist/esm/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/esm/index.d.ts",
-        "default": "./dist/esm/index.js"
+        "types": "./dist/esm/index.d.mts",
+        "default": "./dist/esm/index.mjs"
       },
       "require": {
         "types": "./dist/index.d.ts",
@@ -49,8 +49,8 @@
     },
     "./ts": {
       "import": {
-        "types": "./dist/esm/ts/index.d.ts",
-        "default": "./dist/esm/ts/index.js"
+        "types": "./dist/esm/ts/index.d.mts",
+        "default": "./dist/esm/ts/index.mjs"
       },
       "require": {
         "types": "./dist/ts/index.d.ts",
@@ -60,8 +60,8 @@
     },
     "./zod": {
       "import": {
-        "types": "./dist/esm/zod/index.d.ts",
-        "default": "./dist/esm/zod/index.js"
+        "types": "./dist/esm/zod/index.d.mts",
+        "default": "./dist/esm/zod/index.mjs"
       },
       "require": {
         "types": "./dist/zod/index.d.ts",
@@ -71,8 +71,8 @@
     },
     "./interactive": {
       "import": {
-        "types": "./dist/esm/interactive/index.d.ts",
-        "default": "./dist/esm/interactive/index.js"
+        "types": "./dist/esm/interactive/index.d.mts",
+        "default": "./dist/esm/interactive/index.mjs"
       },
       "require": {
         "types": "./dist/interactive/index.d.ts",
