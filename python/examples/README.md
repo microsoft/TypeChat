@@ -108,6 +108,16 @@ AZURE_OPENAI_API_KEY=...
 
 Examples can be found in the `examples` directory.
 
+To classify one text input without starting an interactive session, run the
+[non-interactive sentiment example](./sentiment/non_interactive.py) from the `python` directory:
+
+```sh
+python examples/sentiment/non_interactive.py "TypeChat is awesome!"
+```
+
+For an explanation of how to call the same async function from an existing backend, see the
+[Python quickstart](../../site/src/docs/python/non-interactive.md).
+
 To run an example interactively, type `python examples/<example_name>/demo.py` from the example's directory and enter requests when prompted. Type `quit` or `exit` to end the session. You can also open in VS Code the selected example's directory and press <kbd>F5</kbd> to launch it in debug mode.
 
 Note that there are various sample "prose" files (e.g. `input.txt`) provided in each `src` directory that can give a sense of what you can run.
