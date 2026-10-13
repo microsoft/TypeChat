@@ -1,23 +1,10 @@
-import { createRequire } from 'node:module';
-import { Result, success, error } from '../result';
-import { TypeChatJsonValidator } from "../typechat";
-
-// TypeScript 7 ships as an ES module, while this package is emitted as CommonJS. Node's
-// `require(esm)` support (Node >=22.12) lets us load it synchronously, and `resolution-mode`
-// makes the TypeScript compiler resolve the ESM-only types from a CommonJS file.
 // TODO: Revisit these `typescript/unstable/*` imports once a stable API is available.
-type SyncModule = typeof import('typescript/unstable/sync', { with: { 'resolution-mode': 'import' } });
-type FileSystemModule = typeof import('typescript/unstable/fs', { with: { 'resolution-mode': 'import' } });
-type AstIsModule = typeof import('typescript/unstable/ast/is', { with: { 'resolution-mode': 'import' } });
-
-type Checker = InstanceType<SyncModule['Checker']>;
-type Diagnostic = import('typescript/unstable/sync', { with: { 'resolution-mode': 'import' } }).Diagnostic;
-type SourceFile = import('typescript/unstable/ast', { with: { 'resolution-mode': 'import' } }).SourceFile;
-
-const requireEsm = createRequire(__filename);
-const { API, NodeBuilderFlags, SymbolFlags }: SyncModule = requireEsm('typescript/unstable/sync');
-const { createVirtualFileSystem }: FileSystemModule = requireEsm('typescript/unstable/fs');
-const { isTypeReferenceNode, isVariableStatement }: AstIsModule = requireEsm('typescript/unstable/ast/is');
+import { API, NodeBuilderFlags, SymbolFlags, type Checker, type Diagnostic } from 'typescript/unstable/sync';
+import { createVirtualFileSystem } from 'typescript/unstable/fs';
+import type { SourceFile } from 'typescript/unstable/ast';
+import { isTypeReferenceNode, isVariableStatement } from 'typescript/unstable/ast/is';
+import { Result, success, error } from '../result.js';
+import { TypeChatJsonValidator } from "../typechat.js";
 
 const libText = `interface Array<T> { length: number, [n: number]: T }
 interface Object { toString(): string }

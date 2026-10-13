@@ -24,6 +24,30 @@ Install TypeChat:
 npm install typechat
 ```
 
+TypeChat supports both native ECMAScript modules (ESM) and CommonJS. Use `import`
+in an ESM application:
+
+```js
+import { createJsonTranslator } from "typechat";
+import { createTypeScriptJsonValidator } from "typechat/ts";
+```
+
+Or use `require` in a CommonJS application:
+
+```js
+const { createJsonTranslator } = require("typechat");
+const { createTypeScriptJsonValidator } = require("typechat/ts");
+```
+
+The `typechat`, `typechat/ts`, `typechat/zod`, and `typechat/interactive` entry points
+select the matching JavaScript build and TypeScript declarations automatically.
+Both builds target ES2021 and require Node.js 22.19.0 or newer.
+
+For compatibility with earlier CommonJS-only releases, native ESM default imports
+(`import typechat from "typechat"`) and dynamic imports' `.default` properties remain
+supported for all four entry points. Default imports also preserve the exported
+TypeScript types, such as `typechat.Result<T>`.
+
 You can also build TypeChat from source:
 
 ```sh
@@ -33,8 +57,14 @@ npm install
 npm run build
 ```
 
-Run the test suite with `npm test`. The Zod schema tests also compile their generated
-TypeScript schema text to check for syntax errors and unresolved type references.
+The build emits CommonJS JavaScript and declarations in `dist`, and native ESM
+JavaScript and declarations in `dist/esm`.
+
+Run the test suite with `npm test`. Package tests verify named and default imports,
+both module formats, and their declaration resolution using only the files included
+in the npm package.
+The Zod schema tests also compile their generated TypeScript schema text to check
+for syntax errors and unresolved type references.
 
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 
