@@ -76,6 +76,12 @@ export interface TypeChatJsonValidator<T extends object> {
      */
     getTypeName(): string;
     /**
+     * Optionally validates schema configuration without a JSON instance. Translators call this before
+     * the first model request. Validators whose schemas are checked during instance validation may omit it.
+     * @returns A success result when the schema is valid, or an error describing the schema problem.
+     */
+    validateSchema?(): Result<void>;
+    /**
      * Validates the given JSON object according to the associated TypeScript schema. Returns a
      * `Success<T>` object containing the JSON object if validation was successful. Otherwise, returns
      * an `Error` object with a `message` property describing the error.
@@ -122,6 +128,10 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
     }
 
     async function translate(request: string, promptPreamble?: string | PromptSection[]) {
+        const schemaValidation = validator.validateSchema?.();
+        if (schemaValidation && !schemaValidation.success) {
+            return error(`Schema validation failed before model request: ${schemaValidation.message}`);
+        }
         const preamble: PromptSection[] = typeof promptPreamble === "string" ? [{ role: "user", content: promptPreamble }] : promptPreamble ?? [];
         let prompt: PromptSection[] = [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }];
         let attemptRepair = typeChat.attemptRepair;
