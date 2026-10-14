@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { createJsonTranslator } from "../dist/index.js";
 import { createTypeScriptJsonValidator } from "../dist/ts/index.js";
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,106 @@ function validatorFor<T extends object>(schema: string, typeName: string) {
 // ---------------------------------------------------------------------------
 
 describe("createTypeScriptJsonValidator", () => {
+
+    describe("schema-only validation", () => {
+        const invalidSchemas = [
+            {
+                name: "unsupported built-in types",
+                schema: "export interface Event { dateTime?: Date; }",
+                typeName: "Event",
+                diagnostic: /Date/
+            },
+            {
+                name: "unsupported library generics",
+                schema: "export interface Event { values: ReadonlyArray<string>; }",
+                typeName: "Event",
+                diagnostic: /ReadonlyArray/
+            },
+            {
+                name: "syntax errors",
+                schema: "export interface Event { dateTime: string;",
+                typeName: "Event",
+                diagnostic: /schema\.ts\(\d+,\d+\):/
+            },
+            {
+                name: "unresolved references",
+                schema: "export interface Event { dateTime: MissingType; }",
+                typeName: "Event",
+                diagnostic: /MissingType/
+            },
+            {
+                name: "missing target exports",
+                schema: "export interface Event { dateTime: string; }",
+                typeName: "MissingEvent",
+                diagnostic: /MissingEvent/
+            }
+        ];
+
+        for (const { name, schema, typeName, diagnostic } of invalidSchemas) {
+            for (const attemptRepair of [true, false]) {
+                it(`rejects ${name} before a model call when repair is ${attemptRepair ? "enabled" : "disabled"}`, async () => {
+                    const validator = validatorFor(schema, typeName);
+                    let modelCalls = 0;
+                    const translator = createJsonTranslator({
+                        async complete() {
+                            modelCalls++;
+                            return { success: true as const, data: "{}" };
+                        }
+                    }, validator);
+                    translator.attemptRepair = attemptRepair;
+
+                    try {
+                        const result = await translator.translate("test request");
+                        assert.equal(modelCalls, 0);
+                        assert.equal(result.success, false);
+                        assert.match(result.message, /schema validation failed before model request/i);
+                        assert.match(result.message, diagnostic);
+                    } finally {
+                        validator.close();
+                    }
+                });
+            }
+        }
+
+        it("accepts a valid schema with required properties and caches the result", () => {
+            const validator = validatorFor(
+                "export interface Event { required: string; }",
+                "Event"
+            );
+            try {
+                const firstResult = validator.validateSchema();
+                assert.ok(firstResult.success, "schema validation must not require a JSON instance");
+                assert.strictEqual(validator.validateSchema(), firstResult);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("keeps response repair for a valid schema", async () => {
+            const validator = validatorFor(smallSchema, "Point");
+            let modelCalls = 0;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return {
+                        success: true as const,
+                        data: modelCalls === 1
+                            ? '{"x":"not-a-number","y":2}'
+                            : '{"x":1,"y":2}'
+                    };
+                }
+            }, validator);
+
+            try {
+                const result = await translator.translate("point");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { x: 1, y: 2 });
+                assert.equal(modelCalls, 2);
+            } finally {
+                validator.close();
+            }
+        });
+    });
 
     describe("valid objects", () => {
         it("accepts an object that satisfies all required properties", () => {
