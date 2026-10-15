@@ -193,4 +193,73 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(result.data.includes("const json: Point ="));
         });
     });
+
+    describe("standard-library helper types", () => {
+        const helperSchema = `
+export interface Payload {
+    values: ReadonlyArray<string>;
+    readonlySyntax: readonly number[];
+    counts: Record<string, number>;
+    metadata: Partial<{ name: string; size: number }>;
+    required: Required<{ id?: string }>;
+    frozen: Readonly<{ x: number }>;
+    picked: Pick<{ a: string; b: number }, "a">;
+    omitted: Omit<{ a: string; b: number }, "b">;
+    color: Exclude<"red" | "green" | "blue", "green">;
+    kind: Extract<"a" | "b" | 1, string>;
+    label: NonNullable<string | null>;
+}`;
+        const validPayload = {
+            values: ["a"],
+            readonlySyntax: [1],
+            counts: { a: 1 },
+            metadata: {},
+            required: { id: "x" },
+            frozen: { x: 1 },
+            picked: { a: "x" },
+            omitted: { a: "x" },
+            color: "red",
+            kind: "a",
+            label: "l"
+        };
+
+        it("accepts a payload that satisfies every helper type", () => {
+            const v = validatorFor(helperSchema, "Payload");
+            const result = v.validate(validPayload);
+            assert.ok(result.success, `expected validation to succeed, got: ${!result.success && result.message}`);
+        });
+
+        it("accepts the reproduction from issue #452", () => {
+            const v = validatorFor(`
+export interface Payload {
+    values: ReadonlyArray<string>;
+    counts: Record<string, number>;
+    metadata: Partial<{ name: string }>;
+}`, "Payload");
+            const result = v.validate({ values: ["a"], counts: { a: 1 }, metadata: {} });
+            assert.ok(result.success, `expected validation to succeed, got: ${!result.success && result.message}`);
+        });
+
+        const invalidCases: [string, object, RegExp][] = [
+            ["ReadonlyArray element type", { values: [1] }, /'number' is not assignable to type 'string'/],
+            ["readonly array syntax element type", { readonlySyntax: ["x"] }, /'string' is not assignable to type 'number'/],
+            ["Record value type", { counts: { a: "1" } }, /'string' is not assignable to type 'number'/],
+            ["Partial property type", { metadata: { name: 1 } }, /'number' is not assignable to type 'string'/],
+            ["Required missing property", { required: {} }, /Property 'id' is missing/],
+            ["Readonly property type", { frozen: { x: "1" } }, /'string' is not assignable to type 'number'/],
+            ["Pick property type", { picked: { a: 1 } }, /'number' is not assignable to type 'string'/],
+            ["Omit removed property", { omitted: { a: "x", b: 1 } }, /'"?b"?' does not exist/],
+            ["Exclude removed member", { color: "green" }, /'"green"' is not assignable/],
+            ["Extract non-matching member", { kind: 1 }, /'number' is not assignable/],
+            ["NonNullable null", { label: null }, /'null' is not assignable to type 'string'/],
+        ];
+        for (const [name, override, expected] of invalidCases) {
+            it(`rejects an invalid value for ${name}`, () => {
+                const v = validatorFor(helperSchema, "Payload");
+                const result = v.validate({ ...validPayload, ...override });
+                assert.ok(!result.success, "expected validation to fail");
+                assert.match(result.message, expected);
+            });
+        }
+    });
 });

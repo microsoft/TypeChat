@@ -27,7 +27,17 @@ interface NewableFunction extends Function {}
 interface String { readonly length: number }
 interface Boolean { valueOf(): boolean }
 interface Number { valueOf(): number }
-interface RegExp { test(string: string): boolean }`;
+interface RegExp { test(string: string): boolean }
+interface ReadonlyArray<T> { readonly length: number, readonly [n: number]: T }
+type Partial<T> = { [P in keyof T]?: T[P] };
+type Required<T> = { [P in keyof T]-?: T[P] };
+type Readonly<T> = { readonly [P in keyof T]: T[P] };
+type Pick<T, K extends keyof T> = { [P in K]: T[P] };
+type Record<K extends keyof any, T> = { [P in K]: T };
+type Exclude<T, U> = T extends U ? never : T;
+type Extract<T, U> = T extends U ? T : never;
+type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>>;
+type NonNullable<T> = T & {};`;
 
 const configFileName = "/tsconfig.json";
 const libFileName = "/lib.d.ts";

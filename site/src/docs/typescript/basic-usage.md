@@ -112,6 +112,10 @@ export interface SentimentResponse {
 }
 ```
 
+The validator type-checks against a minimal library rather than the full TypeScript standard library, since responses are always plain JSON.
+Besides primitives, object types, arrays, and unions, schemas can use `ReadonlyArray`, `Partial`, `Required`, `Readonly`, `Pick`, `Omit`, `Record`, `Exclude`, `Extract`, and `NonNullable`.
+Runtime types such as `Date`, `Map`, or `Set` aren't JSON values and aren't available; describe their JSON representation instead (for example, an ISO date `string`).
+
 It also means we will need to manually load up an input `.ts` file verbatim.
 
 ```ts
