@@ -170,7 +170,7 @@ class TypeChatValidator(Generic[T]):
         Validates the given Python object according to the associated schema type.
 
         Returns a `Success[T]` object containing the object if validation was successful.
-        Otherwise, returns a `Failure` object with a `message` property describing the error.
+        Otherwise, returns a `Failure` with an error message and the rejected object in `value`.
         """
         ...
 ```
@@ -262,6 +262,32 @@ In the ideal case, `result` will be a `typechat.Success` and we'll be able to
 access our well-typed `value` property!
 This will correspond to the type that we passed in when we created our
 translator object (i.e. `Sentiment`).
+
+## Accessing Failed Output
+
+A `Failure` can also provide an unvalidated `value: object` and `response_text: str | None`.
+Check `has_value` before using `value`; it distinguishes missing data from a rejected `None`,
+`False`, `0`, or empty string.
+
+```py
+result = await translator.translate(message)
+if isinstance(result, Failure):
+    original_response = result.response_text
+    if result.has_value:
+        rejected = result.value
+        # Validate or repair this value before using it as a Sentiment.
+```
+
+Use `isinstance` with `Success` or `Failure` to distinguish outcomes, not the presence of `value`.
+Validators also retain rejected inputs when used directly.
+Custom validators can return `Failure(message, value=rejected, response_text=text)`, and the
+translator preserves their payloads.
+
+If automatic repair fails, TypeChat retains the latest rejected candidate and available model text,
+not a full attempt history. These can refer to different attempts if the repair response could not
+be parsed. A network failure before any output has no candidate value. Repair limits and successful
+results are unchanged, including Python's existing repair of malformed JSON.
+Rejected values and response text may contain sensitive output; do not log or serialize them blindly.
 
 That's it!
 You should now have a basic idea of TypeChat's APIs and how to get started

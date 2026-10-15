@@ -23,7 +23,7 @@ export function createZodJsonValidator<T extends Record<string, z.ZodType>, K ex
     function validate(jsonObject: object) {
         const result = schema[typeName].safeParse(jsonObject);
         if (!result.success) {
-            return error(result.error.issues.map(({ path, message }) => `${path.map(key => `[${JSON.stringify(key)}]`).join("")}: ${message}`).join("\n"));
+            return error(result.error.issues.map(({ path, message }) => `${path.map(key => `[${JSON.stringify(key)}]`).join("")}: ${message}`).join("\n"), { data: jsonObject });
         }
         return success(result.data as z.infer<T[K]> & object);
     }
