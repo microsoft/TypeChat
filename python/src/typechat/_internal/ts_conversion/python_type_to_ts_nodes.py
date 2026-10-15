@@ -77,10 +77,20 @@ class Annotatedish(Protocol):
 class Dataclassish(Protocol):
     __dataclass_fields__: dict[str, Field[Any]]
 
+
+class NewTypeish(Protocol):
+    __supertype__: object
+
+
 # type[TypedDict]
 # https://github.com/microsoft/pyright/pull/6505#issuecomment-1834431725
 class TypeOfTypedDict(Protocol):
     __total__: bool
+
+
+def is_new_type(py_type: object) -> TypeGuard[NewTypeish]:
+    return isinstance(py_type, (typing.NewType, typing_extensions.NewType))
+
 
 if sys.version_info >= (3, 12) and typing.TypeAliasType is not typing_extensions.TypeAliasType:
     # Sometimes typing_extensions aliases TypeAliasType,
@@ -229,6 +239,9 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         # TODO: consider handling bare 'tuple' (and list, etc.)
         # https://docs.python.org/3/library/typing.html#annotating-tuples
         # Using plain tuple as an annotation is equivalent to using tuple[Any, ...]:
+
+        if is_new_type(py_type):
+            return convert_to_type_node(py_type.__supertype__)
 
         origin = get_origin(py_type)
         if origin is not None:
