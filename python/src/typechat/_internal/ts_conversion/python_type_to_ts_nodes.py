@@ -74,9 +74,6 @@ class Annotatedish(Protocol):
     __origin__: object
     __metadata__: tuple[object, ...]
 
-class NewTypeish(Protocol):
-    __supertype__: object
-
 class Dataclassish(Protocol):
     __dataclass_fields__: dict[str, Field[Any]]
 
@@ -241,8 +238,8 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
         # A NewType has the same runtime representation as its underlying type,
         # so we emit the underlying type (which may itself be a NewType).
-        if isinstance(py_type, (typing.NewType, typing_extensions.NewType)):
-            return convert_to_type_node(cast(NewTypeish, py_type).__supertype__)
+        if is_new_type(py_type):
+            return convert_to_type_node(py_type.__supertype__)
 
         # TODO: consider handling bare 'tuple' (and list, etc.)
         # https://docs.python.org/3/library/typing.html#annotating-tuples
