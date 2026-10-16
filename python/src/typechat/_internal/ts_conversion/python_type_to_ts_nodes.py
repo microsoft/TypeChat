@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import collections.abc
 from collections import OrderedDict
+import datetime
+import decimal
 import inspect
 import sys
 import typing
 import typing_extensions
+import uuid
 from dataclasses import MISSING, Field, dataclass
 from types import NoneType, UnionType
 from typing_extensions import (
@@ -235,6 +238,31 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             return NeverTypeReferenceNode
         if py_type is Self:
             return ThisTypeReferenceNode
+
+        # Standard library types supported by Pydantic
+        if py_type is datetime.datetime:
+            return Annotated(
+                StringTypeReferenceNode,
+                "ISO 8601 date-time string (e.g., '2022-08-20T08:30:00.000Z')"
+            )
+        if py_type is datetime.date:
+            return Annotated(StringTypeReferenceNode, "ISO 8601 date string (e.g., '2022-08-20')")
+        if py_type is datetime.time:
+            return Annotated(StringTypeReferenceNode, "ISO 8601 time string (e.g., '08:30:00')")
+        if py_type is datetime.timedelta:
+            return Annotated(StringTypeReferenceNode, "ISO 8601 duration string (e.g., 'PT1H')")
+        if py_type is uuid.UUID:
+            return Annotated(
+                StringTypeReferenceNode,
+                "UUID string (e.g., '12345678-1234-5678-1234-567812345678')"
+            )
+        if py_type is decimal.Decimal:
+            return Annotated(StringTypeReferenceNode, "Decimal number string (e.g., '12.50')")
+        if py_type is bytes:
+            return Annotated(StringTypeReferenceNode, "Base64 encoded bytes or UTF-8 string")
+
+        if isinstance(py_type, Annotatedish):
+             return convert_to_type_node(py_type.__origin__)
 
         # TODO: consider handling bare 'tuple' (and list, etc.)
         # https://docs.python.org/3/library/typing.html#annotating-tuples
