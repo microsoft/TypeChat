@@ -176,6 +176,8 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
                 return appendUnionOrIntersectionTypes([(type._zod.def as z.core.$ZodOptionalDef).innerType as z.ZodType, z.undefined()], TypePrecedence.Union);
             case "readonly":
                 return appendReadonlyType(type);
+            case "pipe":
+                return appendType((type._zod.def as z.core.$ZodPipeDef).in as z.ZodType);
         }
         append("any");
     }

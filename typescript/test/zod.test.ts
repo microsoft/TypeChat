@@ -409,6 +409,41 @@ describe("getZodSchemaAsTypeScript", () => {
     });
 
     // -----------------------------------------------------------------------
+    // Input schemas for transformations and pipelines
+    // -----------------------------------------------------------------------
+
+    describe("z.transform() and z.pipe()", () => {
+
+        it("emits the JSON input type for a transform pipeline", () => {
+            const DateTime = z.iso.datetime().transform(value => new Date(value));
+            assert.match(schemaOf("DateTime", DateTime), /type DateTime = string;/);
+        });
+
+        it("emits the input schema for a pipeline", () => {
+            const NumberFromString = z.string().pipe(z.coerce.number());
+            assert.match(schemaOf("NumberFromString", NumberFromString), /type NumberFromString = string;/);
+        });
+
+        it("preserves transformed runtime values during validation", () => {
+            const Event = {
+                Event: z.object({
+                    dateTime: z.iso.datetime().transform(value => new Date(value)),
+                }),
+            };
+            const validator = createZodJsonValidator(Event, "Event");
+            assert.match(validator.getSchemaText(), /dateTime: string;/);
+
+            const result = validator.validate({ dateTime: "2022-08-20T08:30:00.000Z" });
+            assert.ok(result.success, "expected ISO date-time validation to succeed");
+            assert.ok(result.data.dateTime instanceof Date);
+
+            const invalidResult = validator.validate({ dateTime: "not-a-date" });
+            assert.ok(!invalidResult.success, "expected invalid date-time validation to fail");
+        });
+
+    });
+
+    // -----------------------------------------------------------------------
     // Fallthrough: unknown type kind → any
     // -----------------------------------------------------------------------
 
