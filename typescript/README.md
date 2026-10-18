@@ -48,6 +48,34 @@ To see TypeChat in action, we recommend exploring the [TypeChat example projects
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
 
+## Accessing failed output
+
+Failed results include a `message` and may also include `data: unknown` and `responseText: string`.
+Validators return the rejected input in `data`. Translators also retain the original model text,
+including when that text is not valid JSON:
+
+```ts
+const result = await translator.translate(request);
+if (!result.success) {
+    const rejected: unknown = result.data;
+    const originalResponse = result.responseText;
+    // Validate or repair the rejected value before treating it as the target type.
+}
+```
+
+On final failure, automatic repair retains the latest rejected candidate and available response text,
+not a full attempt history. If a repair response cannot be parsed, `data` can come from an earlier
+attempt than `responseText`. An initial network failure has no candidate data. Successful results,
+error messages, and repair limits are unchanged; `getData` still throws on failure.
+
+Use `success` to distinguish successful and failed results, not the presence of `data`.
+Custom validators can supply their own failure payloads, which the translator preserves.
+To create such a failure, use `error(message, { data, responseText })`; `error(message)` still returns
+the original message-only shape. A present `data` property can contain any value, including `null`
+or `undefined`, so check property presence when that distinction matters.
+
+Rejected values and response text may contain sensitive output. Do not log them automatically.
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a

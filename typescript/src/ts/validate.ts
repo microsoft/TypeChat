@@ -139,16 +139,21 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
         return schemaValidationResult;
     }
 
-    function validate(jsonObject: object) {
+    function validate(jsonObject: object): Result<T> {
         const moduleResult = validator.createModuleTextFromJson(jsonObject);
         if (!moduleResult.success) {
-            return moduleResult;
+            return "data" in moduleResult ? moduleResult : {
+                ...moduleResult,
+                success: false,
+                message: moduleResult.message,
+                data: jsonObject
+            };
         }
         writeFile(jsonFileName, moduleResult.data);
         const snapshot = api.updateSnapshot({ fileChanges: { changed: [jsonFileName] } });
         const project = snapshot.getProject(configFileName);
         if (!project) {
-            return error(`The TypeScript schema project '${configFileName}' couldn't be loaded.`);
+            return error(`The TypeScript schema project '${configFileName}' couldn't be loaded.`, { data: jsonObject });
         }
         const program = project.program;
         const syntacticDiagnostics = program.getSyntacticDiagnostics();
@@ -165,7 +170,7 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
                 }
                 return message;
             }).join("\n");
-            return error(diagnostics);
+            return error(diagnostics, { data: jsonObject });
         }
         return success(jsonObject as T);
     }
