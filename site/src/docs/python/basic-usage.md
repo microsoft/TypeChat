@@ -3,6 +3,9 @@ layout: doc-page
 title: Basic Python Usage
 ---
 
+For a runnable example without a chat loop and guidance on backend integration, start with the
+[non-interactive Python quickstart](/docs/python/non-interactive/).
+
 TypeChat is currently a small library, so we can get a solid understanding
 just by going through the following example:
 

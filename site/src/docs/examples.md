@@ -5,6 +5,8 @@ title: Examples
 
 To see TypeChat in action, check out the examples found in [`/typescript/examples`](https://github.com/microsoft/TypeChat/tree/main/typescript/examples).
 
+For Python, start with the [non-interactive quickstart](/docs/python/non-interactive/) to integrate TypeChat into an existing application, or explore the [Python examples](https://github.com/microsoft/TypeChat/tree/main/python/examples).
+
 Each example shows how TypeChat handles natural language input, and maps to validated JSON as output. Most example inputs run on both GPT 3.5 and GPT 4.
 We are working to reproduce outputs with other models.
 Generally, models trained on both code and natural language text have high accuracy.
