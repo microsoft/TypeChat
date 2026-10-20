@@ -117,6 +117,39 @@
     }),
   ])
 # ---
+# name: test_translator_with_newtype
+  list([
+    dict({
+      'kind': 'CLIENT REQUEST',
+      'payload': list([
+        dict({
+          'content': '''
+            
+            You are a service that translates user requests into JSON objects of type "ExampleWithNewType" according to the following TypeScript definitions:
+            ```
+            interface ExampleWithNewType {
+                user_id: string;
+                count: number;
+            }
+            
+            ```
+            The following is a user request:
+            '''
+            Get me a user.
+            '''
+            The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+  
+          ''',
+          'role': 'user',
+        }),
+      ]),
+    }),
+    dict({
+      'kind': 'MODEL RESPONSE',
+      'payload': '{ "user_id": "abc", "count": 1 }',
+    }),
+  ])
+# ---
 # name: test_translator_with_single_failure
   list([
     dict({

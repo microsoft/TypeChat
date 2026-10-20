@@ -149,6 +149,11 @@ That would mean that to access the value of `sentiment`, we would have to write 
 Note that while we used [the built-in `typing` module](https://docs.python.org/3/library/typing.html), [`typing_extensions`](https://pypi.org/project/typing-extensions/) is supported as well.
 TypeChat also understands constructs like `Annotated` and `Doc` to add comments to individual attributes.
 
+[`typing.NewType`](https://docs.python.org/3/library/typing.html#typing.NewType) (and `typing_extensions.NewType`) is also supported.
+TypeChat converts a NewType through its `__supertype__`, so the TypeScript schema uses the underlying JSON type: `NewType("UserId", str)` becomes `string`, and a NewType built on another NewType follows the chain.
+Runtime validation still uses the declared Python type; NewType itself does not add checks beyond that underlying type.
+
+
 ## Creating a Validator
 
 A validator really has two jobs generating a textual schema for language models, and making sure any data fits a given shape.
