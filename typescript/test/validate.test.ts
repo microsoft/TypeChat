@@ -40,6 +40,69 @@ export interface Point {
     y: number;
 }`;
 
+// Schemas for serialized string-enum validation.
+const stringEnumSchema = `
+export enum Currency {
+    USD = "USD",
+    EUR = "EUR"
+}
+export interface Order {
+    currency: Currency;
+}`;
+
+const differingEnumValueSchema = `
+export enum Plan {
+    Basic = "basic",
+    Pro = "pro"
+}
+export interface Subscription {
+    plan: Plan;
+}`;
+
+const nestedEnumSchema = `
+export enum Status {
+    Active = "active",
+    Paused = "paused"
+}
+export interface Item {
+    status: Status;
+}
+export interface Batch {
+    primary: Item;
+    items: Item[];
+    lookup: { [id: string]: Status };
+    result: { ok: true; value: Status } | { ok: false; error: string };
+}`;
+
+const enumMemberTypeSchema = `
+export enum Currency {
+    USD = "USD",
+    EUR = "EUR"
+}
+export type EuropeanCurrency = Currency.EUR;
+export interface Payment {
+    currency: EuropeanCurrency;
+}`;
+
+const numericEnumSchema = `
+export enum Priority {
+    Low,
+    Medium,
+    High
+}
+export interface Config {
+    priority: Priority;
+    count: number;
+}`;
+
+const computedStringEnumSchema = `
+export enum Currency {
+    Euro = "E" + "UR"
+}
+export interface Order {
+    currency: Currency;
+}`;
+
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
@@ -79,6 +142,82 @@ describe("createTypeScriptJsonValidator", () => {
                 extra1: "a", extra2: "b", extra3: "c", extra4: "d", extra5: "e"
             });
             assert.ok(result.success, "expected validation to succeed without optional props");
+        });
+    });
+
+    describe("serialized string enum values", () => {
+        it("accepts a valid serialized string-enum value", () => {
+            const v = validatorFor(stringEnumSchema, "Order");
+            const result = v.validate({ currency: "EUR" });
+            assert.ok(result.success, `expected validation to succeed, got: ${result.success ? "" : result.message}`);
+        });
+
+        it("rejects unknown values and member names that differ from their values", () => {
+            const v = validatorFor(differingEnumValueSchema, "Subscription");
+            const unknown = v.validate({ plan: "enterprise" });
+            assert.ok(!unknown.success, "expected an unknown enum value to fail");
+            assert.match(unknown.message, /not assignable/);
+
+            const memberName = v.validate({ plan: "Basic" });
+            assert.ok(!memberName.success, "expected an enum member name to fail when it differs from the value");
+            assert.match(memberName.message, /not assignable/);
+        });
+
+        it("validates enums in nested objects, arrays, unions, and index signatures", () => {
+            const v = validatorFor(nestedEnumSchema, "Batch");
+            const valid = v.validate({
+                primary: { status: "active" },
+                items: [{ status: "paused" }, { status: "active" }],
+                lookup: { first: "active", second: "paused" },
+                result: { ok: true, value: "active" }
+            });
+            assert.ok(valid.success, `expected nested enum values to pass, got: ${valid.success ? "" : valid.message}`);
+
+            const invalid = v.validate({
+                primary: { status: "active" },
+                items: [{ status: "unknown" }],
+                lookup: { first: "active" },
+                result: { ok: false, error: "failed" }
+            });
+            assert.ok(!invalid.success, "expected an unknown nested enum value to fail");
+            assert.match(invalid.message, /not assignable/);
+        });
+
+        it("accepts serialized values for an individual enum-member type", () => {
+            const v = validatorFor(enumMemberTypeSchema, "Payment");
+            const valid = v.validate({ currency: "EUR" });
+            assert.ok(valid.success, `expected enum-member value to pass, got: ${valid.success ? "" : valid.message}`);
+
+            const invalid = v.validate({ currency: "USD" });
+            assert.ok(!invalid.success, "expected a different enum member to fail");
+            assert.match(invalid.message, /not assignable/);
+        });
+
+        it("preserves numeric enum validation", () => {
+            const v = validatorFor(numericEnumSchema, "Config");
+            const valid = v.validate({ priority: 1, count: 2 });
+            assert.ok(valid.success, `expected numeric enum value to pass, got: ${valid.success ? "" : valid.message}`);
+
+            const invalid = v.validate({ priority: 3, count: 2 });
+            assert.ok(!invalid.success, "expected a value outside the numeric enum to fail");
+            assert.match(invalid.message, /not assignable/);
+        });
+
+        it("does not hide unrelated type errors", () => {
+            const v = validatorFor(numericEnumSchema, "Config");
+            const result = v.validate({ priority: 1, count: "two" });
+            assert.ok(!result.success, "expected an unrelated type error to fail validation");
+            assert.match(result.message, /not assignable/);
+        });
+
+        it("supports constant-folded string enum values", () => {
+            const v = validatorFor(computedStringEnumSchema, "Order");
+            const valid = v.validate({ currency: "EUR" });
+            assert.ok(valid.success, `expected constant-folded enum value to pass, got: ${valid.success ? "" : valid.message}`);
+
+            const invalid = v.validate({ currency: "USD" });
+            assert.ok(!invalid.success, "expected a value not produced by the computed member to fail");
+            assert.match(invalid.message, /not assignable/);
         });
     });
 
@@ -190,7 +329,8 @@ describe("createTypeScriptJsonValidator", () => {
             const result = v.createModuleTextFromJson({ x: 1, y: 2 });
             assert.ok(result.success, "expected module text creation to succeed");
             assert.ok(result.data.includes("import { Point } from './schema'"));
-            assert.ok(result.data.includes("const json: Point ="));
+            assert.ok(result.data.includes("type __TypeChatJsonWire<T> = T extends string"));
+            assert.ok(result.data.includes("const json: __TypeChatJsonWire<Point> ="));
         });
     });
 });

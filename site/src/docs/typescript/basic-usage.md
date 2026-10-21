@@ -202,6 +202,31 @@ const validator = createTypeScriptJsonValidator<SentimentResponse>(schema, "Sent
 We provided the text of the schema and the name of the type we want returned data to satisfy.
 We also have to provide the type argument `SentimentResponse` to explain what data shape we expect (though note that this is a bit like a type cast and isn't guaranteed).
 
+#### String enums
+
+JSON represents a TypeScript string enum using the member's value, not its name. The TypeScript validator
+normalizes string-enum types to their literal values before validating, including when they appear in nested
+objects, arrays, unions, and index signatures.
+
+```ts
+export enum Currency {
+    USD = "USD",
+    EUR = "EUR"
+}
+
+export interface Order {
+    currency: Currency;
+}
+```
+
+The JSON `{ "currency": "EUR" }` is valid, while `{ "currency": "GBP" }` is not. If a member's name and value
+differ, such as `Basic = "basic"`, JSON must use `"basic"`; `"Basic"` is rejected. Numeric enums keep their
+existing numeric validation behavior.
+
+Members initialized with compile-time string expressions, such as `Euro = "E" + "UR"`, are supported when
+TypeScript resolves the value to a string literal. Computed members without a compile-time literal type should be
+modeled with a string literal union instead.
+
 ### Zod Validators
 
 If you chose to define your schema with Zod, you can use the `createZodJsonValidator` function:
