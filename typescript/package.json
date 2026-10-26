@@ -38,7 +38,7 @@
     "./interactive": "./dist/interactive/index.js"
   },
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=24.22.1"
   },
   "files": [
     "dist",

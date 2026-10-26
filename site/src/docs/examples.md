@@ -28,7 +28,7 @@ We recommend reading each example in the following order.
 
 You can experiment with these TypeChat examples on your local machine with just Node.js.
 
-Ensure [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en) or newer is installed.
+Ensure [Node.js 24.22.1 or newer](https://nodejs.org/en/download) is installed.
 
 ```
 git clone https://github.com/microsoft/TypeChat
