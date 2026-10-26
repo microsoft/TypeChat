@@ -18,6 +18,10 @@ Types are all you need!
 
 # Getting Started
 
+The TypeScript/JavaScript package requires [Node.js 24.22.1 or newer](https://nodejs.org/en/download).
+Development uses Node.js 24.22.1, pinned in [.nvmrc](./.nvmrc), which includes the
+[October 21, 2026 security fixes](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
+
 Install TypeChat for TypeScript/JavaScript:
 
 ```
