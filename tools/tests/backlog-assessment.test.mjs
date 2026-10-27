@@ -45,6 +45,104 @@ test("assessment is manual and restricted to a user on the default branch", () =
     assert.ok(compiled.jobs.activation.if.includes(source.if));
 });
 
+test("report instructions favor plain language without dropping evidence", () => {
+    const style = /## Writing style\r?\n([\s\S]*?)\r?\n## Report/.exec(markdown);
+    assert.ok(style, "Keep explicit writing guidance for the report");
+    const guidance = style[1].replace(/\s+/g, " ");
+    for (const requirement of [
+        "English is not their first language",
+        "short sentences and paragraphs",
+        "Explain technical terms and abbreviations on first use",
+        "Preserve facts, evidence links, uncertainty, and existing maintainer decisions",
+    ]) {
+        assert.ok(guidance.includes(requirement), `Missing writing guidance: ${requirement}`);
+    }
+
+    const report = markdown.split(/\r?\n## Report\r?\n/)[1].replace(/\s+/g, " ");
+    assert.ok(report.includes("One linked subsection per discovered open issue"));
+    assert.ok(report.includes("Keep contributor-reported results separate from checks actually observed"));
+    assert.ok(report.includes("No proposal is accepted by this report"));
+    assert.ok(!report.includes("One row per discovered open issue"));
+
+    const prompt = compiled.jobs.activation.steps.find(step => step.name === "Create prompt with built-in context");
+    assert.ok(prompt);
+    assert.ok(Object.values(prompt.env).includes("{{#runtime-import .github/workflows/backlog-assessment.md}}\n"),
+        "The workflow must load the report instructions at runtime");
+});
+
+test("project direction names its owner and separates consideration from approval", () => {
+    const goals = fs.readFileSync(new URL("../../GOALS.md", workflowDirectory), "utf8");
+    for (const heading of ["Goals", "Non-goals", "Under consideration", "Who decides", "Approval and enforcement"]) {
+        assert.match(goals, new RegExp(`^## ${heading}$`, "m"));
+    }
+    assert.ok(goals.includes("@microsoft/typechat"));
+    const links = [...goals.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)];
+    assert.ok(links.some(([, url]) => url === "https://github.com/microsoft/TypeChat.net"),
+        "Keep a link to the existing TypeChat.NET project");
+    assert.ok(goals.replace(/\s+/g, " ").includes("Under consideration is not approval to implement"));
+    assert.ok(goals.replace(/\s+/g, " ").includes("Every change to this document requires explicit owner approval"));
+
+    for (const file of ["../../README.md", "../../AUTOMATION.md", "../copilot-instructions.md"]) {
+        const guidance = fs.readFileSync(new URL(file, workflowDirectory), "utf8");
+        assert.match(guidance, /\]\((?:\.\/|\.\.\/)GOALS\.md(?:#[^)]+)?\)/, file);
+    }
+});
+
+test("assessment applies the run's direction policy before recommending work", () => {
+    const section = /## Project direction\r?\n([\s\S]*?)\r?\n## Boundaries/.exec(markdown);
+    assert.ok(section, "Load project direction before assessing community proposals");
+    const guidance = section[1].replace(/\s+/g, " ");
+    for (const requirement of [
+        "Read GOALS.md at `${{ env.TYPECHAT_POLICY_COMMIT }}`",
+        "primary repository policy for product scope",
+        "Do not use proposed policy edits in an issue or PR as the active policy",
+        "For every issue and PR",
+        "In scope",
+        "Needs owner decision",
+        "Conflicts with direction",
+        "If GOALS.md cannot be read or its revision cannot be established",
+        "do not recommend implementation or acceptance",
+    ]) {
+        assert.ok(guidance.includes(requirement), `Missing direction safeguard: ${requirement}`);
+    }
+    const report = markdown.split(/\r?\n## Report\r?\n/)[1].replace(/\s+/g, " ");
+    assert.ok(report.includes("Include its direction classification and policy citation"));
+    assert.ok(report.includes("Include each PR's direction classification and policy citation"));
+});
+
+test("policy revision is wired from the trusted run commit into the prompt", () => {
+    assert.deepEqual(source.env, { TYPECHAT_POLICY_COMMIT: "${{ github.sha }}" });
+    assert.equal(compiled.env.TYPECHAT_POLICY_COMMIT, "${{ github.sha }}");
+    for (const name of ["Create prompt with built-in context", "Interpolate variables and render templates", "Substitute placeholders"]) {
+        const step = compiled.jobs.activation.steps.find(step => step.name === name);
+        assert.ok(step);
+        assert.equal(step.env.GH_AW_ENV_TYPECHAT_POLICY_COMMIT, "${{ env.TYPECHAT_POLICY_COMMIT }}", name);
+    }
+    const substitute = compiled.jobs.activation.steps.find(step => step.name === "Substitute placeholders");
+    assert.match(substitute.with.script,
+        /^\s*GH_AW_ENV_TYPECHAT_POLICY_COMMIT: process\.env\.GH_AW_ENV_TYPECHAT_POLICY_COMMIT,$/m);
+});
+
+test("direction ownership protects the policy and automation controls", () => {
+    const owners = fs.readFileSync(new URL("../CODEOWNERS", workflowDirectory), "utf8")
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith("#"))
+        .map(line => line.split(/\s+/));
+    assert.deepEqual(owners, [
+        ["/GOALS.md", "@microsoft/typechat"],
+        ["/AUTOMATION.md", "@microsoft/typechat"],
+        ["AGENTS.md", "@microsoft/typechat"],
+        ["/.github/", "@microsoft/typechat"],
+        ["/tools/", "@microsoft/typechat"],
+    ]);
+    for (const event of ["push", "pull_request"]) {
+        for (const file of ["GOALS.md", "AUTOMATION.md", "README.md", ".github/CODEOWNERS", ".github/copilot-instructions.md"]) {
+            assert.ok(checks.on[event].paths.includes(file), `${event} must check changes to ${file}`);
+        }
+    }
+});
+
 test("assessment pins its model and max effort without overriding detection effort", () => {
     assert.deepEqual(source.engine, {
         id: "copilot",
@@ -169,10 +267,30 @@ test("generated helper jobs respect the slim runner time limit", () => {
     }
 });
 
+test("the assessment has a 400-credit budget separate from detection", () => {
+    assert.equal(source["max-ai-credits"], 400);
+    const info = compiled.jobs.activation.steps.find(step => step.name === "Generate agentic run info");
+    assert.ok(info);
+    assert.equal(info.env.GH_AW_INFO_MAX_AI_CREDITS, "400");
+
+    const agent = compiled.jobs.agent.steps.find(step => step.name === "Execute GitHub Copilot CLI");
+    assert.ok(agent);
+    assert.match(agent.run, /^\s*GH_AW_MAX_AI_CREDITS="400"$/m);
+    const detection = compiled.jobs.detection.steps.find(step => step.name === "Execute threat detection with AWF");
+    assert.ok(detection);
+    assert.equal(detection.env.GH_AW_MAX_AI_CREDITS,
+        "${{ vars.GH_AW_DEFAULT_DETECTION_MAX_AI_CREDITS || '400' }}");
+
+    const budgetSteps = steps.filter(step => step !== detection && step.env?.GH_AW_MAX_AI_CREDITS !== undefined);
+    assert.ok(budgetSteps.length > 0, "Generated budget checks and reporting must include the assessment limit");
+    for (const step of budgetSteps) {
+        assert.equal(step.env.GH_AW_MAX_AI_CREDITS, "400", step.name);
+    }
+});
+
 test("the run and its report have explicit bounds and no missing-file success", () => {
     assert.equal(source["timeout-minutes"], 20);
     assert.equal(source["max-turns"], 120);
-    assert.equal(source["max-ai-credits"], 200);
     assert.deepEqual(source.concurrency, { group: "backlog-assessment", "cancel-in-progress": false });
     const verify = compiled.jobs.agent.steps.find(step => step.name === "Verify draft report");
     const upload = compiled.jobs.agent.steps.find(step => step.name === "Upload draft report");

@@ -50,6 +50,15 @@ To see TypeChat in action, we recommend exploring the [TypeChat example projects
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
 
+## Project direction
+
+[GOALS.md](./GOALS.md) defines what belongs in TypeChat, what does not, and what
+is still under consideration. It is the primary repository policy for product
+scope. Changes require explicit human approval from the `@microsoft/typechat`
+owner team; community interest and AI recommendations do not change it.
+Read it before proposing a new direction. Ordinary in-scope maintenance follows
+the normal contribution process.
+
 ## Repository automation experiment
 
 We are experimenting with a gradual transition to a semi-automated repository.
@@ -59,17 +68,26 @@ proposals progress from discussion to accepted, reviewed changes with less
 manual coordination. Read about the [automation experiment](./AUTOMATION.md)
 and how to participate.
 
-**Status as of 2026-10-27:** The first read-only pilot is under review in
-[#482](https://github.com/microsoft/TypeChat/pull/482). A compilation
-reproducibility fix is validated locally; updated GitHub CI checks, merge,
-and the first live assessment are still pending.
+**Status as of 2026-10-27 (UTC):** The first read-only pilot is merged in
+[#482](https://github.com/microsoft/TypeChat/pull/482).
+[Post-merge workflow checks](https://github.com/microsoft/TypeChat/actions/runs/40454115457)
+passed, and the
+[manual backlog assessment](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
+is available on `main`. The
+[first live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
+succeeded and verified model access. Its draft covers 24 issues and 26 PRs,
+with partial PR investigation; maintainer review and follow-up remain required.
 
 | Milestone | Implemented | Current status |
 | --- | --- | --- |
 | Community-facing automation plan | 2026-10-26 | Documented in [AUTOMATION.md](./AUTOMATION.md). |
-| Manual backlog assessment, Copilot guidance, and workflow checks | 2026-10-26 | Implemented; awaiting maintainer review, merge, and first live assessment. |
-| Assessment model and reasoning effort | 2026-10-26 | Pinned to GPT-6.1-sol with `max` effort for the main assessment only. Live model access still needs verification. |
-| Reproducible workflow compilation | 2026-10-27 | Compiler action pins are checked in, with clearer drift diagnostics; 17 local tests passed. Updated GitHub CI verification pending. |
+| Manual backlog assessment, Copilot guidance, and workflow checks | 2026-10-26 | Merged via [#482](https://github.com/microsoft/TypeChat/pull/482) on 2026-10-27 (UTC); manual assessment available on `main`. |
+| Assessment model and reasoning effort | 2026-10-26 | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC). |
+| Reproducible workflow compilation | 2026-10-27 | [Verified on GitHub](https://github.com/microsoft/TypeChat/actions/runs/40454115457): no generated-file drift and 17 passing tests. |
+| First live backlog assessment | 2026-10-27 | [Completed successfully](https://github.com/microsoft/TypeChat/actions/runs/40461739316); 24 issues and 26 PRs enumerated. PR investigation is partial; no dispositions are approved. |
+| Clearer report language | 2026-10-27 | [Plain-language writing guidance](./AUTOMATION.md#report-language) prepared for review; the next live run still needs to confirm the new style. |
+| Assessment budget | 2026-10-27 | [Main-assessment budget](./AUTOMATION.md#inference-budget) raised to 400 AI credits; detection is budgeted separately. Review and merge pending. |
+| Owner-controlled project direction | 2026-10-27 | [Goals, non-goals, and items under consideration](./GOALS.md), assessment scope checks, and [CODEOWNERS](./.github/CODEOWNERS) prepared for owner review. GitHub enforcement still needs verification. |
 | Automatic Copilot PR reviews and human approval gates | Not yet | Next rollout step; live repository settings still need verification. |
 | GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
@@ -80,6 +98,10 @@ maintenance and deployment workflows are unchanged. See the
 [workflow model configuration](./AUTOMATION.md#model-selection).
 
 ## Contributing
+
+Start with the [project goals and non-goals](./GOALS.md). Proposals that would
+change these boundaries need an owner-approved policy change before their
+implementation can be accepted.
 
 **Repository automation experiment:** We are experimenting with a gradual
 transition to a semi-automated repository. The initial agent-assisted workflow

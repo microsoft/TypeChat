@@ -7,27 +7,40 @@ of the project.
 Our goal is to reduce routine coordination and maintenance work so contributors
 and maintainers can focus on useful ideas, design decisions, and quality.
 
+Automation must follow [GOALS.md](./GOALS.md), the primary repository policy for
+product scope. It can help carry out the project's direction, not choose a new
+one. Changes to that policy require explicit human owner approval.
+
 This is an early experiment. The workflow below describes our intended direction;
 capabilities will be introduced incrementally, and not everything described here
 is available today.
 
 ## Status and implementation history
 
-**Last updated: 2026-10-27.** The first pilot is under review in
-[#482](https://github.com/microsoft/TypeChat/pull/482). A compilation
-reproducibility fix is validated locally. Updated GitHub CI checks, maintainer
-review, merge to the default branch, confirmation of GitHub Copilot access,
-and the first live assessment are still pending.
-No live repository settings have been changed as part of this pilot.
+**Last updated: 2026-10-27 (UTC).** The first pilot is merged into `main` through
+[#482](https://github.com/microsoft/TypeChat/pull/482).
+[Post-merge workflow checks](https://github.com/microsoft/TypeChat/actions/runs/40454115457)
+passed, and the
+[Backlog assessment workflow](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
+is available for manual dispatch. The
+[first live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
+completed successfully, verifying live Copilot access and the configured model
+and main-assessment reasoning effort. Its draft enumerates 24 issues and 26 PRs,
+but PR investigation is partial. Human review remains required; automatic
+Copilot PR reviews and broader autonomy are not enabled by this pilot.
 
 | Implemented | Change | Current state |
 | --- | --- | --- |
 | 2026-10-26 | Community-facing plan and [README announcement](./README.md#repository-automation-experiment) | Documented. |
-| 2026-10-26 | Shared [Copilot contributor and review guidance](./.github/copilot-instructions.md) | Prepared; instructions do not configure automatic PR reviews. |
-| 2026-10-26 | [Manual backlog assessment](./.github/workflows/backlog-assessment.md) | Implemented; produces a draft report without changing issues or PRs. First GitHub run pending. |
-| 2026-10-26 | [Compilation checks](./.github/workflows/agent-workflow-check.yml) and [contract tests](./tools/tests/backlog-assessment.test.mjs) | Strict compilation and 17 tests passed locally. Updated GitHub CI verification pending. |
-| 2026-10-26 | [Assessment model and reasoning effort](#model-selection) | GPT-6.1-sol pinned with `max` effort for the main assessment only; threat detection keeps its default effort. Live model access unverified. |
-| 2026-10-27 | [Compiler action pins](./.github/aw/actions-lock.json) and clearer drift diagnostics | The runtime pin is checked in with the generated workflow, keeping local and CI compilation consistent. |
+| 2026-10-26 | Shared [Copilot contributor and review guidance](./.github/copilot-instructions.md) | Merged; instructions do not configure automatic PR reviews. |
+| 2026-10-26 | [Manual backlog assessment](./.github/workflows/backlog-assessment.md) | Available on `main` since 2026-10-27 (UTC), via [#482](https://github.com/microsoft/TypeChat/pull/482). First live report produced; maintainer review required. |
+| 2026-10-26 | [Compilation checks](./.github/workflows/agent-workflow-check.yml) and [contract tests](./tools/tests/backlog-assessment.test.mjs) | Verified in [post-merge CI](https://github.com/microsoft/TypeChat/actions/runs/40454115457) on 2026-10-27 (UTC): strict compilation, no generated-file drift, and 17 passing tests. |
+| 2026-10-26 | [Assessment model and reasoning effort](#model-selection) | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC); threat detection keeps its separately configured default effort. |
+| 2026-10-27 | [Compiler action pins](./.github/aw/actions-lock.json) and clearer drift diagnostics | Merged; the post-merge drift check passed on GitHub. |
+| 2026-10-27 | [First live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316) | Successful execution and report upload. All 24 issues and 26 PRs enumerated; selective PR investigation means overall coverage remains partial. |
+| 2026-10-27 | [Clearer report language](#report-language) | Writing guidance and a regression test prepared for review. A live run with the revised guidance is still pending. |
+| 2026-10-27 | [Assessment budget](#inference-budget) | Main assessment increased from 200 to 400 AI credits; detection keeps its separate default. Prepared for review, not yet active on GitHub. |
+| 2026-10-27 | [Owner-controlled project direction](./GOALS.md) | Policy, assessment scope checks, shared guidance, and [CODEOWNERS](./.github/CODEOWNERS) prepared for owner review. GitHub approval enforcement and a live assessment using the policy remain unverified. |
 | Not yet | Automatic Copilot PR reviews and human approval gates | Live settings need verification and a maintainer-approved rollout. |
 | Not yet | Agent-assisted discussion and explicit issue acceptance | Planned; no issue-discussion or acceptance commands are enabled by this pilot. |
 | Not yet | Human-approved agent implementation | Planned; the assessment does not start implementation or open PRs. |
@@ -48,12 +61,43 @@ Agents may investigate problems, summarize discussions, suggest questions, write
 tests, and propose changes. Automated tests and GitHub Copilot code reviews will
 support review, not replace human judgment.
 
+### Protecting project direction
+
+The direction owner is `@microsoft/typechat`. Goals, non-goals, and the
+[items under consideration](./GOALS.md#under-consideration) can change only
+through an owner-approved policy pull request. Under consideration does not mean
+approved for implementation. Ordinary work already within the goals follows
+normal maintainer review.
+
+The assessment reads the policy at its trusted default-branch run commit. Each
+issue and PR receives an **In scope**, **Needs owner decision**, or **Conflicts
+with direction** classification, with a plain-language reason and a policy
+citation. An unreadable policy or uncertain fit is not permission to recommend
+implementation. Proposed policy edits in unmerged PRs do not replace the active
+policy.
+
+[CODEOWNERS](./.github/CODEOWNERS) covers the policy, this automation document,
+any `AGENTS.md` guidance, the `.github/` controls, and repository automation tools
+and tests. These local rules request owner review; they do not enable required
+reviews themselves.
+An administrator must verify the team has the required visibility and write
+access, require pull requests and code-owner approval, prevent stale approvals,
+and restrict bypasses. The
+[enforcement checklist](./GOALS.md#approval-and-enforcement) records these
+requirements. No live settings were changed for this policy work.
+
+The first policy PR needs deliberate human owner review: GitHub uses the
+CODEOWNERS file already on the base branch, not the proposed one. Record
+activation only after the protections have been verified on GitHub.
+
 ## First pilot: a draft backlog assessment
 
 The first pilot is a [manually triggered assessment workflow](./.github/workflows/backlog-assessment.md).
-Once it has been reviewed, merged to the default branch, and its GitHub Copilot
-access enabled, a maintainer can select **Actions > Backlog assessment > Run
-workflow** on the default branch.
+It is now available on the default branch. Once the relevant organization
+Copilot access is enabled, a maintainer can select
+**Actions > Backlog assessment > Run workflow**, using `main`. Every report
+remains a draft until maintainer review; successful execution alone is not
+a complete backlog review or approval to act.
 
 The workflow reads open issues, their discussions, and existing pull requests.
 It proposes next steps and acceptance criteria in a draft report. It does not
@@ -74,6 +118,76 @@ the per-run Actions token, so the relevant organization policy must allow it.
 No personal token or bot write credentials are needed for this read-only pilot.
 It has time, turn, and inference-budget limits and no scheduled trigger.
 
+### Report retention
+
+The downloadable **backlog-assessment** report is kept for **seven days** by
+default. The [source workflow](./.github/workflows/backlog-assessment.md) sets
+`retention-days: 7`. In the generated workflow,
+`GH_AW_DEFAULT_ARTIFACT_RETENTION_DAYS` overrides that value when set, subject
+to GitHub Actions retention limits. Other artifacts, such as execution logs and
+usage records, have their own retention settings; they do not extend the report's
+lifetime.
+
+The workflow does not save reports in the repository. Keeping selected reports
+there would be a separate, maintainer-approved step. A preserved report should
+be a dated snapshot with its run link, assessed commit, coverage limits, and
+review status. Review its contents through a normal pull request, rather than
+automatically committing reports or raw execution logs. Preserving a report
+does not approve its recommendations or make its findings current.
+
+### Report language
+
+Reports should be easy to follow even when English is not the reader's first
+language. The revised [writing guidance](./.github/workflows/backlog-assessment.md)
+asks the agent to explain what each issue means for users, acknowledge existing
+contributions, and describe a practical next step in short paragraphs.
+Technical terms should be explained, not removed. Detailed evidence belongs in
+clearly labeled notes rather than wide tables full of compressed phrases.
+
+Clearer language must keep the same facts and limits. Reports still distinguish
+what a contributor says from checks the assessment actually inspected. They
+still identify incomplete coverage and decisions that need maintainer approval.
+The writing change does not alter tools, permissions, model settings, or budgets.
+Those follow-ups remain separate work.
+
+### First live assessment
+
+[Run 40461739316](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
+completed on 2026-10-27 (UTC). The draft contains 24 issue rows and 26 open-PR
+rows. It investigated 11 issue-linked PRs more deeply, but left formal reviews
+and head checks on the other 15 PRs, and inline review threads, for follow-up.
+This is a useful review inventory, not a complete code review or merge approval.
+
+Reported usage was 188.67 AI credits for the assessment and 7.43 for threat
+detection, approximately 196.10 in total. These are reported usage units, not a
+currency charge. That run used the earlier 200-credit main-assessment limit.
+Limits are per component, not a combined workflow budget.
+
+Two follow-up checks remain before expanding autonomy:
+
+- **Tool exposure:** Copilot CLI's `--allow-tool` controls permission approval,
+  not a strict available-tool filter. Additional read-only search tools were
+  used. Preserve the read-only repository guards and explicitly validate the
+  intended available-tool set before adding capabilities. See
+  [Copilot CLI tool controls](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools).
+- **Telemetry quality:** The built-in grader's failure and loop totals conflict
+  with the detailed activity records. Reconcile those measurements before using
+  them as automated acceptance gates; a grader summary is not code-review evidence.
+
+### Inference budget
+
+**Changed on 2026-10-27:** The main assessment is configured for **400 AI credits**
+per run through `max-ai-credits` in the
+[source workflow](./.github/workflows/backlog-assessment.md), increased from 200.
+The change takes effect after review and merge of the source and generated
+workflow. Its 20-minute and 120-turn limits are unchanged.
+
+Threat detection has a separate **400-credit default**, controlled by
+`GH_AW_DEFAULT_DETECTION_MAX_AI_CREDITS`. That setting is unchanged. The
+400-credit assessment budget is therefore not a cap for the entire workflow:
+the two default component budgets total 800 credits. Actual usage may be lower,
+and other configured guardrails can still prevent a run.
+
 ### Model selection
 
 **Pinned on 2026-10-26:** The main assessment uses `gpt-6.1-sol` with `max`
@@ -90,8 +204,9 @@ engine:
 `engine.model` pins the model; `engine.args` passes the native Copilot CLI
 `--reasoning-effort max` option. The generated assessment no longer falls back
 to `GH_AW_MODEL_AGENT_COPILOT`, `GH_AW_DEFAULT_MODEL_COPILOT`, or `auto`.
-The existing time, turn, and inference-budget limits are unchanged; maximum
-effort can use more time and credits within those limits.
+The model and effort settings do not replace the separate time, turn, and
+[credit limits](#inference-budget). Maximum effort can use more time and credits
+within those limits.
 
 The separate threat-detection job inherits `gpt-6.1-sol`, but not the main
 assessment's extra CLI arguments. By design, `max` applies only to the main
@@ -100,9 +215,10 @@ Its explicit inherited model also replaces its previous model-variable fallback.
 
 To change either setting, edit the Markdown source, regenerate the compiled
 workflow, and update the model contract test and this documentation. The first
-approved GitHub run must still verify that the model is available and permitted
-for the workflow's Copilot access. Local compilation and tests verify the
-configuration, not live inference or model access. See the
+live run verified the pinned model and main-assessment `max` setting on
+2026-10-27 (UTC). Local compilation and tests verify configuration, not continued
+model availability or organization access; recheck live access when changing
+the configuration. See the
 [engine configuration reference](https://github.github.com/gh-aw/reference/engines/#extended-coding-agent-configuration)
 and [Copilot model behavior](https://github.github.com/gh-aw/reference/engines/copilot/#capabilities-and-limitations).
 Editor chat or subagent model preferences do not configure this workflow, and
@@ -142,8 +258,12 @@ We aim to keep the entire process on GitHub:
    Discussions for questions and exploratory conversations.
 2. **Clarify the proposal.** Contributors, maintainers, and agents help establish
    the intended outcome, scope, non-goals, and testable acceptance criteria.
-3. **Accept the work.** A maintainer approves the agreed scope before
-   implementation begins. Material scope changes return to discussion.
+   Check the proposal against [GOALS.md](./GOALS.md). Unclear fit and items under
+   consideration need an owner decision, not an assumption of acceptance.
+3. **Accept the work.** A maintainer approves agreed, in-scope work before
+   implementation begins. A direction change or exception needs an
+   owner-approved policy change merged first. Material scope changes return
+   to discussion.
 4. **Propose an implementation.** A contributor or agent opens a pull request
    linked to the accepted work, with tests and supporting documentation.
 5. **Review and accept the result.** Automated checks, GitHub Copilot review, and
@@ -173,6 +293,11 @@ less manual coordination.
 The criteria for automatic adoption will be discussed and published before that
 behavior is enabled. Participation, elapsed time, or an agent's recommendation
 alone will not guarantee acceptance.
+
+Any future automatic adoption must remain within the owner-approved goals.
+Changing those goals, making exceptions, or promoting an item under
+consideration into accepted scope will continue to require explicit human
+owner approval, even if routine work becomes more autonomous.
 
 Ambiguous proposals and higher-impact decisions, including significant API
 changes, security-sensitive work, and releases, will continue to involve humans.
