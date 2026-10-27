@@ -20,7 +20,7 @@ checkout: false
 network: defaults
 timeout-minutes: 20
 max-turns: 120
-max-ai-credits: 200
+max-ai-credits: 400
 concurrency:
   group: backlog-assessment
   cancel-in-progress: false
@@ -120,24 +120,69 @@ GitHub tools.
    prerequisites for reliable testing. Separate design-heavy or ambiguous work
    from well-scoped candidates. Do not create duplicate implementation tasks.
 
+## Writing style
+
+Write for community members with different technical backgrounds, including
+people for whom English is not their first language. Sound like a helpful
+colleague explaining the situation, not a log of status codes.
+
+- Use plain English, complete sentences, and short sentences and paragraphs.
+  Explain what a problem means for someone using TypeChat before describing
+  implementation details. Give each paragraph one main idea.
+- Explain technical terms and abbreviations on first use. Prefer "latest commit"
+  to "head", "next decision" to "disposition", and "found" to "enumerated".
+  Keep exact API names and error messages when they matter, and explain them.
+- Avoid idioms, regional expressions, sarcasm, and strings of compressed
+  phrases separated by semicolons. Be respectful of contributors and recognize
+  their work without suggesting that an unverified change is ready to merge.
+- Use descriptive headings and short paragraphs for individual issues and PRs.
+  Use bullets for checks and questions. Reserve tables for compact facts with
+  at most three columns; do not put multi-sentence assessments in table cells.
+- Preserve facts, evidence links, uncertainty, and existing maintainer decisions.
+  Say "not checked" when evidence was not inspected, rather than "missing".
+  Do not remove technical requirements or turn reported results into verified
+  results to make the report shorter or more reassuring.
+- Explain the human-review requirement clearly at the start. Repeat it where a
+  specific approval is needed, rather than adding the same warning to every
+  entry. Keep coverage gaps visible, with detailed counts in the evidence notes.
+
+For example, replace "Head checks: CLA only; acceptance evidence outstanding"
+with "The contributor reports that the tests pass. The only check found for the
+latest commit confirms the contributor license agreement. We still need test
+results before deciding whether the change is ready." This is a wording example,
+not evidence to reuse for another pull request.
+
 ## Report
 
 Create `backlog-assessment.md` even when the backlog is empty or some information
 is unavailable. Include these sections:
 
 - **Draft status and coverage:** State "Draft - requires maintainer review",
-  assessment time, totals, pages/items read, and whether coverage is complete,
-  partial, or unavailable. Explain errors and gaps; never invent missing data.
-- **Issue inventory:** One row per discovered open issue, linking to the issue
-  and any relevant PRs. Include current discussion state, proposed next step,
-  evidence, and unresolved questions. Mark unassessed issues explicitly.
-- **Candidate acceptance criteria:** Record existing criteria and separately
-  label any proposed additions for the first few actionable candidates.
-- **Existing pull requests:** Highlight linked contributions and blockers.
-  Distinguish a contributor's claimed verification from independently observed
-  checks. This assessment is not a GitHub Copilot code review or merge approval.
-- **Maintainer decisions needed:** List the specific questions or dispositions
-  for a human to approve. No proposal is accepted by this report.
+  assessment time, totals, and whether coverage is complete, partial, or
+  unavailable. Open with a short, welcoming overview of what was found, why it
+  matters, and what still needs attention. Explain errors and gaps; never invent
+  missing data. This assessment is not a GitHub Copilot code review or merge
+  approval.
+- **Suggested starting point:** Introduce a small review queue in plain language.
+  Explain why each contribution is worth reviewing next and what would help
+  that review. Do not present the queue as an approved implementation plan.
+- **Issue inventory:** One linked subsection per discovered open issue, including
+  relevant PR links. Explain the user's need, what the discussion has established,
+  and the suggested next step in short paragraphs. Include the evidence and
+  unresolved questions. Mark unassessed issues explicitly.
+- **Candidate acceptance criteria:** Explain that these are the checks needed
+  before considering a change complete. For the first few actionable candidates,
+  use separate lists labeled "Existing requirements" and "Suggested additions"
+  so readers can distinguish recorded requirements from new suggestions. State
+  who proposed or approved them; a request in an issue is not itself approval.
+- **Existing pull requests:** Describe each contribution, its current review
+  position, and what would help it move forward. Keep contributor-reported
+  results separate from checks actually observed. Link to supporting evidence.
+- **Maintainer decisions needed:** Ask specific questions in complete sentences
+  and explain why each decision matters. No proposal is accepted by this report.
+- **Evidence and coverage notes:** Record pages/items read, reported totals,
+  source links, errors, and work not completed. Keep the detailed evidence here
+  without hiding important limits from the opening summary.
 
 If a limit or data-access error prevents a complete assessment, produce an
 explicitly partial report with the remaining work identified. Finish with a

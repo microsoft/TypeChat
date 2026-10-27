@@ -34,6 +34,8 @@ Copilot PR reviews and broader autonomy are not enabled by this pilot.
 | 2026-10-26 | [Assessment model and reasoning effort](#model-selection) | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC); threat detection keeps its separately configured default effort. |
 | 2026-10-27 | [Compiler action pins](./.github/aw/actions-lock.json) and clearer drift diagnostics | Merged; the post-merge drift check passed on GitHub. |
 | 2026-10-27 | [First live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316) | Successful execution and report upload. All 24 issues and 26 PRs enumerated; selective PR investigation means overall coverage remains partial. |
+| 2026-10-27 | [Clearer report language](#report-language) | Writing guidance and a regression test prepared for review. A live run with the revised guidance is still pending. |
+| 2026-10-27 | [Assessment budget](#inference-budget) | Main assessment increased from 200 to 400 AI credits; detection keeps its separate default. Prepared for review, not yet active on GitHub. |
 | Not yet | Automatic Copilot PR reviews and human approval gates | Live settings need verification and a maintainer-approved rollout. |
 | Not yet | Agent-assisted discussion and explicit issue acceptance | Planned; no issue-discussion or acceptance commands are enabled by this pilot. |
 | Not yet | Human-approved agent implementation | Planned; the assessment does not start implementation or open PRs. |
@@ -82,6 +84,38 @@ the per-run Actions token, so the relevant organization policy must allow it.
 No personal token or bot write credentials are needed for this read-only pilot.
 It has time, turn, and inference-budget limits and no scheduled trigger.
 
+### Report retention
+
+The downloadable **backlog-assessment** report is kept for **seven days** by
+default. The [source workflow](./.github/workflows/backlog-assessment.md) sets
+`retention-days: 7`. In the generated workflow,
+`GH_AW_DEFAULT_ARTIFACT_RETENTION_DAYS` overrides that value when set, subject
+to GitHub Actions retention limits. Other artifacts, such as execution logs and
+usage records, have their own retention settings; they do not extend the report's
+lifetime.
+
+The workflow does not save reports in the repository. Keeping selected reports
+there would be a separate, maintainer-approved step. A preserved report should
+be a dated snapshot with its run link, assessed commit, coverage limits, and
+review status. Review its contents through a normal pull request, rather than
+automatically committing reports or raw execution logs. Preserving a report
+does not approve its recommendations or make its findings current.
+
+### Report language
+
+Reports should be easy to follow even when English is not the reader's first
+language. The revised [writing guidance](./.github/workflows/backlog-assessment.md)
+asks the agent to explain what each issue means for users, acknowledge existing
+contributions, and describe a practical next step in short paragraphs.
+Technical terms should be explained, not removed. Detailed evidence belongs in
+clearly labeled notes rather than wide tables full of compressed phrases.
+
+Clearer language must keep the same facts and limits. Reports still distinguish
+what a contributor says from checks the assessment actually inspected. They
+still identify incomplete coverage and decisions that need maintainer approval.
+The writing change does not alter tools, permissions, model settings, or budgets.
+Those follow-ups remain separate work.
+
 ### First live assessment
 
 [Run 40461739316](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
@@ -92,8 +126,8 @@ This is a useful review inventory, not a complete code review or merge approval.
 
 Reported usage was 188.67 AI credits for the assessment and 7.43 for threat
 detection, approximately 196.10 in total. These are reported usage units, not a
-currency charge. Limits are per component; the main assessment's 200-credit
-limit is not a combined workflow budget.
+currency charge. That run used the earlier 200-credit main-assessment limit.
+Limits are per component, not a combined workflow budget.
 
 Two follow-up checks remain before expanding autonomy:
 
@@ -105,6 +139,20 @@ Two follow-up checks remain before expanding autonomy:
 - **Telemetry quality:** The built-in grader's failure and loop totals conflict
   with the detailed activity records. Reconcile those measurements before using
   them as automated acceptance gates; a grader summary is not code-review evidence.
+
+### Inference budget
+
+**Changed on 2026-10-27:** The main assessment is configured for **400 AI credits**
+per run through `max-ai-credits` in the
+[source workflow](./.github/workflows/backlog-assessment.md), increased from 200.
+The change takes effect after review and merge of the source and generated
+workflow. Its 20-minute and 120-turn limits are unchanged.
+
+Threat detection has a separate **400-credit default**, controlled by
+`GH_AW_DEFAULT_DETECTION_MAX_AI_CREDITS`. That setting is unchanged. The
+400-credit assessment budget is therefore not a cap for the entire workflow:
+the two default component budgets total 800 credits. Actual usage may be lower,
+and other configured guardrails can still prevent a run.
 
 ### Model selection
 
@@ -122,8 +170,9 @@ engine:
 `engine.model` pins the model; `engine.args` passes the native Copilot CLI
 `--reasoning-effort max` option. The generated assessment no longer falls back
 to `GH_AW_MODEL_AGENT_COPILOT`, `GH_AW_DEFAULT_MODEL_COPILOT`, or `auto`.
-The existing time, turn, and inference-budget limits are unchanged; maximum
-effort can use more time and credits within those limits.
+The model and effort settings do not replace the separate time, turn, and
+[credit limits](#inference-budget). Maximum effort can use more time and credits
+within those limits.
 
 The separate threat-detection job inherits `gpt-6.1-sol`, but not the main
 assessment's extra CLI arguments. By design, `max` applies only to the main

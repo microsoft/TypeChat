@@ -76,6 +76,8 @@ with partial PR investigation; maintainer review and follow-up remain required.
 | Assessment model and reasoning effort | 2026-10-26 | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC). |
 | Reproducible workflow compilation | 2026-10-27 | [Verified on GitHub](https://github.com/microsoft/TypeChat/actions/runs/40454115457): no generated-file drift and 17 passing tests. |
 | First live backlog assessment | 2026-10-27 | [Completed successfully](https://github.com/microsoft/TypeChat/actions/runs/40461739316); 24 issues and 26 PRs enumerated. PR investigation is partial; no dispositions are approved. |
+| Clearer report language | 2026-10-27 | [Plain-language writing guidance](./AUTOMATION.md#report-language) prepared for review; the next live run still needs to confirm the new style. |
+| Assessment budget | 2026-10-27 | [Main-assessment budget](./AUTOMATION.md#inference-budget) raised to 400 AI credits; detection is budgeted separately. Review and merge pending. |
 | Automatic Copilot PR reviews and human approval gates | Not yet | Next rollout step; live repository settings still need verification. |
 | GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
