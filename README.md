@@ -59,14 +59,17 @@ proposals progress from discussion to accepted, reviewed changes with less
 manual coordination. Read about the [automation experiment](./AUTOMATION.md)
 and how to participate.
 
-**Status as of 2026-10-26:** The first read-only pilot is implemented and locally
-validated, but its GitHub rollout and first live run are still pending.
+**Status as of 2026-10-27:** The first read-only pilot is under review in
+[#482](https://github.com/microsoft/TypeChat/pull/482). A compilation
+reproducibility fix is validated locally; updated GitHub CI checks, merge,
+and the first live assessment are still pending.
 
 | Milestone | Implemented | Current status |
 | --- | --- | --- |
 | Community-facing automation plan | 2026-10-26 | Documented in [AUTOMATION.md](./AUTOMATION.md). |
-| Manual backlog assessment, Copilot guidance, and workflow checks | 2026-10-26 | Implemented; 16 local tests passed. Awaiting maintainer review, merge, and first GitHub run. |
+| Manual backlog assessment, Copilot guidance, and workflow checks | 2026-10-26 | Implemented; awaiting maintainer review, merge, and first live assessment. |
 | Assessment model and reasoning effort | 2026-10-26 | Pinned to GPT-6.1-sol with `max` effort for the main assessment only. Live model access still needs verification. |
+| Reproducible workflow compilation | 2026-10-27 | Compiler action pins are checked in, with clearer drift diagnostics; 17 local tests passed. Updated GitHub CI verification pending. |
 | Automatic Copilot PR reviews and human approval gates | Not yet | Next rollout step; live repository settings still need verification. |
 | GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |

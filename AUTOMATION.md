@@ -13,9 +13,11 @@ is available today.
 
 ## Status and implementation history
 
-**Last updated: 2026-10-26.** The first pilot is implemented and locally
-validated. Maintainer review, merge to the default branch, confirmation of
-GitHub Copilot access, and the first live assessment are still pending.
+**Last updated: 2026-10-27.** The first pilot is under review in
+[#482](https://github.com/microsoft/TypeChat/pull/482). A compilation
+reproducibility fix is validated locally. Updated GitHub CI checks, maintainer
+review, merge to the default branch, confirmation of GitHub Copilot access,
+and the first live assessment are still pending.
 No live repository settings have been changed as part of this pilot.
 
 | Implemented | Change | Current state |
@@ -23,8 +25,9 @@ No live repository settings have been changed as part of this pilot.
 | 2026-10-26 | Community-facing plan and [README announcement](./README.md#repository-automation-experiment) | Documented. |
 | 2026-10-26 | Shared [Copilot contributor and review guidance](./.github/copilot-instructions.md) | Prepared; instructions do not configure automatic PR reviews. |
 | 2026-10-26 | [Manual backlog assessment](./.github/workflows/backlog-assessment.md) | Implemented; produces a draft report without changing issues or PRs. First GitHub run pending. |
-| 2026-10-26 | [Compilation checks](./.github/workflows/agent-workflow-check.yml) and [contract tests](./tools/tests/backlog-assessment.test.mjs) | Strict compilation and 16 tests passed locally; generated output is reproducible. GitHub CI execution pending. |
+| 2026-10-26 | [Compilation checks](./.github/workflows/agent-workflow-check.yml) and [contract tests](./tools/tests/backlog-assessment.test.mjs) | Strict compilation and 17 tests passed locally. Updated GitHub CI verification pending. |
 | 2026-10-26 | [Assessment model and reasoning effort](#model-selection) | GPT-6.1-sol pinned with `max` effort for the main assessment only; threat detection keeps its default effort. Live model access unverified. |
+| 2026-10-27 | [Compiler action pins](./.github/aw/actions-lock.json) and clearer drift diagnostics | The runtime pin is checked in with the generated workflow, keeping local and CI compilation consistent. |
 | Not yet | Automatic Copilot PR reviews and human approval gates | Live settings need verification and a maintainer-approved rollout. |
 | Not yet | Agent-assisted discussion and explicit issue acceptance | Planned; no issue-discussion or acceptance commands are enabled by this pilot. |
 | Not yet | Human-approved agent implementation | Planned; the assessment does not start implementation or open PRs. |
@@ -108,16 +111,24 @@ its model setting does not configure GitHub Copilot PR reviews.
 ### Validation and rollout
 
 Changes to the workflow are checked by compiling its Markdown source with
-gh-aw **v0.93.5**. Maintainers should regenerate and commit its companion
-`.lock.yml` file rather than edit that generated file directly:
+gh-aw **v0.93.5**. Maintainers should regenerate and commit the
+[compiled workflow](./.github/workflows/backlog-assessment.lock.yml) and
+[compiler action pins](./.github/aw/actions-lock.json) together, rather than
+edit the generated workflow directly:
 
 ```shell
 gh aw compile backlog-assessment --strict --no-check-update --no-logo --action-tag 32ecafbc061c9af57e9361942099e381102ae304
 ```
 
-The action reference above pins the v0.93.5 runtime. The workflow check also runs
-the contract tests in `tools/` (`npm ci` followed by `npm test`), including checks
-that generated reporting jobs cannot write to issues or pull requests.
+The action reference above pins the v0.93.5 runtime. Keep the compiler pin file
+checked in: otherwise successful action resolution can create new pins and
+change generated comments in CI. After committing regenerated files, repeating
+the command should leave `.github/` and `.gitattributes` unchanged, including
+no new untracked files.
+
+The workflow check also runs the contract tests in `tools/` (`npm ci` followed
+by `npm test`), including checks that the runtime pin matches the compilation
+command and that generated reporting jobs cannot write to issues or pull requests.
 
 This first pilot does not enable automatic Copilot PR reviews or change existing
 maintenance and deployment workflows. Configuring those reviews and their human

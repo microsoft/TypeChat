@@ -140,6 +140,27 @@ test("every remote action and reusable workflow is pinned to a full commit", () 
     }
 });
 
+test("the compiler runtime action pin is cached for reproducible compilation", () => {
+    const compile = checks.jobs.compile.steps.find(step => step.name === "Validate and compile the assessment");
+    assert.ok(compile);
+    const actionTag = /--action-tag\s+([a-f0-9]{40})(?:\s|$)/.exec(compile.run);
+    assert.ok(actionTag, "Compilation must select an immutable runtime");
+    const repo = "github/gh-aw/actions/setup";
+    const reference = `${repo}@${actionTag[1]}`;
+    const cache = JSON.parse(fs.readFileSync(new URL("../aw/actions-lock.json", workflowDirectory), "utf8"));
+    const entry = cache.entries[reference];
+    assert.ok(entry, "Commit the compiler runtime pin with the generated workflow");
+    assert.equal(entry.repo, repo);
+    assert.equal(entry.version, actionTag[1]);
+    assert.equal(entry.sha, actionTag[1]);
+
+    const setupSteps = steps.filter(step => step.uses?.startsWith(`${repo}@`));
+    assert.ok(setupSteps.length > 0);
+    for (const step of setupSteps) {
+        assert.equal(step.uses, reference);
+    }
+});
+
 test("generated helper jobs respect the slim runner time limit", () => {
     for (const [name, job] of Object.entries(compiled.jobs)) {
         if (job["runs-on"] === "ubuntu-slim" && typeof job["timeout-minutes"] === "number") {
