@@ -59,17 +59,23 @@ proposals progress from discussion to accepted, reviewed changes with less
 manual coordination. Read about the [automation experiment](./AUTOMATION.md)
 and how to participate.
 
-**Status as of 2026-10-27:** The first read-only pilot is under review in
-[#482](https://github.com/microsoft/TypeChat/pull/482). A compilation
-reproducibility fix is validated locally; updated GitHub CI checks, merge,
-and the first live assessment are still pending.
+**Status as of 2026-10-27 (UTC):** The first read-only pilot is merged in
+[#482](https://github.com/microsoft/TypeChat/pull/482).
+[Post-merge workflow checks](https://github.com/microsoft/TypeChat/actions/runs/40454115457)
+passed, and the
+[manual backlog assessment](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
+is available on `main`. The
+[first live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
+succeeded and verified model access. Its draft covers 24 issues and 26 PRs,
+with partial PR investigation; maintainer review and follow-up remain required.
 
 | Milestone | Implemented | Current status |
 | --- | --- | --- |
 | Community-facing automation plan | 2026-10-26 | Documented in [AUTOMATION.md](./AUTOMATION.md). |
-| Manual backlog assessment, Copilot guidance, and workflow checks | 2026-10-26 | Implemented; awaiting maintainer review, merge, and first live assessment. |
-| Assessment model and reasoning effort | 2026-10-26 | Pinned to GPT-6.1-sol with `max` effort for the main assessment only. Live model access still needs verification. |
-| Reproducible workflow compilation | 2026-10-27 | Compiler action pins are checked in, with clearer drift diagnostics; 17 local tests passed. Updated GitHub CI verification pending. |
+| Manual backlog assessment, Copilot guidance, and workflow checks | 2026-10-26 | Merged via [#482](https://github.com/microsoft/TypeChat/pull/482) on 2026-10-27 (UTC); manual assessment available on `main`. |
+| Assessment model and reasoning effort | 2026-10-26 | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC). |
+| Reproducible workflow compilation | 2026-10-27 | [Verified on GitHub](https://github.com/microsoft/TypeChat/actions/runs/40454115457): no generated-file drift and 17 passing tests. |
+| First live backlog assessment | 2026-10-27 | [Completed successfully](https://github.com/microsoft/TypeChat/actions/runs/40461739316); 24 issues and 26 PRs enumerated. PR investigation is partial; no dispositions are approved. |
 | Automatic Copilot PR reviews and human approval gates | Not yet | Next rollout step; live repository settings still need verification. |
 | GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |

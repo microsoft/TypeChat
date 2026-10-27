@@ -13,21 +13,27 @@ is available today.
 
 ## Status and implementation history
 
-**Last updated: 2026-10-27.** The first pilot is under review in
-[#482](https://github.com/microsoft/TypeChat/pull/482). A compilation
-reproducibility fix is validated locally. Updated GitHub CI checks, maintainer
-review, merge to the default branch, confirmation of GitHub Copilot access,
-and the first live assessment are still pending.
-No live repository settings have been changed as part of this pilot.
+**Last updated: 2026-10-27 (UTC).** The first pilot is merged into `main` through
+[#482](https://github.com/microsoft/TypeChat/pull/482).
+[Post-merge workflow checks](https://github.com/microsoft/TypeChat/actions/runs/40454115457)
+passed, and the
+[Backlog assessment workflow](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
+is available for manual dispatch. The
+[first live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
+completed successfully, verifying live Copilot access and the configured model
+and main-assessment reasoning effort. Its draft enumerates 24 issues and 26 PRs,
+but PR investigation is partial. Human review remains required; automatic
+Copilot PR reviews and broader autonomy are not enabled by this pilot.
 
 | Implemented | Change | Current state |
 | --- | --- | --- |
 | 2026-10-26 | Community-facing plan and [README announcement](./README.md#repository-automation-experiment) | Documented. |
-| 2026-10-26 | Shared [Copilot contributor and review guidance](./.github/copilot-instructions.md) | Prepared; instructions do not configure automatic PR reviews. |
-| 2026-10-26 | [Manual backlog assessment](./.github/workflows/backlog-assessment.md) | Implemented; produces a draft report without changing issues or PRs. First GitHub run pending. |
-| 2026-10-26 | [Compilation checks](./.github/workflows/agent-workflow-check.yml) and [contract tests](./tools/tests/backlog-assessment.test.mjs) | Strict compilation and 17 tests passed locally. Updated GitHub CI verification pending. |
-| 2026-10-26 | [Assessment model and reasoning effort](#model-selection) | GPT-6.1-sol pinned with `max` effort for the main assessment only; threat detection keeps its default effort. Live model access unverified. |
-| 2026-10-27 | [Compiler action pins](./.github/aw/actions-lock.json) and clearer drift diagnostics | The runtime pin is checked in with the generated workflow, keeping local and CI compilation consistent. |
+| 2026-10-26 | Shared [Copilot contributor and review guidance](./.github/copilot-instructions.md) | Merged; instructions do not configure automatic PR reviews. |
+| 2026-10-26 | [Manual backlog assessment](./.github/workflows/backlog-assessment.md) | Available on `main` since 2026-10-27 (UTC), via [#482](https://github.com/microsoft/TypeChat/pull/482). First live report produced; maintainer review required. |
+| 2026-10-26 | [Compilation checks](./.github/workflows/agent-workflow-check.yml) and [contract tests](./tools/tests/backlog-assessment.test.mjs) | Verified in [post-merge CI](https://github.com/microsoft/TypeChat/actions/runs/40454115457) on 2026-10-27 (UTC): strict compilation, no generated-file drift, and 17 passing tests. |
+| 2026-10-26 | [Assessment model and reasoning effort](#model-selection) | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC); threat detection keeps its separately configured default effort. |
+| 2026-10-27 | [Compiler action pins](./.github/aw/actions-lock.json) and clearer drift diagnostics | Merged; the post-merge drift check passed on GitHub. |
+| 2026-10-27 | [First live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316) | Successful execution and report upload. All 24 issues and 26 PRs enumerated; selective PR investigation means overall coverage remains partial. |
 | Not yet | Automatic Copilot PR reviews and human approval gates | Live settings need verification and a maintainer-approved rollout. |
 | Not yet | Agent-assisted discussion and explicit issue acceptance | Planned; no issue-discussion or acceptance commands are enabled by this pilot. |
 | Not yet | Human-approved agent implementation | Planned; the assessment does not start implementation or open PRs. |
@@ -51,9 +57,11 @@ support review, not replace human judgment.
 ## First pilot: a draft backlog assessment
 
 The first pilot is a [manually triggered assessment workflow](./.github/workflows/backlog-assessment.md).
-Once it has been reviewed, merged to the default branch, and its GitHub Copilot
-access enabled, a maintainer can select **Actions > Backlog assessment > Run
-workflow** on the default branch.
+It is now available on the default branch. Once the relevant organization
+Copilot access is enabled, a maintainer can select
+**Actions > Backlog assessment > Run workflow**, using `main`. Every report
+remains a draft until maintainer review; successful execution alone is not
+a complete backlog review or approval to act.
 
 The workflow reads open issues, their discussions, and existing pull requests.
 It proposes next steps and acceptance criteria in a draft report. It does not
@@ -73,6 +81,30 @@ which is in public preview. It requests organization-billed Copilot access using
 the per-run Actions token, so the relevant organization policy must allow it.
 No personal token or bot write credentials are needed for this read-only pilot.
 It has time, turn, and inference-budget limits and no scheduled trigger.
+
+### First live assessment
+
+[Run 40461739316](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
+completed on 2026-10-27 (UTC). The draft contains 24 issue rows and 26 open-PR
+rows. It investigated 11 issue-linked PRs more deeply, but left formal reviews
+and head checks on the other 15 PRs, and inline review threads, for follow-up.
+This is a useful review inventory, not a complete code review or merge approval.
+
+Reported usage was 188.67 AI credits for the assessment and 7.43 for threat
+detection, approximately 196.10 in total. These are reported usage units, not a
+currency charge. Limits are per component; the main assessment's 200-credit
+limit is not a combined workflow budget.
+
+Two follow-up checks remain before expanding autonomy:
+
+- **Tool exposure:** Copilot CLI's `--allow-tool` controls permission approval,
+  not a strict available-tool filter. Additional read-only search tools were
+  used. Preserve the read-only repository guards and explicitly validate the
+  intended available-tool set before adding capabilities. See
+  [Copilot CLI tool controls](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools).
+- **Telemetry quality:** The built-in grader's failure and loop totals conflict
+  with the detailed activity records. Reconcile those measurements before using
+  them as automated acceptance gates; a grader summary is not code-review evidence.
 
 ### Model selection
 
@@ -100,9 +132,10 @@ Its explicit inherited model also replaces its previous model-variable fallback.
 
 To change either setting, edit the Markdown source, regenerate the compiled
 workflow, and update the model contract test and this documentation. The first
-approved GitHub run must still verify that the model is available and permitted
-for the workflow's Copilot access. Local compilation and tests verify the
-configuration, not live inference or model access. See the
+live run verified the pinned model and main-assessment `max` setting on
+2026-10-27 (UTC). Local compilation and tests verify configuration, not continued
+model availability or organization access; recheck live access when changing
+the configuration. See the
 [engine configuration reference](https://github.github.com/gh-aw/reference/engines/#extended-coding-agent-configuration)
 and [Copilot model behavior](https://github.github.com/gh-aw/reference/engines/copilot/#capabilities-and-limitations).
 Editor chat or subagent model preferences do not configure this workflow, and
