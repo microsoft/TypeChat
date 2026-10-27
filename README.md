@@ -78,6 +78,13 @@ maintenance and deployment workflows are unchanged. See the
 
 ## Contributing
 
+**Repository automation experiment:** We are experimenting with a gradual
+transition to a semi-automated repository. The initial agent-assisted workflow
+keeps humans in the loop, while our longer-term goal is to help community
+proposals progress from discussion to accepted, reviewed changes with less
+manual coordination. Read about the [automation experiment](./AUTOMATION.md)
+and how to participate.
+
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
