@@ -76,7 +76,9 @@ test("project direction names its owner and separates consideration from approva
         assert.match(goals, new RegExp(`^## ${heading}$`, "m"));
     }
     assert.ok(goals.includes("@microsoft/typechat"));
-    assert.ok(goals.includes("TypeChat.NET"));
+    const links = [...goals.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)];
+    assert.ok(links.some(([, url]) => url === "https://github.com/microsoft/TypeChat.net"),
+        "Keep a link to the existing TypeChat.NET project");
     assert.ok(goals.replace(/\s+/g, " ").includes("Under consideration is not approval to implement"));
     assert.ok(goals.replace(/\s+/g, " ").includes("Every change to this document requires explicit owner approval"));
 
