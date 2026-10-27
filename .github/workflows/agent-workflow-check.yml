@@ -32,9 +32,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Install pinned workflow compiler
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh extension install github/gh-aw --pin v0.93.5
+        run: |
+          curl --fail --silent --show-error --location \
+            https://raw.githubusercontent.com/github/gh-aw/32ecafbc061c9af57e9361942099e381102ae304/install-gh-aw.sh \
+            --output "$RUNNER_TEMP/install-gh-aw.sh"
+          bash "$RUNNER_TEMP/install-gh-aw.sh" v0.93.5
       - name: Validate and compile the assessment
         env:
           GH_TOKEN: ${{ github.token }}
