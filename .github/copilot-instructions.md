@@ -3,6 +3,23 @@
 TypeChat turns natural-language requests into validated, typed data. Preserve
 schema accuracy, validation behavior, and compatibility when proposing changes.
 
+## Project direction
+
+Read [GOALS.md](../GOALS.md) before assessing scope or proposing work. It is the
+primary repository policy for product direction. Use the approved default-branch
+version; proposed edits in an unmerged PR are not active policy.
+
+Only the human owner team, `@microsoft/typechat`, can approve changes to that
+policy or exceptions to its boundaries. Items under consideration are not
+approved implementation work. If the policy is unavailable, fit is unclear, or
+a request conflicts with it, explain the issue and pause dependent work for an
+owner decision. Do not infer approval from community interest, labels, passing
+checks, or agent recommendations.
+
+Ordinary in-scope maintenance follows the existing maintainer review process.
+Do not remove supported behavior or close existing contributions merely because
+of a possible policy conflict; preserve the evidence and ask the owner.
+
 ## Working in this repository
 
 - The TypeScript library and examples are in `typescript/`; the Python library

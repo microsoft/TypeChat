@@ -50,6 +50,15 @@ To see TypeChat in action, we recommend exploring the [TypeChat example projects
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
 
+## Project direction
+
+[GOALS.md](./GOALS.md) defines what belongs in TypeChat, what does not, and what
+is still under consideration. It is the primary repository policy for product
+scope. Changes require explicit human approval from the `@microsoft/typechat`
+owner team; community interest and AI recommendations do not change it.
+Read it before proposing a new direction. Ordinary in-scope maintenance follows
+the normal contribution process.
+
 ## Repository automation experiment
 
 We are experimenting with a gradual transition to a semi-automated repository.
@@ -78,6 +87,7 @@ with partial PR investigation; maintainer review and follow-up remain required.
 | First live backlog assessment | 2026-10-27 | [Completed successfully](https://github.com/microsoft/TypeChat/actions/runs/40461739316); 24 issues and 26 PRs enumerated. PR investigation is partial; no dispositions are approved. |
 | Clearer report language | 2026-10-27 | [Plain-language writing guidance](./AUTOMATION.md#report-language) prepared for review; the next live run still needs to confirm the new style. |
 | Assessment budget | 2026-10-27 | [Main-assessment budget](./AUTOMATION.md#inference-budget) raised to 400 AI credits; detection is budgeted separately. Review and merge pending. |
+| Owner-controlled project direction | 2026-10-27 | [Goals, non-goals, and items under consideration](./GOALS.md), assessment scope checks, and [CODEOWNERS](./.github/CODEOWNERS) prepared for owner review. GitHub enforcement still needs verification. |
 | Automatic Copilot PR reviews and human approval gates | Not yet | Next rollout step; live repository settings still need verification. |
 | GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
@@ -88,6 +98,10 @@ maintenance and deployment workflows are unchanged. See the
 [workflow model configuration](./AUTOMATION.md#model-selection).
 
 ## Contributing
+
+Start with the [project goals and non-goals](./GOALS.md). Proposals that would
+change these boundaries need an owner-approved policy change before their
+implementation can be accepted.
 
 **Repository automation experiment:** We are experimenting with a gradual
 transition to a semi-automated repository. The initial agent-assisted workflow

@@ -7,6 +7,10 @@ of the project.
 Our goal is to reduce routine coordination and maintenance work so contributors
 and maintainers can focus on useful ideas, design decisions, and quality.
 
+Automation must follow [GOALS.md](./GOALS.md), the primary repository policy for
+product scope. It can help carry out the project's direction, not choose a new
+one. Changes to that policy require explicit human owner approval.
+
 This is an early experiment. The workflow below describes our intended direction;
 capabilities will be introduced incrementally, and not everything described here
 is available today.
@@ -36,6 +40,7 @@ Copilot PR reviews and broader autonomy are not enabled by this pilot.
 | 2026-10-27 | [First live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316) | Successful execution and report upload. All 24 issues and 26 PRs enumerated; selective PR investigation means overall coverage remains partial. |
 | 2026-10-27 | [Clearer report language](#report-language) | Writing guidance and a regression test prepared for review. A live run with the revised guidance is still pending. |
 | 2026-10-27 | [Assessment budget](#inference-budget) | Main assessment increased from 200 to 400 AI credits; detection keeps its separate default. Prepared for review, not yet active on GitHub. |
+| 2026-10-27 | [Owner-controlled project direction](./GOALS.md) | Policy, assessment scope checks, shared guidance, and [CODEOWNERS](./.github/CODEOWNERS) prepared for owner review. GitHub approval enforcement and a live assessment using the policy remain unverified. |
 | Not yet | Automatic Copilot PR reviews and human approval gates | Live settings need verification and a maintainer-approved rollout. |
 | Not yet | Agent-assisted discussion and explicit issue acceptance | Planned; no issue-discussion or acceptance commands are enabled by this pilot. |
 | Not yet | Human-approved agent implementation | Planned; the assessment does not start implementation or open PRs. |
@@ -55,6 +60,35 @@ merging, and releases.
 Agents may investigate problems, summarize discussions, suggest questions, write
 tests, and propose changes. Automated tests and GitHub Copilot code reviews will
 support review, not replace human judgment.
+
+### Protecting project direction
+
+The direction owner is `@microsoft/typechat`. Goals, non-goals, and the
+[items under consideration](./GOALS.md#under-consideration) can change only
+through an owner-approved policy pull request. Under consideration does not mean
+approved for implementation. Ordinary work already within the goals follows
+normal maintainer review.
+
+The assessment reads the policy at its trusted default-branch run commit. Each
+issue and PR receives an **In scope**, **Needs owner decision**, or **Conflicts
+with direction** classification, with a plain-language reason and a policy
+citation. An unreadable policy or uncertain fit is not permission to recommend
+implementation. Proposed policy edits in unmerged PRs do not replace the active
+policy.
+
+[CODEOWNERS](./.github/CODEOWNERS) covers the policy, this automation document,
+any `AGENTS.md` guidance, the `.github/` controls, and repository automation tools
+and tests. These local rules request owner review; they do not enable required
+reviews themselves.
+An administrator must verify the team has the required visibility and write
+access, require pull requests and code-owner approval, prevent stale approvals,
+and restrict bypasses. The
+[enforcement checklist](./GOALS.md#approval-and-enforcement) records these
+requirements. No live settings were changed for this policy work.
+
+The first policy PR needs deliberate human owner review: GitHub uses the
+CODEOWNERS file already on the base branch, not the proposed one. Record
+activation only after the protections have been verified on GitHub.
 
 ## First pilot: a draft backlog assessment
 
@@ -224,8 +258,12 @@ We aim to keep the entire process on GitHub:
    Discussions for questions and exploratory conversations.
 2. **Clarify the proposal.** Contributors, maintainers, and agents help establish
    the intended outcome, scope, non-goals, and testable acceptance criteria.
-3. **Accept the work.** A maintainer approves the agreed scope before
-   implementation begins. Material scope changes return to discussion.
+   Check the proposal against [GOALS.md](./GOALS.md). Unclear fit and items under
+   consideration need an owner decision, not an assumption of acceptance.
+3. **Accept the work.** A maintainer approves agreed, in-scope work before
+   implementation begins. A direction change or exception needs an
+   owner-approved policy change merged first. Material scope changes return
+   to discussion.
 4. **Propose an implementation.** A contributor or agent opens a pull request
    linked to the accepted work, with tests and supporting documentation.
 5. **Review and accept the result.** Automated checks, GitHub Copilot review, and
@@ -255,6 +293,11 @@ less manual coordination.
 The criteria for automatic adoption will be discussed and published before that
 behavior is enabled. Participation, elapsed time, or an agent's recommendation
 alone will not guarantee acceptance.
+
+Any future automatic adoption must remain within the owner-approved goals.
+Changing those goals, making exceptions, or promoting an item under
+consideration into accepted scope will continue to require explicit human
+owner approval, even if routine work becomes more autonomous.
 
 Ambiguous proposals and higher-impact decisions, including significant API
 changes, security-sensitive work, and releases, will continue to involve humans.
