@@ -68,7 +68,7 @@ proposals progress from discussion to accepted, reviewed changes with less
 manual coordination. Read about the [automation experiment](./AUTOMATION.md)
 and how to participate.
 
-**Status as of 2026-10-27 (UTC):** The first read-only pilot is merged in
+**Status as of 2026-10-29 (UTC):** The first read-only pilot is merged in
 [#482](https://github.com/microsoft/TypeChat/pull/482).
 [Post-merge workflow checks](https://github.com/microsoft/TypeChat/actions/runs/40454115457)
 passed, and the
@@ -78,6 +78,12 @@ is available on `main`. The
 succeeded and verified model access. Its draft covers 24 issues and 26 PRs,
 with partial PR investigation; maintainer review and follow-up remain required.
 
+The policy, clearer writing guidance, and 400-credit budget merged through
+[#485](https://github.com/microsoft/TypeChat/pull/485) on 2026-10-27 (UTC).
+The [second run](https://github.com/microsoft/TypeChat/actions/runs/40586341288)
+reached its 120-model-call limit before writing a report. Higher call and timeout
+limits are prepared below; they are not yet activated on GitHub.
+
 | Milestone | Implemented | Current status |
 | --- | --- | --- |
 | Community-facing automation plan | 2026-10-26 | Documented in [AUTOMATION.md](./AUTOMATION.md). |
@@ -85,9 +91,11 @@ with partial PR investigation; maintainer review and follow-up remain required.
 | Assessment model and reasoning effort | 2026-10-26 | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC). |
 | Reproducible workflow compilation | 2026-10-27 | [Verified on GitHub](https://github.com/microsoft/TypeChat/actions/runs/40454115457): no generated-file drift and 17 passing tests. |
 | First live backlog assessment | 2026-10-27 | [Completed successfully](https://github.com/microsoft/TypeChat/actions/runs/40461739316); 24 issues and 26 PRs enumerated. PR investigation is partial; no dispositions are approved. |
-| Clearer report language | 2026-10-27 | [Plain-language writing guidance](./AUTOMATION.md#report-language) prepared for review; the next live run still needs to confirm the new style. |
-| Assessment budget | 2026-10-27 | [Main-assessment budget](./AUTOMATION.md#inference-budget) raised to 400 AI credits; detection is budgeted separately. Review and merge pending. |
-| Owner-controlled project direction | 2026-10-27 | [Goals, non-goals, and items under consideration](./GOALS.md), assessment scope checks, and [CODEOWNERS](./.github/CODEOWNERS) prepared for owner review. GitHub enforcement still needs verification. |
+| Clearer report language | 2026-10-27 | [Writing guidance](./AUTOMATION.md#report-language) merged via [#485](https://github.com/microsoft/TypeChat/pull/485) and loaded in the second run. No report was produced to evaluate the prose. |
+| Assessment budget | 2026-10-27 | [Main-assessment budget](./AUTOMATION.md#inference-budget) raised to 400 AI credits via [#485](https://github.com/microsoft/TypeChat/pull/485) and confirmed in the second run. Detection remains separately budgeted. |
+| Owner-controlled project direction | 2026-10-27 | [Policy](./GOALS.md), assessment guidance, and [CODEOWNERS](./.github/CODEOWNERS) merged via [#485](https://github.com/microsoft/TypeChat/pull/485). The policy was read at the trusted run commit; report classifications and GitHub enforcement remain unverified. |
+| Call and execution-time limits | 2026-10-29 | [Raised to 1,000 calls and 60 minutes of agent execution](./AUTOMATION.md#execution-limits), within a 100-minute job for setup and post-processing. Credit budgets unchanged. Prepared for review; activation pending. |
+| Owner-approved budget overrides | Not yet | [Future work](./AUTOMATION.md#owner-approved-budget-overrides-planned); no override input or approval mechanism is enabled. |
 | Automatic Copilot PR reviews and human approval gates | Not yet | Next rollout step; live repository settings still need verification. |
 | GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
