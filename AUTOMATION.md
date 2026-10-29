@@ -17,7 +17,7 @@ is available today.
 
 ## Status and implementation history
 
-**Last updated: 2026-10-27 (UTC).** The first pilot is merged into `main` through
+**Last updated: 2026-10-29 (UTC).** The first pilot is merged into `main` through
 [#482](https://github.com/microsoft/TypeChat/pull/482).
 [Post-merge workflow checks](https://github.com/microsoft/TypeChat/actions/runs/40454115457)
 passed, and the
@@ -29,6 +29,13 @@ and main-assessment reasoning effort. Its draft enumerates 24 issues and 26 PRs,
 but PR investigation is partial. Human review remains required; automatic
 Copilot PR reviews and broader autonomy are not enabled by this pilot.
 
+The policy, report-language, and 400-credit changes merged through
+[#485](https://github.com/microsoft/TypeChat/pull/485) on 2026-10-27 (UTC).
+The [second assessment](https://github.com/microsoft/TypeChat/actions/runs/40586341288)
+loaded those changes but reached the separate 120-model-call limit before
+writing a report. Higher call and execution-time limits are now prepared for
+review; their activation and a successful report under those limits are pending.
+
 | Implemented | Change | Current state |
 | --- | --- | --- |
 | 2026-10-26 | Community-facing plan and [README announcement](./README.md#repository-automation-experiment) | Documented. |
@@ -38,9 +45,12 @@ Copilot PR reviews and broader autonomy are not enabled by this pilot.
 | 2026-10-26 | [Assessment model and reasoning effort](#model-selection) | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC); threat detection keeps its separately configured default effort. |
 | 2026-10-27 | [Compiler action pins](./.github/aw/actions-lock.json) and clearer drift diagnostics | Merged; the post-merge drift check passed on GitHub. |
 | 2026-10-27 | [First live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316) | Successful execution and report upload. All 24 issues and 26 PRs enumerated; selective PR investigation means overall coverage remains partial. |
-| 2026-10-27 | [Clearer report language](#report-language) | Writing guidance and a regression test prepared for review. A live run with the revised guidance is still pending. |
-| 2026-10-27 | [Assessment budget](#inference-budget) | Main assessment increased from 200 to 400 AI credits; detection keeps its separate default. Prepared for review, not yet active on GitHub. |
-| 2026-10-27 | [Owner-controlled project direction](./GOALS.md) | Policy, assessment scope checks, shared guidance, and [CODEOWNERS](./.github/CODEOWNERS) prepared for owner review. GitHub approval enforcement and a live assessment using the policy remain unverified. |
+| 2026-10-27 | [Clearer report language](#report-language) | Merged via [#485](https://github.com/microsoft/TypeChat/pull/485). Guidance loaded in the second run, but no report was produced to evaluate the prose. |
+| 2026-10-27 | [Assessment budget](#inference-budget) | Main assessment increased from 200 to 400 AI credits via [#485](https://github.com/microsoft/TypeChat/pull/485); the second run confirmed the setting. Detection keeps its separate default. |
+| 2026-10-27 | [Owner-controlled project direction](./GOALS.md) | Merged via [#485](https://github.com/microsoft/TypeChat/pull/485). The second run read the policy at its trusted commit; report classifications and GitHub approval enforcement remain unverified. |
+| 2026-10-27 | [Second live assessment](#second-live-assessment) | Stopped at 120 model calls with 146.09 of 400 main-assessment credits used. Report validation and upload were skipped; no backlog report was produced. |
+| 2026-10-29 | [Call and execution-time limits](#execution-limits) | Raised to 1,000 model calls and 60 minutes of agent execution, within a 100-minute job. Credit budgets unchanged. Prepared for review, not yet activated on GitHub. |
+| Not yet | [Owner-approved budget overrides](#owner-approved-budget-overrides-planned) | Future work only; no budget-override input or approval mechanism is enabled. |
 | Not yet | Automatic Copilot PR reviews and human approval gates | Live settings need verification and a maintainer-approved rollout. |
 | Not yet | Agent-assisted discussion and explicit issue acceptance | Planned; no issue-discussion or acceptance commands are enabled by this pilot. |
 | Not yet | Human-approved agent implementation | Planned; the assessment does not start implementation or open PRs. |
@@ -179,14 +189,70 @@ Two follow-up checks remain before expanding autonomy:
 **Changed on 2026-10-27:** The main assessment is configured for **400 AI credits**
 per run through `max-ai-credits` in the
 [source workflow](./.github/workflows/backlog-assessment.md), increased from 200.
-The change takes effect after review and merge of the source and generated
-workflow. Its 20-minute and 120-turn limits are unchanged.
+This merged through [#485](https://github.com/microsoft/TypeChat/pull/485), and
+the second live run confirmed the setting. The call and timeout changes below
+do not increase this budget.
 
 Threat detection has a separate **400-credit default**, controlled by
 `GH_AW_DEFAULT_DETECTION_MAX_AI_CREDITS`. That setting is unchanged. The
 400-credit assessment budget is therefore not a cap for the entire workflow:
 the two default component budgets total 800 credits. Actual usage may be lower,
 and other configured guardrails can still prevent a run.
+
+### Second live assessment
+
+[Run 40586341288](https://github.com/microsoft/TypeChat/actions/runs/40586341288)
+ran on 2026-10-27 (UTC), using the merged policy and writing guidance. It stopped
+after 120 successful model calls while still researching issues and PRs.
+The call limit, not the credit budget or timeout, ended the assessment.
+The agent had not written a report, so report validation and upload were skipped.
+
+Reported usage was 146.09 AI credits for the main assessment and 8.58 for threat
+detection, approximately 154.67 in total. The run confirmed GPT-6.1-sol with
+maximum reasoning effort, the 400-credit main budget, and a successful policy
+read at the trusted run commit. Without a report, it did not validate the new
+prose or direction classifications.
+
+### Execution limits
+
+**Changed on 2026-10-29:** The main assessment is configured for **1,000 model
+calls** and a **60-minute execution timeout**, increased from 120 and 20 minutes.
+These changes are prepared for review and take effect after the source and
+generated workflow are merged:
+
+```yaml
+timeout-minutes: 60
+max-turns: 1000
+max-ai-credits: 400
+jobs:
+  agent:
+    timeout-minutes: 100
+```
+
+`max-turns` limits model requests, not GitHub API tool calls or report entries.
+The 60-minute timeout applies to the main agent's execution. The enclosing job
+has a 100-minute timeout, preserving the previous 40-minute allowance for setup,
+report upload, and post-processing. This prevents setup from consuming the
+agent's execution allowance. Detection and other jobs can add time to the
+overall workflow; their limits and both credit budgets are unchanged.
+
+These are ceilings, not a guarantee of completion or a measured coverage rate.
+A run can still reach its credit budget or produce only a partial assessment.
+Saving drafts incrementally remains a separate reliability follow-up.
+
+### Owner-approved budget overrides (planned)
+
+Future work: support a temporary main-assessment budget override for a specific
+run after explicit approval from a human member of `@microsoft/typechat`.
+Record the approved amount, reason, and intended run, and enforce approval before
+inference starts. The run should record the approved allowance alongside actual
+usage, without changing the default budget for later runs.
+
+An agent must not approve its own increase. Approval must not bypass organization
+billing limits, other guardrails, or the project's scope policy. **This is a
+planned capability only:** no budget-override input or approval mechanism is
+enabled by this change. Until implemented, budget changes require an
+owner-reviewed change to the workflow source and generated workflow.
 
 ### Model selection
 

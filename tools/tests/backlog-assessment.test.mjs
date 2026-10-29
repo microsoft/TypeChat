@@ -269,6 +269,9 @@ test("generated helper jobs respect the slim runner time limit", () => {
 
 test("the assessment has a 400-credit budget separate from detection", () => {
     assert.equal(source["max-ai-credits"], 400);
+    assert.equal(source.on.workflow_dispatch?.inputs, undefined);
+    assert.deepEqual(Object.keys(compiled.on.workflow_dispatch.inputs), ["aw_context"],
+        "Only the compiler's reserved context input is enabled; budget overrides remain future work");
     const info = compiled.jobs.activation.steps.find(step => step.name === "Generate agentic run info");
     assert.ok(info);
     assert.equal(info.env.GH_AW_INFO_MAX_AI_CREDITS, "400");
@@ -288,9 +291,26 @@ test("the assessment has a 400-credit budget separate from detection", () => {
     }
 });
 
+test("the assessment runtime allows 1000 model calls and 60 minutes", () => {
+    assert.equal(source["timeout-minutes"], 60);
+    assert.equal(source["max-turns"], 1000);
+    assert.deepEqual(source.jobs, { agent: { "timeout-minutes": 100 } });
+    const agent = compiled.jobs.agent.steps.find(step => step.name === "Execute GitHub Copilot CLI");
+    assert.ok(agent);
+    assert.equal(agent["timeout-minutes"], 60);
+    assert.equal(agent.env.GH_AW_TIMEOUT_MINUTES, 60);
+    assert.equal(agent.env.GH_AW_MAX_TURNS, 1000);
+    assert.equal(compiled.jobs.agent["timeout-minutes"], 100,
+        "Keep the existing 40-minute allowance for setup and post-processing");
+    const maxRuns = /\\"maxRuns\\":(\d+)(?=,|\})/.exec(agent.run);
+    assert.ok(maxRuns, "The API proxy must enforce the model-call limit");
+    assert.equal(Number(maxRuns[1]), 1000);
+    const agentTimeout = /\\"agentTimeout\\":(\d+)(?=,|\})/.exec(agent.run);
+    assert.ok(agentTimeout, "The firewall runtime must use the agent-execution timeout");
+    assert.equal(Number(agentTimeout[1]), 60);
+});
+
 test("the run and its report have explicit bounds and no missing-file success", () => {
-    assert.equal(source["timeout-minutes"], 20);
-    assert.equal(source["max-turns"], 120);
     assert.deepEqual(source.concurrency, { group: "backlog-assessment", "cancel-in-progress": false });
     const verify = compiled.jobs.agent.steps.find(step => step.name === "Verify draft report");
     const upload = compiled.jobs.agent.steps.find(step => step.name === "Upload draft report");

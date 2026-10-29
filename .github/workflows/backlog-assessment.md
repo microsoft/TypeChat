@@ -21,9 +21,13 @@ engine:
   args: ["--reasoning-effort", "max"]
 checkout: false
 network: defaults
-timeout-minutes: 20
-max-turns: 120
+timeout-minutes: 60
+max-turns: 1000
 max-ai-credits: 400
+jobs:
+  agent:
+    # Keep 40 minutes for setup and post-processing outside the agent timeout.
+    timeout-minutes: 100
 concurrency:
   group: backlog-assessment
   cancel-in-progress: false
