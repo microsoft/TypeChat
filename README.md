@@ -54,8 +54,8 @@ To learn more about TypeChat, visit the [documentation](https://microsoft.github
 
 [GOALS.md](./GOALS.md) defines what belongs in TypeChat, what does not, and what
 is still under consideration. It is the primary repository policy for product
-scope. Changes require explicit human approval from the `@microsoft/typechat`
-owner team; community interest and AI recommendations do not change it.
+scope. Changes require explicit approval from the human project owner,
+`@robgruen`; community interest and AI recommendations do not change it.
 Read it before proposing a new direction. Ordinary in-scope maintenance follows
 the normal contribution process.
 
@@ -96,8 +96,11 @@ GitHub Copilot code review, or merge approval.
 | Successful policy-aware assessment | 2026-10-29 | [Run details](./AUTOMATION.md#successful-policy-aware-assessment): 21 issues and 25 open PRs inventoried, with partial verification and human review still required. |
 | Human follow-through | 2026-10-29 | Maintainers subsequently merged [#433](https://github.com/microsoft/TypeChat/pull/433) and [#437](https://github.com/microsoft/TypeChat/pull/437). These were human decisions, not automated acceptance. |
 | Selected report archive | 2026-10-30 | The [October 29 draft](./reports/backlog-assessments/2026-10-29-40962028077.md) is preserved unchanged with [provenance and review limits](./AUTOMATION.md#archived-snapshot), for normal PR review. No automatic archiving is enabled. |
+| Named project owner | 2026-10-30 | [Policy](./GOALS.md) and [CODEOWNERS](./.github/CODEOWNERS) name `@robgruen`. Prepared for review; the change takes effect after merge. Existing branch-review protections are unchanged. |
+| Tool boundaries and run diagnostics | 2026-10-30 | [Restricted model tools and native-only metrics](./AUTOMATION.md#tool-boundaries-and-trustworthy-diagnostics) prepared for review. Offline replay corrects the misleading tool totals; live activation remains pending. CI access restrictions are not bypassed. |
 | Owner-approved budget overrides | Not yet | [Future work](./AUTOMATION.md#owner-approved-budget-overrides-planned); no override input or approval mechanism is enabled. |
-| Automatic Copilot PR reviews and full owner-gate verification | Not yet | Separate rollout work. Human review remains required; the complete repository configuration still needs verification. |
+| Automatic Copilot PR reviews | 2026-10-30 | [Active review rule](https://github.com/microsoft/TypeChat/rules/26174313) for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Configuration verified; observation on an eligible PR remains a follow-up. |
+| Stricter human-review enforcement | Not enabled | Existing branch-review protections are retained at the owner's request. Copilot reviews do not replace human approval. |
 | GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
 

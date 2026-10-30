@@ -29,9 +29,9 @@ inventories 21 open issues and 25 open PRs at the assessment time.
 The inventory is complete, but verification remains partial. The agent inspected
 PR patches, reviews, and check records; it did not run tests or inspect job logs,
 and two CI definitions were inaccessible. The report's direction classifications
-and next steps remain advisory. Human review is still required; automatic
-Copilot PR reviews, issue acceptance, and broader autonomy are not enabled by
-this pilot.
+and next steps remain advisory. Human review is still required. Copilot PR
+reviews are now enabled through a separate repository rule; issue acceptance
+and broader autonomy are not enabled by this pilot.
 
 | Implemented | Change | Current state |
 | --- | --- | --- |
@@ -50,8 +50,11 @@ this pilot.
 | 2026-10-29 | [Successful policy-aware assessment](#successful-policy-aware-assessment) | All six jobs succeeded, including report validation and upload. Complete open-item inventory, with partial verification and human review still required. |
 | 2026-10-29 | Human follow-through | Maintainers subsequently merged [#433](https://github.com/microsoft/TypeChat/pull/433) and [#437](https://github.com/microsoft/TypeChat/pull/437). The archive preserves their earlier assessment-time status. |
 | 2026-10-30 | [Selected report archive](#archived-snapshot) | The October 29 draft is preserved unchanged with provenance and review limits, for normal PR review. No automatic archiving is enabled. |
+| 2026-10-30 | Named project owner | [Policy](./GOALS.md), shared guidance, and [CODEOWNERS](./.github/CODEOWNERS) name `@robgruen`. Prepared for review; active only after merge. Existing branch-review protections are unchanged. |
+| 2026-10-30 | [Model-visible tools and native diagnostics](#tool-boundaries-and-trustworthy-diagnostics) | Restricted tool choices and native-only metrics prepared for review. Offline replay and regression tests verify the correction; activation and a live run with these changes remain pending. |
 | Not yet | [Owner-approved budget overrides](#owner-approved-budget-overrides-planned) | Future work only; no budget-override input or approval mechanism is enabled. |
-| Not yet | Automatic Copilot PR reviews and full owner-gate verification | Human review remains required. Complete settings verification and review automation remain separate, maintainer-approved work. |
+| 2026-10-30 | [Automatic Copilot PR reviews](#github-copilot-pr-reviews) | Active for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Saved and effective rule configuration verified. Observation on an eligible PR remains a follow-up. |
+| Not enabled | Stricter human-review enforcement | Existing branch-review protections are retained at the owner's request. The written owner-approval requirement still applies. |
 | Not yet | Agent-assisted discussion and explicit issue acceptance | Planned; no issue-discussion or acceptance commands are enabled by this pilot. |
 | Not yet | Human-approved agent implementation | Planned; the assessment does not start implementation or open PRs. |
 | Not yet | Selective automatic adoption | Future work, after public criteria and maintainer approval. |
@@ -71,9 +74,27 @@ Agents may investigate problems, summarize discussions, suggest questions, write
 tests, and propose changes. Automated tests and GitHub Copilot code reviews will
 support review, not replace human judgment.
 
+### GitHub Copilot PR reviews
+
+**Enabled on 2026-10-30 (UTC).** The
+[Automatic Copilot review on main](https://github.com/microsoft/TypeChat/rules/26174313)
+rule requests reviews for ready pull requests targeting `main` and for
+subsequent pushes to those PRs. This rule skips draft PRs; personal settings or
+manual requests can still initiate additional reviews independently.
+
+The saved rule and its application to `main` were verified through GitHub's API.
+An actual review under the new rule will be checked on an eligible PR. The rule
+does not accept issues, start implementation, merge changes, or satisfy a
+required human approval. Existing branch-review protections and team visibility
+were left unchanged at the owner's request.
+
+Copilot code-review usage is separate from the assessment's 400-credit budget.
+Its model and review effort follow GitHub Copilot code-review settings, not the
+backlog workflow's model or `--reasoning-effort` argument.
+
 ### Protecting project direction
 
-The direction owner is `@microsoft/typechat`. Goals, non-goals, and the
+The direction owner is `@robgruen`. Goals, non-goals, and the
 [items under consideration](./GOALS.md#under-consideration) can change only
 through an owner-approved policy pull request. Under consideration does not mean
 approved for implementation. Ordinary work already within the goals follows
@@ -88,17 +109,17 @@ policy.
 
 [CODEOWNERS](./.github/CODEOWNERS) covers the policy, this automation document,
 any `AGENTS.md` guidance, the `.github/` controls, and repository automation tools
-and tests. These local rules request owner review; they do not enable required
-reviews themselves.
-An administrator must verify the team has the required visibility and write
-access, require pull requests and code-owner approval, prevent stale approvals,
-and restrict bypasses. The
-[enforcement checklist](./GOALS.md#approval-and-enforcement) records these
-requirements. No live settings were changed for this policy work.
+and tests. These rules request review from the named owner; they do not enable
+required reviews themselves. The owner chose to keep existing branch-review
+protections unchanged. The
+[enforcement checklist](./GOALS.md#approval-and-enforcement) describes the
+separate decisions needed for stricter GitHub enforcement. The written owner
+policy must not be described as automatic approval enforcement.
 
-The first policy PR needs deliberate human owner review: GitHub uses the
-CODEOWNERS file already on the base branch, not the proposed one. Record
-activation only after the protections have been verified on GitHub.
+An ownership change needs deliberate human owner approval: GitHub uses the
+CODEOWNERS file already on the base branch, not the proposed one. Archived
+reports retain the ownership policy used at their assessment commit. Record
+activation only after the relevant changes have been merged and verified.
 
 ## First pilot: a draft backlog assessment
 
@@ -179,16 +200,70 @@ detection, approximately 196.10 in total. These are reported usage units, not a
 currency charge. That run used the earlier 200-credit main-assessment limit.
 Limits are per component, not a combined workflow budget.
 
-Two follow-up checks remain before expanding autonomy:
+The run also revealed that permission approvals did not restrict the model's
+tool inventory, and that built-in failure and repetition totals disagreed with
+native tool records. The control changes below address those observations.
+Historical artifacts are retained as originally produced, not rewritten.
 
-- **Tool exposure:** Copilot CLI's `--allow-tool` controls permission approval,
-  not a strict available-tool filter. Additional read-only search tools were
-  used. Preserve the read-only repository guards and explicitly validate the
-  intended available-tool set before adding capabilities. See
-  [Copilot CLI tool controls](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools).
-- **Telemetry quality:** The built-in grader's failure and loop totals conflict
-  with the detailed activity records. Reconcile those measurements before using
-  them as automated acceptance gates; a grader summary is not code-review evidence.
+### Tool boundaries and trustworthy diagnostics
+
+**Prepared on 2026-10-30 (UTC); active after merge.** The
+[source workflow](./.github/workflows/backlog-assessment.md) now sets an explicit
+Copilot CLI `--available-tools` filter as well as permission approvals. These
+are separate controls: permission approval alone does not hide tools from the
+model. See [Copilot CLI tool controls](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools).
+
+The model's choices are limited to nine repository-scoped GitHub readers, four
+local report tools (`apply_patch`, `glob`, `rg`, and `view`), and three reporting
+signals. The issue and PR search tools used in the successful assessment are
+explicitly included. Shell commands, web browsing, unrelated GitHub readers,
+and subagent tools are not in that model-visible set. The existing read-only
+token permissions, repository restriction, and secrecy guards are unchanged.
+Internal gateway metadata calls may still appear in transport logs; they are
+not additional model-selected actions.
+
+The pinned CLI accepts the exact 16-tool argument, and contract tests check its
+presence in the generated agent command without applying it to threat detection.
+These are offline checks. The next approved live run must confirm useful
+assessment behavior with the restricted choices.
+
+For metrics, the pinned runtime counted transport records as extra failed tool
+calls. Its shared lookup helper did not respect a filtered-session argument, and
+an offline replay with version 1.0.1 also retained the incorrect failure count.
+The runtime therefore remains pinned to 0.93.5 rather than being upgraded on
+the assumption that this would fix the numbers.
+
+Four affected built-ins are explicitly disabled: `tool-success-rate`,
+`tool-failure-count`, `loops`, and `trajectory-efficiency`. Three replacement
+diagnostics share a small implementation that reads only main-agent native
+events and scopes call IDs to their original sessions:
+
+| Recorded run 40962028077 | Original built-in result | Native-only replay |
+| --- | --- | --- |
+| Failed or unfinished tool calls | 421 | 5 |
+| Successful tool calls | 37.81% | 98.08% (256 of 261) |
+| Consecutive identical requests | 358 | 0 |
+
+Real failures and unfinished calls are not discarded. The five recorded failures
+were three denied shell attempts and two denied file reads. When evidence needed
+for a metric is missing, unknown, or duplicated, that metric is explicitly
+unavailable rather than guessed. Repetition compares actual names and arguments
+within each session; repeating a request can be legitimate and is not by itself
+proof of a loop.
+
+These diagnostics do not approve work or replace test evidence. Custom graders
+use the runtime's experimental feature, which produces an expected compiler
+warning. They run without model inference in a separate, read-only job after a
+successful conclusion. If conclusion fails, that job is skipped; missing
+results must not be interpreted as zero failures. The dedicated report
+validation and upload steps, not a general-purpose artifact score, establish
+whether a draft was delivered.
+
+**CI evidence remains restricted.** The gateway classified the two CI-definition
+reads in the recorded run as private-scoped data and denied them. This change
+does not weaken that policy, widen credentials, or use another path to retrieve
+the files. An authorized policy review or human-verified CI evidence is still
+needed; assessments must keep the resulting coverage gap visible.
 
 ### Inference budget
 
@@ -308,7 +383,7 @@ Saving drafts incrementally remains a separate reliability follow-up.
 ### Owner-approved budget overrides (planned)
 
 Future work: support a temporary main-assessment budget override for a specific
-run after explicit approval from a human member of `@microsoft/typechat`.
+run after explicit approval from the human project owner, `@robgruen`.
 Record the approved amount, reason, and intended run, and enforce approval before
 inference starts. The run should record the approved allowance alongside actual
 usage, without changing the default budget for later runs.
@@ -323,17 +398,13 @@ owner-reviewed change to the workflow source and generated workflow.
 
 **Pinned on 2026-10-26:** The main assessment uses `gpt-6.1-sol` with `max`
 reasoning effort. The setting is in the
-[workflow's Markdown frontmatter](./.github/workflows/backlog-assessment.md):
-
-```yaml
-engine:
-  id: copilot
-  model: gpt-6.1-sol
-  args: ["--reasoning-effort", "max"]
-```
+[workflow's Markdown frontmatter](./.github/workflows/backlog-assessment.md).
 
 `engine.model` pins the model; `engine.args` passes the native Copilot CLI
-`--reasoning-effort max` option. The generated assessment no longer falls back
+`--reasoning-effort max` option and the model-visible tool filter. Preserve the
+complete `--available-tools` argument when changing the model or reasoning
+effort; the checked-in source is the authoritative configuration.
+The generated assessment no longer falls back
 to `GH_AW_MODEL_AGENT_COPILOT`, `GH_AW_DEFAULT_MODEL_COPILOT`, or `auto`.
 The model and effort settings do not replace the separate time, turn, and
 [credit limits](#inference-budget). Maximum effort can use more time and credits
@@ -377,9 +448,10 @@ The workflow check also runs the contract tests in `tools/` (`npm ci` followed
 by `npm test`), including checks that the runtime pin matches the compilation
 command and that generated reporting jobs cannot write to issues or pull requests.
 
-This first pilot does not enable automatic Copilot PR reviews or change existing
-maintenance and deployment workflows. Configuring those reviews and their human
-approval gates remains a separate, maintainer-approved rollout step.
+The assessment itself remains report-only and does not change existing
+maintenance and deployment workflows. The separate
+[Copilot review rule](#github-copilot-pr-reviews) is enabled. Changes to stricter
+human-review enforcement remain a separate owner decision.
 
 ## From discussion to a reviewed change
 
