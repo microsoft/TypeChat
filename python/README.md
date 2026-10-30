@@ -75,8 +75,9 @@ treated as documentation. For multiline field declarations, put the comment on t
 `# type: ignore` directives, including those with bracketed error codes, are not treated
 as field documentation.
 
-Source inspection is read-only. If source is unavailable, such as for dynamically created
-types or deployments without source files, conversion continues using the type annotations
+Source inspection is read-only and supports nested class definitions with multiline strings.
+If source is unavailable, such as for dynamically created types or deployments without source files,
+conversion continues using the type annotations
 and explicit documentation without inline comments. If available source cannot be parsed,
 the problem is reported in `TypeScriptSchemaConversionResult.errors` rather than silently
 discarding the comments.

@@ -7,7 +7,6 @@ import inspect
 import io
 import re
 import sys
-import textwrap
 import tokenize
 import typing
 import typing_extensions
@@ -175,9 +174,16 @@ def _extract_inline_field_comments(py_type: type) -> dict[str, str]:
     except (OSError, TypeError):
         return {}
 
-    source = textwrap.dedent("".join(source_lines))
-    tree = ast.parse(source)
-    if len(tree.body) != 1 or not isinstance(tree.body[0], ast.ClassDef):
+    source = "".join(source_lines)
+    try:
+        statements = ast.parse(source).body
+    except IndentationError:
+        # An outer suite accepts nested source without changing multiline string contents.
+        source = "if True:\n" + source
+        statements = ast.parse(source).body
+        if len(statements) == 1 and isinstance(statements[0], ast.If):
+            statements = statements[0].body
+    if len(statements) != 1 or not isinstance(statements[0], ast.ClassDef):
         raise ValueError("Source does not contain a single class definition.")
 
     comments_by_line = {
@@ -187,7 +193,7 @@ def _extract_inline_field_comments(py_type: type) -> dict[str, str]:
     }
     lines = source.split("\n")
     comments: dict[str, str] = {}
-    for stmt in tree.body[0].body:
+    for stmt in statements[0].body:
         if (
             isinstance(stmt, ast.AnnAssign)
             and isinstance(stmt.target, ast.Name)

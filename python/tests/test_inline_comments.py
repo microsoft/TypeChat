@@ -158,6 +158,70 @@ def test_nested_classes_can_be_translated_independently():
     """)
 
 
+def test_nested_dataclass_multiline_default_without_comments():
+    @dataclass
+    class NestedDefault:
+        value: str = """first line
+column-zero line
+"""
+
+    assert_schema(NestedDefault, """
+        interface NestedDefault {
+            value?: string;
+        }
+    """)
+
+
+def test_nested_dataclass_multiline_default_preserves_comment_coordinates():
+    @dataclass
+    class NestedDefault:
+        value: str = """first line
+# part of the string, not documentation
+"""  # value documentation
+        count: int = 1  # count documentation
+
+    assert_schema(NestedDefault, """
+        interface NestedDefault {
+            // value documentation
+            value?: string;
+            // count documentation
+            count?: number;
+        }
+    """)
+
+
+def test_nested_typeddict_multiline_literal_preserves_comment_coordinates():
+    class NestedLiteral(TypedDict):
+        value: Literal["""first line
+# part of the literal
+last line"""]  # literal documentation
+
+    assert_schema(NestedLiteral, """
+        interface NestedLiteral {
+            // literal documentation
+            value: "first line\\n# part of the literal\\nlast line";
+        }
+    """)
+
+
+def test_nested_class_multiline_docstring_preserves_documentation():
+    @dataclass
+    class NestedDocstring:
+        """Class documentation.
+Column-zero documentation.
+"""
+        value: int  # value documentation
+
+    assert_schema(NestedDocstring, """
+        // Class documentation.
+        // Column-zero documentation.
+        interface NestedDocstring {
+            // value documentation
+            value: number;
+        }
+    """)
+
+
 @pytest.mark.parametrize("error_type", [OSError, TypeError])
 def test_unavailable_source_preserves_types_and_explicit_documentation(
     monkeypatch: pytest.MonkeyPatch,
@@ -199,6 +263,7 @@ def test_unexpected_source_lookup_failures_are_not_silenced(monkeypatch: pytest.
 @pytest.mark.parametrize("source", [
     "class Point(TypedDict):\n    x: Literal[\n",
     "value = 1\n",
+    "    class Point(TypedDict):\n        x: int\nvalue = 1\n",
 ])
 def test_invalid_source_is_reported_as_a_conversion_error(monkeypatch: pytest.MonkeyPatch, source: str):
     def get_source(_obj: object) -> tuple[list[str], int]:
