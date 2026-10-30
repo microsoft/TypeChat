@@ -1,4 +1,3 @@
-import assert from "assert";
 import dotenv from "dotenv";
 import findConfig from "find-config";
 import fs from "fs";
@@ -9,7 +8,13 @@ import { HealthDataResponse } from "./healthDataSchema";
 import { createHealthDataTranslator } from "./translator";
 
 const dotEnvPath = findConfig(".env");
-assert(dotEnvPath, ".env file not found!");
+if (!dotEnvPath) {
+    console.error(
+        "Error: .env file not found.\n" +
+        "Copy .env.example to .env in the repository root and configure your OpenAI or Azure OpenAI credentials."
+    );
+    process.exit(1);
+}
 dotenv.config({ path: dotEnvPath });
 
 const healthInstructions = `

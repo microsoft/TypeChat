@@ -24,7 +24,7 @@ We recommend reading each example in the following order.
 
 You can experiment with these TypeChat examples on your local machine with just Node.js.
 
-Ensure [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en) or newer is installed.
+Ensure [Node.js 24.22.1 or newer](https://nodejs.org/en/download) is installed.
 
 ```
 git clone https://github.com/microsoft/TypeChat
@@ -80,7 +80,7 @@ To use an Azure OpenAI endpoint, include the following environment variables:
 | `AZURE_OPENAI_ENDPOINT` | The full URL of the Azure OpenAI REST API (e.g. `https://YOUR_RESOURCE_NAME.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT_NAME/chat/completions?api-version=2023-05-15`) |
 | `AZURE_OPENAI_API_KEY` | Your Azure OpenAI API key |
 
-We recommend setting environment variables by creating a `.env` file in the root directory of the project that looks like the following:
+Copy [`.env.example`](../../.env.example) to `.env` in the repository root, then fill in the values for the endpoint you want to use:
 
 ```ini
 # For OpenAI
@@ -92,11 +92,34 @@ AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_KEY=...
 ```
 
+Examples that search for `.env` look in the current working directory and its parent directories. If no file is found, they print a setup message and exit with status `1`, without an assertion stack trace.
+
+### Using a proxy (optional)
+
+If the model endpoint can only be reached through a proxy (for example in restricted regions),
+`createLanguageModel` honors the standard `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` environment
+variables, and `NO_PROXY` for hosts that should bypass the proxy — set them (e.g. in your `.env`
+file) and requests are routed accordingly:
+
+```ini
+HTTPS_PROXY=http://127.0.0.1:7890
+# Optional: comma-separated hosts that should bypass the proxy
+NO_PROXY=localhost,127.0.0.1
+```
+
+Proxy support uses [`undici`](https://www.npmjs.com/package/undici) (which also powers Node's
+built-in `fetch`). It is an optional dependency loaded only when a proxy is configured, so install
+it when you need this: `npm install undici`. When calling `createOpenAILanguageModel` or
+`createAzureOpenAILanguageModel` directly, pass the proxy explicitly via the `options` argument:
+`createOpenAILanguageModel(apiKey, model, endPoint, org, { proxyUrl })` (or `createAzureOpenAILanguageModel(apiKey, endPoint, { proxyUrl })`).
+
 ## Step 4: Run the examples
 
 Examples can be found in the `examples` directory.
 
 To run an example interactively, type `node ./dist/main.js` from the example's directory and enter requests when prompted. Type `quit` or `exit` to end the session. You can also open in VS Code the selected example's directory and press <kbd>F5</kbd> to launch it in debug mode.
+
+To debug from the repository root in VS Code, choose an example configuration in Run and Debug and press <kbd>F5</kbd>. Configure `.env` as described above before starting the debugger.
 
 Note that there are various sample "prose" files (e.g. `input.txt`) provided in each `src` directory that can give a sense of what you can run.
 

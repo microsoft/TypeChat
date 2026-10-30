@@ -1,13 +1,16 @@
 {
   "name": "typechat-py",
   "private": true,
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "TypeChat is a library that makes it easy to build natural language interfaces using types.",
   "scripts": {
     "check": "pyright"
   },
   "author": "Microsoft",
   "license": "MIT",
+  "engines": {
+    "node": ">=24.22.1"
+  },
   "devDependencies": {
     "pyright": "1.1.358"
   }

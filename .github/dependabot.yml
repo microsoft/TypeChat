@@ -26,12 +26,13 @@
 
 version: 2
 updates:
-  # npm — typescript library + examples + docs site.
+  # npm — typescript library + examples + docs site + repository tools.
   - package-ecosystem: "npm"
     directories:
       - "/typescript"
       - "/typescript/examples/*"
       - "/site"
+      - "/tools"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -74,3 +75,5 @@ updates:
         applies-to: security-updates
         patterns: ["*"]
         update-types: ["minor", "patch"]
+    cooldown:
+      default-days: 7

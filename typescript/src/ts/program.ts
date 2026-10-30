@@ -69,6 +69,19 @@ export type ResultReference = {
 };
 
 /**
+ * Determines whether a function name is safe to use as an `@func` value. The name must be a plain
+ * ASCII identifier — a letter, underscore, or `$`, followed by letters, digits, underscores, or `$`
+ * — and must not be a member of `Object.prototype` (e.g. `constructor`, `__proto__`, `toString`,
+ * `valueOf`, `hasOwnProperty`), which could otherwise be used to escape the intended API surface
+ * during code generation or dispatch.
+ */
+function isValidFunctionName(name: unknown): name is string {
+    return typeof name === "string" &&
+        /^[a-zA-Z_$][0-9a-zA-Z_$]*$/.test(name) &&
+        !Object.prototype.hasOwnProperty.call(Object.prototype, name);
+}
+
+/**
  * Transforms a JSON program object into an equivalent TypeScript module suitable for type checking.
  * The generated module takes the form:
  * 
@@ -86,7 +99,7 @@ export type ResultReference = {
 export function createModuleTextFromProgram(jsonObject: object): Result<string> {
     const steps = (jsonObject as Program)["@steps"];
     if (!(Array.isArray(steps) && steps.every(step => typeof step === "object" && step !== null && step.hasOwnProperty("@func")))) {
-        return error("JSON object is not a valid program");
+        return error("JSON object is not a valid program", { data: jsonObject });
     }
     let hasError = false;
     let functionBody = "";
@@ -96,7 +109,7 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
         currentStep++;
     }
     return hasError ?
-        error("JSON program contains an invalid expression") :
+        error("JSON program contains an invalid expression", { data: jsonObject }) :
         success(`import { API } from "./schema";\nfunction program(api: API) {\n${functionBody}}`);
 
     function exprToString(expr: unknown): string {
@@ -108,7 +121,7 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
     function objectToString(obj: Record<string, unknown>) {
         if (obj.hasOwnProperty("@ref")) {
             const index = obj["@ref"];
-            if (typeof index === "number" && index < currentStep && Object.keys(obj).length === 1) {
+            if (typeof index === "number" && Number.isInteger(index) && index >= 0 && index < currentStep && Object.keys(obj).length === 1) {
                 return `step${index + 1}`;
             }
         }
@@ -116,7 +129,7 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
             const func = obj["@func"];
             const hasArgs = obj.hasOwnProperty("@args");
             const args = hasArgs ? obj["@args"] : [];
-            if (typeof func === "string" && (Array.isArray(args)) && Object.keys(obj).length === (hasArgs ? 2 : 1)) {
+            if (isValidFunctionName(func) && (Array.isArray(args)) && Object.keys(obj).length === (hasArgs ? 2 : 1)) {
                 return `api.${func}(${arrayToString(args)})`;
             }
         }
@@ -160,16 +173,22 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
     async function evaluateObject(obj: Record<string, unknown>) {
         if (obj.hasOwnProperty("@ref")) {
             const index = obj["@ref"];
-            if (typeof index === "number" && index < results.length) {
+            if (Object.keys(obj).length === 1 && typeof index === "number" && Number.isInteger(index) && index >= 0 && index < results.length) {
                 return results[index];
             }
+            throw new Error(`Invalid result reference: ${String(index)}`);
         }
         else if (obj.hasOwnProperty("@func")) {
             const func = obj["@func"];
-            const args = obj.hasOwnProperty("@args") ? obj["@args"] : [];
-            if (typeof func === "string" && Array.isArray(args)) {
-                return await onCall(func, await evaluateArray(args));
+            const hasArgs = obj.hasOwnProperty("@args");
+            const args = hasArgs ? obj["@args"] : [];
+            if (!isValidFunctionName(func)) {
+                throw new Error(`Invalid function name: ${JSON.stringify(func)}`);
             }
+            if (!Array.isArray(args) || Object.keys(obj).length !== (hasArgs ? 2 : 1)) {
+                throw new Error(`Invalid function call: ${JSON.stringify(obj)}`);
+            }
+            return await onCall(func, await evaluateArray(args));
         }
         else if (Array.isArray(obj)) {
             return evaluateArray(obj);

@@ -33,7 +33,8 @@ dependencies = [
 # Development-time dependencies.
 dev = [
   "coverage[toml]>=6.5",
-  "pytest>=8.0.2",
+  "pytest>=8.0.2,<9",
+  "pytest-xdist>=3.8.0",
   "syrupy>=5.0.0",
 ]
 

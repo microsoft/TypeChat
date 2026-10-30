@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import ast
+import collections.abc
 from collections import OrderedDict
 import inspect
+import io
+import re
 import sys
 import textwrap
+import tokenize
 import typing
 import typing_extensions
 from dataclasses import MISSING, Field, dataclass
@@ -23,6 +27,7 @@ from typing_extensions import (
     NotRequired,
     Protocol,
     Required,
+    Self,
     TypeAlias,
     TypeAliasType,    
     TypeGuard,
@@ -77,10 +82,20 @@ class Annotatedish(Protocol):
 class Dataclassish(Protocol):
     __dataclass_fields__: dict[str, Field[Any]]
 
+
+class NewTypeish(Protocol):
+    __supertype__: object
+
+
 # type[TypedDict]
 # https://github.com/microsoft/pyright/pull/6505#issuecomment-1834431725
 class TypeOfTypedDict(Protocol):
     __total__: bool
+
+
+def is_new_type(py_type: object) -> TypeGuard[NewTypeish]:
+    return isinstance(py_type, (typing.NewType, typing_extensions.NewType))
+
 
 if sys.version_info >= (3, 12) and typing.TypeAliasType is not typing_extensions.TypeAliasType:
     # Sometimes typing_extensions aliases TypeAliasType,
@@ -133,45 +148,59 @@ class TypeScriptNodeTranslationResult:
     errors: list[str]
 
 
-# TODO: https://github.com/microsoft/pyright/issues/6587
-_SELF_TYPE = getattr(typing_extensions, "Self")
-
 _LIST_TYPES: set[object] = {
     list,
     set,
     frozenset,
-    # TODO: https://github.com/microsoft/pyright/issues/6582
-    # collections.abc.MutableSequence,
-    # collections.abc.Sequence,
-    # collections.abc.Set
+    collections.abc.Sequence,
+    collections.abc.MutableSequence,
+    collections.abc.Set,
+    collections.abc.MutableSet,
+    collections.abc.Iterable,
+    collections.abc.Collection,
 }
 
-# TODO: https://github.com/microsoft/pyright/issues/6582
-# _DICT_TYPES: set[type] = {
-#     dict,
-#     collections.abc.MutableMapping,
-#     collections.abc.Mapping
-# }
+
+_DICT_TYPES: set[type] = {
+    dict,
+    collections.abc.MutableMapping,
+    collections.abc.Mapping,
+}
 
 
 def _extract_inline_field_comments(py_type: type) -> dict[str, str]:
-    """Return a mapping of field name → inline # comment for a TypedDict or dataclass."""
+    """Extract comments for directly declared fields when the class source is available."""
     try:
         source_lines, _ = inspect.getsourcelines(py_type)
-        tree = ast.parse(textwrap.dedent("".join(source_lines)))
-        comments: dict[str, str] = {}
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ClassDef):
-                for stmt in node.body:
-                    if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
-                        line = source_lines[stmt.end_lineno - 1]
-                        if "#" in line:
-                            comment = line[line.index("#") + 1:].strip().rstrip("\n")
-                            if comment:
-                                comments[stmt.target.id] = comment
-        return comments
-    except Exception:
+    except (OSError, TypeError):
         return {}
+
+    source = textwrap.dedent("".join(source_lines))
+    tree = ast.parse(source)
+    if len(tree.body) != 1 or not isinstance(tree.body[0], ast.ClassDef):
+        raise ValueError("Source does not contain a single class definition.")
+
+    comments_by_line = {
+        token.start[0]: token.string[1:].strip()
+        for token in tokenize.generate_tokens(io.StringIO(source).readline)
+        if token.type == tokenize.COMMENT and not re.match(r"#\s*type:\s*ignore\b", token.string)
+    }
+    lines = source.split("\n")
+    comments: dict[str, str] = {}
+    for stmt in tree.body[0].body:
+        if (
+            isinstance(stmt, ast.AnnAssign)
+            and isinstance(stmt.target, ast.Name)
+            and stmt.end_lineno is not None
+            and stmt.end_col_offset is not None
+        ):
+            comment = comments_by_line.get(stmt.end_lineno)
+            if comment:
+                # AST column offsets count UTF-8 bytes, not characters.
+                trailing = lines[stmt.end_lineno - 1].encode("utf-8")[stmt.end_col_offset:].decode("utf-8")
+                if trailing.lstrip(" \t;").startswith("#"):
+                    comments[stmt.target.id] = comment
+    return comments
 
 
 def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTranslationResult:
@@ -244,12 +273,20 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             return NullTypeReferenceNode
         if py_type is Never or py_type is NoReturn:
             return NeverTypeReferenceNode
-        if py_type is _SELF_TYPE:
+        if py_type is Self:
             return ThisTypeReferenceNode
+
+        # A NewType has the same runtime representation as its underlying type,
+        # so we emit the underlying type (which may itself be a NewType).
+        if is_new_type(py_type):
+            return convert_to_type_node(py_type.__supertype__)
 
         # TODO: consider handling bare 'tuple' (and list, etc.)
         # https://docs.python.org/3/library/typing.html#annotating-tuples
         # Using plain tuple as an annotation is equivalent to using tuple[Any, ...]:
+
+        if is_new_type(py_type):
+            return convert_to_type_node(py_type.__supertype__)
 
         origin = get_origin(py_type)
         if origin is not None:
@@ -259,7 +296,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                     return TypeReferenceNode(IdentifierNode("Array"), [type_arg])
                 return ArrayTypeNode(type_arg)
 
-            if origin is dict:
+            if origin in _DICT_TYPES:
                 # TODO
                 # Currently, we naively assume all dicts are string-keyed
                 # unless they're annotated with `int` or `float` (note: not `int | float`).
@@ -288,7 +325,10 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                         )
                         return ArrayTypeNode(AnyTypeReferenceNode)
 
-                    return ArrayTypeNode(convert_to_type_node(type_args[0]))
+                    element_type = convert_to_type_node(type_args[0])
+                    if isinstance(element_type, UnionTypeNode):
+                        return TypeReferenceNode(IdentifierNode("Array"), [element_type])
+                    return ArrayTypeNode(element_type)
 
                 return TupleTypeNode([convert_to_type_node(py_type_arg) for py_type_arg in type_args])
 
@@ -354,7 +394,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             optional = optionality_default
 
         type_annotation = convert_to_type_node(skip_annotations(current_annotation))
-        return PropertyDeclarationNode(name, optional, comment or fallback_comment, type_annotation)
+        return PropertyDeclarationNode(name, optional, comment if comment is not None else fallback_comment, type_annotation)
 
     def reserve_name(val: type | TypeAliasType):
         type_name = val.__name__
@@ -393,7 +433,11 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                     base_attributes.setdefault(prop, set()).add(type_hint)
             bases = [convert_to_type_node(base) for base in raw_but_filtered_bases]
 
-            inline_comments = _extract_inline_field_comments(py_type)
+            try:
+                inline_comments = _extract_inline_field_comments(py_type)
+            except (SyntaxError, tokenize.TokenError, ValueError) as exc:
+                errors.append(f"Cannot extract inline field comments for {py_type.__name__}: {exc}")
+                inline_comments = {}
 
             properties: list[PropertyDeclarationNode | IndexSignatureDeclarationNode] = []
             if is_typeddict(py_type):

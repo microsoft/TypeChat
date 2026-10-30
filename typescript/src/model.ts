@@ -69,11 +69,72 @@ export interface TypeChatLanguageModel {
      */
     retryPauseMs?: number;
     /**
+     * Optional property that specifies the timeout, in milliseconds, applied to each HTTP request
+     * made to the model endpoint (the default is 600000ms, i.e. 10 minutes). A request - including
+     * reading its response body - is aborted if it does not complete within this time, preventing a
+     * slow or unresponsive endpoint from causing `complete` to hang indefinitely and exhaust
+     * resources. Set to 0 or a negative value to disable the timeout.
+     */
+    timeoutMs?: number;
+    /**
+     * Optional property that specifies the maximum size, in bytes, of a response body accepted from
+     * the model endpoint (the default is 104857600, i.e. 100 MB). A larger response is rejected
+     * without being fully buffered in memory, preventing a malicious or malfunctioning endpoint from
+     * exhausting memory. Set to 0 or a negative value to disable the limit.
+     */
+    maxResponseBytes?: number;
+    /**
      * Obtains a completion from the language model for the given prompt.
      * @param prompt A prompt string or an array of prompt sections. If a string is specified,
      *   it is converted into a single "user" role prompt section.
      */
     complete(prompt: string | PromptSection[]): Promise<Result<string>>;
+}
+
+/**
+ * Optional settings accepted by the language model factory functions.
+ */
+export interface LanguageModelOptions {
+    /**
+     * URL of an HTTP or HTTPS proxy to route model requests through
+     * (for example `"http://127.0.0.1:7890"`). This is useful in environments where the model
+     * endpoint can only be reached via a proxy.
+     *
+     * Requests are dispatched through the proxy using an `undici` `ProxyAgent`. `undici` is an
+     * optional dependency that is imported only when a proxy is configured; install it with
+     * `npm install undici`.
+     *
+     * When you use {@link createLanguageModel}, proxy configuration is read automatically from the
+     * standard `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` environment variables, and `NO_PROXY` is
+     * honored, so setting those (e.g. in a `.env` file) is usually all that is required.
+     */
+    proxyUrl?: string;
+
+    /**
+     * Selects the OpenAI API variant. When `true`, the Responses API (`/v1/responses`) is used
+     * regardless of the endpoint URL; when `false`, the Chat Completions API is used. When omitted
+     * (default), the variant is inferred from the endpoint URL (a path ending in `/responses`
+     * selects the Responses API). Only applies to `createOpenAILanguageModel`.
+     */
+    useResponsesApi?: boolean;
+}
+
+/**
+ * Internal proxy configuration threaded to the fetch helpers.
+ * - `url`: an explicit proxy URL supplied via {@link LanguageModelOptions.proxyUrl}.
+ * - `env`: values collected from the standard proxy environment variables, applied per request by
+ *   an `undici` `EnvHttpProxyAgent` (which also honors `NO_PROXY` and the http/https split).
+ */
+type ProxySettings =
+    | { kind: "url"; url: string }
+    | { kind: "env"; httpProxy: string | undefined; httpsProxy: string | undefined; noProxy: string | undefined };
+
+/**
+ * {@link LanguageModelOptions} plus internal, pre-resolved proxy settings passed down by
+ * {@link createLanguageModel}. Not part of the public API.
+ */
+interface InternalModelOptions extends LanguageModelOptions {
+    proxy?: ProxySettings;
 }
 
 /**
@@ -94,17 +155,19 @@ export interface TypeChatLanguageModel {
  * @returns An instance of `TypeChatLanguageModel`.
  */
 export function createLanguageModel(env: Record<string, string | undefined>): TypeChatLanguageModel {
+    const proxy = proxySettingsFromEnv(env);
+    const options: InternalModelOptions | undefined = proxy ? { proxy } : undefined;
     if (env.OPENAI_API_KEY) {
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
         const org = env.OPENAI_ORGANIZATION ?? "";
         const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
-        return createOpenAILanguageModel(apiKey, model, endPoint, org);
+        return createOpenAILanguageModel(apiKey, model, endPoint, org, options);
     }
     if (env.AZURE_OPENAI_API_KEY) {
         const apiKey = env.AZURE_OPENAI_API_KEY ?? missingEnvironmentVariable("AZURE_OPENAI_API_KEY");
         const endPoint = env.AZURE_OPENAI_ENDPOINT ?? missingEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
-        return createAzureOpenAILanguageModel(apiKey, endPoint);
+        return createAzureOpenAILanguageModel(apiKey, endPoint, options);
     }
     missingEnvironmentVariable("OPENAI_API_KEY or AZURE_OPENAI_API_KEY");
 }
@@ -112,7 +175,7 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
 /**
  * Creates a language model encapsulation of an OpenAI REST API endpoint.
  *
- * When `endPoint` (or `useResponsesApi`) indicates the Responses API the function routes through
+ * When `endPoint` (or `options.useResponsesApi`) indicates the Responses API the function routes through
  * the `/v1/responses` request/response format; otherwise the Chat Completions format is used.
  * The Responses API is auto-detected when the endpoint URL path ends with `/responses`
  * (e.g. `https://api.openai.com/v1/responses`).
@@ -122,20 +185,20 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  *   `"https://api.openai.com/v1/chat/completions"`. Supply a `/responses` URL to use the
  *   Responses API instead.
  * @param org The OpenAI organization id.
- * @param useResponsesApi When `true`, forces the Responses API regardless of the endpoint URL.
- *   When `false`, forces Chat Completions. When `undefined` (default), the API variant is
- *   inferred from the endpoint URL.
+ * @param options Optional settings such as a proxy URL or the API variant to use.
+ *   See {@link LanguageModelOptions}.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", useResponsesApi?: boolean): TypeChatLanguageModel {
+export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", options?: LanguageModelOptions): TypeChatLanguageModel {
     const headers = {
         "Authorization": `Bearer ${apiKey}`,
         "OpenAI-Organization": org
     };
-    if ((useResponsesApi ?? isResponsesApiUrl(endPoint))) {
-        return createResponsesFetchLanguageModel(endPoint, headers, { model });
+    const proxy = resolveProxySettings(options);
+    if ((options?.useResponsesApi ?? isResponsesApiUrl(endPoint))) {
+        return createResponsesFetchLanguageModel(endPoint, headers, { model }, proxy);
     }
-    return createFetchLanguageModel(endPoint, headers, { model });
+    return createFetchLanguageModel(endPoint, headers, { model }, proxy);
 }
 
 /**
@@ -144,34 +207,54 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
  *   "https://{your-resource-name}.openai.azure.com/openai/deployments/{your-deployment-name}/chat/completions?api-version={API-version}".
  *   Example deployment names are "gpt-35-turbo" and "gpt-4". An example API versions is "2023-05-15".
  * @param apiKey The Azure OpenAI API key.
+ * @param options Optional settings such as a proxy URL. See {@link LanguageModelOptions}.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string): TypeChatLanguageModel {
+export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string, options?: LanguageModelOptions): TypeChatLanguageModel {
     const headers = {
         // Needed when using managed identity
         "Authorization": `Bearer ${apiKey}`,
         // Needed when using regular API key
         "api-key": apiKey
     };
-    return createFetchLanguageModel(endPoint, headers, {});
+    return createFetchLanguageModel(endPoint, headers, {}, resolveProxySettings(options));
 }
+
+/**
+ * Default per-request timeout applied when a model does not set {@link TypeChatLanguageModel.timeoutMs}.
+ * Ten minutes matches common LLM client defaults, allowing slow completions while still preventing a
+ * request from hanging indefinitely.
+ */
+const defaultTimeoutMs = 600000;
+
+/**
+ * Default maximum response body size (100 MB) applied when a model does not set
+ * {@link TypeChatLanguageModel.maxResponseBytes}. Generous enough for any legitimate completion while
+ * still preventing an endpoint from exhausting memory with an unbounded response.
+ */
+const defaultMaxResponseBytes = 100 * 1024 * 1024;
 
 /**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
-function createFetchLanguageModel(url: string, headers: object, defaultParams: object) {
+function createFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings) {
+    let dispatcherPromise: Promise<RequestInit["dispatcher"]> | undefined;
     const model: TypeChatLanguageModel = {
         complete
     };
     return model;
 
     async function complete(prompt: string | PromptSection[]) {
+        dispatcherPromise ??= resolveProxyDispatcher(proxy);
+        const dispatcher = await dispatcherPromise;
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
+        const timeoutMs = model.timeoutMs ?? defaultTimeoutMs;
+        const maxResponseBytes = model.maxResponseBytes ?? defaultMaxResponseBytes;
         const messages = typeof prompt === "string" ? [{ role: "user", content: prompt }] : prompt;
         while (true) {
-            const options = {
+            const options: RequestInit = {
                 method: "POST",
                 body: JSON.stringify({
                     ...defaultParams,
@@ -183,14 +266,33 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
                     "content-type": "application/json",
                     ...headers
                 }
+            };
+            if (dispatcher) {
+                options.dispatcher = dispatcher;
             }
-            const response = await fetch(url, options);
+            let response: Response;
+            try {
+                response = await fetchWithTimeout(url, options, timeoutMs);
+            } catch (e) {
+                if (retryCount >= retryMaxAttempts) {
+                    return error(`REST API fetch error: ${getErrorMessage(e)}`);
+                }
+                await sleep(retryPauseMs);
+                retryCount++;
+                continue;
+            }
             if (response.ok) {
-                const json = await response.json() as { choices: { message: PromptSection }[] };
-                if (typeof json.choices[0].message.content === "string") {
-                    return success(json.choices[0].message.content ?? "");
+                let json: { choices?: { message?: PromptSection }[] } | null;
+                try {
+                    json = await readResponseJson(response, maxResponseBytes) as { choices?: { message?: PromptSection }[] } | null;
+                } catch (e) {
+                    return error(`REST API response error: ${getErrorMessage(e)}`);
+                }
+                const content = json?.choices?.[0]?.message?.content;
+                if (typeof content === "string") {
+                    return success(content);
                 } else {
-                    return error(`REST API unexpected response format: ${JSON.stringify(json.choices[0].message.content)}`);
+                    return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
                 }
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
@@ -228,19 +330,24 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
  * @param headers HTTP headers to include in every request (e.g. `Authorization`).
  * @param defaultParams Additional JSON body parameters merged into every request (e.g. `{ model }`).
  */
-function createResponsesFetchLanguageModel(url: string, headers: object, defaultParams: object) {
+function createResponsesFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings) {
+    let dispatcherPromise: Promise<RequestInit["dispatcher"]> | undefined;
     const model: TypeChatLanguageModel = {
         complete
     };
     return model;
 
     async function complete(prompt: string | PromptSection[]) {
+        dispatcherPromise ??= resolveProxyDispatcher(proxy);
+        const dispatcher = await dispatcherPromise;
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
+        const timeoutMs = model.timeoutMs ?? defaultTimeoutMs;
+        const maxResponseBytes = model.maxResponseBytes ?? defaultMaxResponseBytes;
         const input = typeof prompt === "string" ? prompt : (prompt as PromptSection[]);
         while (true) {
-            const options = {
+            const options: RequestInit = {
                 method: "POST",
                 body: JSON.stringify({
                     ...defaultParams,
@@ -251,16 +358,43 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
                     "content-type": "application/json",
                     ...headers
                 }
+            };
+            if (dispatcher) {
+                options.dispatcher = dispatcher;
             }
-            const response = await fetch(url, options);
+            let response: Response;
+            try {
+                response = await fetchWithTimeout(url, options, timeoutMs);
+            } catch (e) {
+                if (retryCount >= retryMaxAttempts) {
+                    return error(`REST API fetch error: ${getErrorMessage(e)}`);
+                }
+                await sleep(retryPauseMs);
+                retryCount++;
+                continue;
+            }
             if (response.ok) {
                 type ResponsesAPIOutputItem = {
                     type: string;
                     role?: string;
                     content: { type: string; text: string }[];
                 };
-                const json = await response.json() as { output: ResponsesAPIOutputItem[] };
-                const message = json.output?.find(o => o.type === "message");
+                let json: unknown;
+                try {
+                    json = await readResponseJson(response, maxResponseBytes);
+                } catch (e) {
+                    return error(`REST API response error: ${getErrorMessage(e)}`);
+                }
+                if (
+                    json === null ||
+                    typeof json !== "object" ||
+                    !("output" in json) ||
+                    !Array.isArray((json as { output?: unknown }).output)
+                ) {
+                    return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
+                }
+                const output = (json as { output: ResponsesAPIOutputItem[] }).output;
+                const message = output.find(o => o.type === "message");
                 const textContent = message?.content?.find(c => c.type === "output_text");
                 if (textContent?.text !== undefined) {
                     return success(textContent.text);
@@ -288,7 +422,7 @@ function getRetryDelayMs(response: Response, defaultMs: number, maxMs: number): 
     const retryAfter = response.headers.get("retry-after");
     if (retryAfter) {
         const seconds = parseInt(retryAfter, 10);
-        if (!isNaN(seconds)) {
+        if (Number.isFinite(seconds) && seconds >= 0) {
             return Math.min(seconds * 1000, maxMs);
         }
     }
@@ -326,10 +460,139 @@ function isResponsesApiUrl(url: string): boolean {
 }
 
 /**
+ * Performs a `fetch` request that is aborted if it does not complete within `timeoutMs`
+ * milliseconds. Because the abort signal stays attached to the returned response, the timeout also
+ * bounds the time spent reading the response body. A non-positive `timeoutMs` disables the timeout.
+ * Enforcing a timeout prevents a slow or unresponsive endpoint from causing the request to hang
+ * indefinitely and exhaust resources.
+ */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+    if (timeoutMs > 0) {
+        options.signal = AbortSignal.timeout(timeoutMs);
+    }
+    return fetch(url, options);
+}
+
+/**
+ * Reads and JSON-parses a response body while enforcing a maximum size in bytes. When the runtime
+ * exposes a readable stream body (as Node's `fetch` does) and `maxBytes` is positive, the body is
+ * read incrementally and the read is aborted as soon as the accumulated size exceeds `maxBytes`, so
+ * an oversized response is never fully buffered in memory. When no stream body is available or the
+ * limit is disabled, this falls back to `response.json()`.
+ */
+async function readResponseJson(response: Response, maxBytes: number): Promise<unknown> {
+    const body = response.body;
+    if (maxBytes > 0 && body && typeof body.getReader === "function") {
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let received = 0;
+        let text = "";
+        while (true) {
+            const result = await reader.read();
+            if (result.done) {
+                break;
+            }
+            received += result.value.byteLength;
+            if (received > maxBytes) {
+                await reader.cancel().catch(() => { /* ignore cancellation errors */ });
+                throw new Error(`REST API response exceeded the maximum allowed size of ${maxBytes} bytes`);
+            }
+            text += decoder.decode(result.value, { stream: true });
+        }
+        text += decoder.decode();
+        return JSON.parse(text);
+    }
+    return response.json();
+}
+
+/**
+ * Extracts a human-readable message from a value thrown by `fetch` or response processing.
+ */
+function getErrorMessage(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
+}
+
+/**
  * Sleeps for the given number of milliseconds.
  */
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Collects proxy configuration from the standard proxy environment variables, or returns
+ * `undefined` when none are set. `HTTPS_PROXY`/`HTTP_PROXY` select the proxy per request protocol,
+ * `ALL_PROXY` is the fallback for both, and `NO_PROXY` lists hosts that bypass the proxy. Both
+ * upper- and lower-case names are recognized; matching is applied per request by an
+ * `EnvHttpProxyAgent`.
+ */
+function proxySettingsFromEnv(env: Record<string, string | undefined>): ProxySettings | undefined {
+    const allProxy = env.ALL_PROXY ?? env.all_proxy;
+    const httpsProxy = env.HTTPS_PROXY ?? env.https_proxy ?? allProxy;
+    const httpProxy = env.HTTP_PROXY ?? env.http_proxy ?? allProxy;
+    if (!httpsProxy && !httpProxy) {
+        return undefined;
+    }
+    return { kind: "env", httpProxy, httpsProxy, noProxy: env.NO_PROXY ?? env.no_proxy };
+}
+
+/**
+ * Resolves the {@link ProxySettings} for a set of options: an explicit `proxyUrl` becomes a
+ * single-URL proxy, while {@link createLanguageModel} passes pre-resolved environment settings.
+ */
+function resolveProxySettings(options: LanguageModelOptions | undefined): ProxySettings | undefined {
+    const internal = options as InternalModelOptions | undefined;
+    if (internal?.proxy) {
+        return internal.proxy;
+    }
+    if (options?.proxyUrl) {
+        return { kind: "url", url: options.proxyUrl };
+    }
+    return undefined;
+}
+
+/**
+ * Dynamically imports the optional `undici` package, translating a missing-module error into an
+ * actionable message. `undici` also powers Node's built-in `fetch`, so it is the natural choice for
+ * proxy dispatching and is imported only when a proxy is actually configured.
+ */
+async function importUndici() {
+    try {
+        return await import("undici");
+    } catch (e) {
+        if (e instanceof Error && /Cannot find module|ERR_MODULE_NOT_FOUND/.test(e.message)) {
+            throw new Error(
+                `A proxy was configured, but the optional "undici" package is not installed. ` +
+                `Run "npm install undici" to enable proxy support.`
+            );
+        }
+        throw e;
+    }
+}
+
+/**
+ * Lazily constructs an `undici` dispatcher for the given proxy settings, or returns `undefined`
+ * when no proxy is configured. Absent settings are a no-op, so an agent is never accidentally
+ * constructed from an empty proxy string. Node's `fetch` honors an undici `dispatcher` per request.
+ */
+async function resolveProxyDispatcher(proxy: ProxySettings | undefined): Promise<RequestInit["dispatcher"]> {
+    if (!proxy) {
+        return undefined;
+    }
+    const { ProxyAgent, EnvHttpProxyAgent } = await importUndici();
+    // `undici` bundles its own dispatcher types, which are structurally identical to the
+    // `undici-types` copy that Node's global `fetch`/`RequestInit` use but nominally distinct;
+    // bridge the two with a cast.
+    if (proxy.kind === "url") {
+        return new ProxyAgent(proxy.url) as unknown as RequestInit["dispatcher"];
+    }
+    // Env-driven: EnvHttpProxyAgent applies NO_PROXY and the http/https split per request.
+    const envOptions = {
+        ...(proxy.httpProxy ? { httpProxy: proxy.httpProxy } : {}),
+        ...(proxy.httpsProxy ? { httpsProxy: proxy.httpsProxy } : {}),
+        ...(proxy.noProxy ? { noProxy: proxy.noProxy } : {})
+    };
+    return new EnvHttpProxyAgent(envOptions) as unknown as RequestInit["dispatcher"];
 }
 
 /**
