@@ -21,13 +21,25 @@ export async function processRequests(interactivePrompt: string, inputFileName: 
     }
     else {
         const stdio = readline.createInterface({ input: process.stdin, output: process.stdout });
-        while (true) {
-            const input = await stdio.question(interactivePrompt);
+        // Iterating the interface buffers lines that arrive while a request is running and ends on EOF.
+        // Track closing, since EOF can arrive mid-request and prompt() throws on a closed interface.
+        // Track pausing too: the iterator pauses input when its buffer fills, and prompt() would resume it.
+        let closed = false;
+        let paused = false;
+        stdio.once("close", () => closed = true);
+        stdio.on("pause", () => paused = true);
+        stdio.on("resume", () => paused = false);
+        stdio.setPrompt(interactivePrompt);
+        stdio.prompt();
+        for await (const input of stdio) {
             if (input.toLowerCase() === "quit" || input.toLowerCase() === "exit") {
                 break;
             }
             else if (input.length) {
                 await processRequest(input);
+            }
+            if (!closed && !paused) {
+                stdio.prompt();
             }
         }
         stdio.close();
