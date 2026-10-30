@@ -17,24 +17,21 @@ is available today.
 
 ## Status and implementation history
 
-**Last updated: 2026-10-29 (UTC).** The first pilot is merged into `main` through
-[#482](https://github.com/microsoft/TypeChat/pull/482).
-[Post-merge workflow checks](https://github.com/microsoft/TypeChat/actions/runs/40454115457)
-passed, and the
+**Last updated: 2026-10-30 (UTC).** The read-only
 [Backlog assessment workflow](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
-is available for manual dispatch. The
-[first live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
-completed successfully, verifying live Copilot access and the configured model
-and main-assessment reasoning effort. Its draft enumerates 24 issues and 26 PRs,
-but PR investigation is partial. Human review remains required; automatic
-Copilot PR reviews and broader autonomy are not enabled by this pilot.
+is available for manual dispatch on `main`. The
+[latest run](https://github.com/microsoft/TypeChat/actions/runs/40962028077)
+completed successfully with the policy, clearer writing guidance, and higher
+execution limits enabled. Its
+[preserved draft](./reports/backlog-assessments/2026-10-29-40962028077.md)
+inventories 21 open issues and 25 open PRs at the assessment time.
 
-The policy, report-language, and 400-credit changes merged through
-[#485](https://github.com/microsoft/TypeChat/pull/485) on 2026-10-27 (UTC).
-The [second assessment](https://github.com/microsoft/TypeChat/actions/runs/40586341288)
-loaded those changes but reached the separate 120-model-call limit before
-writing a report. Higher call and execution-time limits are now prepared for
-review; their activation and a successful report under those limits are pending.
+The inventory is complete, but verification remains partial. The agent inspected
+PR patches, reviews, and check records; it did not run tests or inspect job logs,
+and two CI definitions were inaccessible. The report's direction classifications
+and next steps remain advisory. Human review is still required; automatic
+Copilot PR reviews, issue acceptance, and broader autonomy are not enabled by
+this pilot.
 
 | Implemented | Change | Current state |
 | --- | --- | --- |
@@ -45,13 +42,16 @@ review; their activation and a successful report under those limits are pending.
 | 2026-10-26 | [Assessment model and reasoning effort](#model-selection) | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC); threat detection keeps its separately configured default effort. |
 | 2026-10-27 | [Compiler action pins](./.github/aw/actions-lock.json) and clearer drift diagnostics | Merged; the post-merge drift check passed on GitHub. |
 | 2026-10-27 | [First live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316) | Successful execution and report upload. All 24 issues and 26 PRs enumerated; selective PR investigation means overall coverage remains partial. |
-| 2026-10-27 | [Clearer report language](#report-language) | Merged via [#485](https://github.com/microsoft/TypeChat/pull/485). Guidance loaded in the second run, but no report was produced to evaluate the prose. |
-| 2026-10-27 | [Assessment budget](#inference-budget) | Main assessment increased from 200 to 400 AI credits via [#485](https://github.com/microsoft/TypeChat/pull/485); the second run confirmed the setting. Detection keeps its separate default. |
-| 2026-10-27 | [Owner-controlled project direction](./GOALS.md) | Merged via [#485](https://github.com/microsoft/TypeChat/pull/485). The second run read the policy at its trusted commit; report classifications and GitHub approval enforcement remain unverified. |
+| 2026-10-27 | [Clearer report language](#report-language) | Merged via [#485](https://github.com/microsoft/TypeChat/pull/485). The successful October 29 draft uses narrative entries, explicit next steps, and separate evidence notes; human review remains required. |
+| 2026-10-27 | [Assessment budget](#inference-budget) | Main assessment increased from 200 to 400 AI credits via [#485](https://github.com/microsoft/TypeChat/pull/485), confirmed in the latest run. Detection keeps its separate default. |
+| 2026-10-27 | [Owner-controlled project direction](./GOALS.md) | Merged via [#485](https://github.com/microsoft/TypeChat/pull/485). The latest draft classifies every item against the policy at its trusted commit. Scope judgments remain advisory; full GitHub approval enforcement still needs verification. |
 | 2026-10-27 | [Second live assessment](#second-live-assessment) | Stopped at 120 model calls with 146.09 of 400 main-assessment credits used. Report validation and upload were skipped; no backlog report was produced. |
-| 2026-10-29 | [Call and execution-time limits](#execution-limits) | Raised to 1,000 model calls and 60 minutes of agent execution, within a 100-minute job. Credit budgets unchanged. Prepared for review, not yet activated on GitHub. |
+| 2026-10-29 | [Call and execution-time limits](#execution-limits) | Merged via [#490](https://github.com/microsoft/TypeChat/pull/490), then used in successful run 40962028077. Limits are 1,000 model calls, 60 minutes of agent execution, and a 100-minute enclosing job; credit budgets unchanged. |
+| 2026-10-29 | [Successful policy-aware assessment](#successful-policy-aware-assessment) | All six jobs succeeded, including report validation and upload. Complete open-item inventory, with partial verification and human review still required. |
+| 2026-10-29 | Human follow-through | Maintainers subsequently merged [#433](https://github.com/microsoft/TypeChat/pull/433) and [#437](https://github.com/microsoft/TypeChat/pull/437). The archive preserves their earlier assessment-time status. |
+| 2026-10-30 | [Selected report archive](#archived-snapshot) | The October 29 draft is preserved unchanged with provenance and review limits, for normal PR review. No automatic archiving is enabled. |
 | Not yet | [Owner-approved budget overrides](#owner-approved-budget-overrides-planned) | Future work only; no budget-override input or approval mechanism is enabled. |
-| Not yet | Automatic Copilot PR reviews and human approval gates | Live settings need verification and a maintainer-approved rollout. |
+| Not yet | Automatic Copilot PR reviews and full owner-gate verification | Human review remains required. Complete settings verification and review automation remain separate, maintainer-approved work. |
 | Not yet | Agent-assisted discussion and explicit issue acceptance | Planned; no issue-discussion or acceptance commands are enabled by this pilot. |
 | Not yet | Human-approved agent implementation | Planned; the assessment does not start implementation or open PRs. |
 | Not yet | Selective automatic adoption | Future work, after public criteria and maintainer approval. |
@@ -138,12 +138,18 @@ to GitHub Actions retention limits. Other artifacts, such as execution logs and
 usage records, have their own retention settings; they do not extend the report's
 lifetime.
 
-The workflow does not save reports in the repository. Keeping selected reports
-there would be a separate, maintainer-approved step. A preserved report should
-be a dated snapshot with its run link, assessed commit, coverage limits, and
-review status. Review its contents through a normal pull request, rather than
-automatically committing reports or raw execution logs. Preserving a report
-does not approve its recommendations or make its findings current.
+The workflow does not automatically commit reports. Maintainers can select a
+report for preservation through a normal pull request, with its run link,
+assessed commit, coverage limits, and review status. The
+[October 29 snapshot](./reports/backlog-assessments/2026-10-29-40962028077.md)
+is the first selected report; its provenance is recorded
+[below](#successful-policy-aware-assessment). Raw execution logs are not archived
+with it.
+
+The repository copy is not subject to the Actions artifact's seven-day expiry.
+Keep the original snapshot unchanged and record later decisions separately.
+Preserving a report does not approve its recommendations, make its findings
+current, or replace the owner-approved scope policy.
 
 ### Report language
 
@@ -213,12 +219,71 @@ maximum reasoning effort, the 400-credit main budget, and a successful policy
 read at the trusted run commit. Without a report, it did not validate the new
 prose or direction classifications.
 
+### Successful policy-aware assessment
+
+[Run 40962028077](https://github.com/microsoft/TypeChat/actions/runs/40962028077)
+completed successfully on **2026-10-29 at 22:33:24 UTC**, about 36 minutes after
+the workflow started. It ran on the merged
+[commit `a79b291`](https://github.com/microsoft/TypeChat/commit/a79b291556f81ad02ece6eec484219598573920a)
+from [#490](https://github.com/microsoft/TypeChat/pull/490). All six jobs succeeded,
+including the draft-report validation and upload.
+
+The run used GPT-6.1-sol with maximum reasoning effort for the main assessment.
+Recorded usage was:
+
+| Component | Successful model responses | AI credits |
+| --- | --- | --- |
+| Main assessment | 195 | 387.86 |
+| Threat detection | 6 | 8.82 |
+
+The total, calculated before rounding the component figures, was **396.67 AI
+credits**. The main assessment used about 97% of its own 400-credit allowance;
+detection has a separate budget. This result confirms
+the configured limits worked for this run, not a measured success rate for
+future workloads or permission to increase spending.
+
+The draft contains **21 open issues and 25 open PRs**, with a direction
+classification and proposed human next step for each. Successful tool records
+confirm reads of all 21 issue descriptions and all 25 PRs' descriptions,
+changed files, reviews, review threads, and check records. The scope policy was
+read at the trusted run commit, not from an unmerged proposal.
+
+**Verification is still partial.** Two pinned CI definitions were inaccessible.
+The assessment did not inspect job logs, run tests, reproduce bugs, or verify
+proposed fixes. It is not a GitHub Copilot code review or approval to act.
+The remaining control and evidence checks described above are still required
+before expanding automation.
+
+#### Archived snapshot
+
+The [dated report](./reports/backlog-assessments/2026-10-29-40962028077.md) is a
+verbatim copy of the uploaded Markdown, including its original draft status,
+contributor credit, and assessment-time findings.
+
+- **Assessment start:** 2026-10-29T22:00:10.999Z, as recorded in the report.
+- **Source artifact:** `backlog-assessment`, artifact ID `12938685685`.
+  The Actions copy expires on 2026-11-05 at 22:30:23 UTC.
+- **Original file:** 81,288 bytes.
+- **File SHA-256:** `dd0e28402dcf3b589c6f4d077493351e6d1df9934aa9328e227934540406439f`.
+
+Archival checks confirmed the original file's identity and cross-checked
+coverage against recorded tool activity. They did not independently validate
+every patch or recommendation. The preserved report remains an
+**agent-generated draft requiring human review**. Review this selected snapshot
+through the normal PR process; it is evidence, not project policy.
+
+Later human follow-through includes [#433](https://github.com/microsoft/TypeChat/pull/433),
+merged at 23:48:00 UTC, and [#437](https://github.com/microsoft/TypeChat/pull/437),
+merged at 23:48:44 UTC on 2026-10-29. Those later decisions do not rewrite the
+snapshot, which still describes the PRs as open at assessment time. Check current
+issues, PRs, and the approved policy before acting on historical recommendations.
+
 ### Execution limits
 
 **Changed on 2026-10-29:** The main assessment is configured for **1,000 model
 calls** and a **60-minute execution timeout**, increased from 120 and 20 minutes.
-These changes are prepared for review and take effect after the source and
-generated workflow are merged:
+These changes merged through [#490](https://github.com/microsoft/TypeChat/pull/490)
+at 21:52:23 UTC that day. The subsequent successful run used the updated limits:
 
 ```yaml
 timeout-minutes: 60
