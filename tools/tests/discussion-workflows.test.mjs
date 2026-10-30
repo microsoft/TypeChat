@@ -58,13 +58,34 @@ test("discussion commands are created-comment events guarded by owner and truste
     }
 });
 
+test("draft requests use the native eyes acknowledgment without public status comments", () => {
+    assert.equal(source.on.reaction, "eyes");
+    assert.equal(source.on["status-comment"], false);
+    assert.equal(source.on["github-token"], "${{ secrets.GITHUB_TOKEN }}");
+    const activation = compiled.jobs.activation;
+    const reaction = activation.steps.find(step => step.name === "Add eyes reaction for immediate feedback");
+    assert.ok(reaction);
+    assert.equal(reaction.env.GH_AW_REACTION, "eyes");
+    assert.equal(reaction.with["github-token"], "${{ secrets.GITHUB_TOKEN }}");
+    assert.match(reaction.with.script, /require\(path\.join\(actionsDir, 'add_reaction\.cjs'\)\)/);
+    for (const event of ["issue_comment", "discussion_comment"]) {
+        assert.ok(reaction.if.includes(`github.event_name == '${event}'`));
+    }
+    assert.ok(activation.if.includes(source.if));
+    assert.ok(!activation.steps.some(step => /status.*comment/i.test(step.name ?? "")));
+    assert.deepEqual(activation.permissions, {
+        actions: "read", contents: "read", discussions: "write", issues: "write", "pull-requests": "write",
+    });
+    assert.ok(activation.if.includes("!github.event.issue.pull_request"));
+    assert.equal(compiled.on.pull_request, undefined);
+});
+
 test("drafting reuses the proven tools and model without enabling the future build budget", () => {
     assert.deepEqual(source.imports, ["shared/read-only-analysis.md"]);
     for (const key of Object.keys(shared)) {
         if (key === "safe-outputs") {
-            assert.deepEqual(Object.keys(source[key]), ["report-missing-tool", "noop", "threat-detection"]);
+            assert.deepEqual(Object.keys(source[key]), ["report-missing-tool", "threat-detection"]);
             assert.equal(source[key]["report-missing-tool"], shared[key]["report-missing-tool"]);
-            assert.deepEqual(source[key].noop, { max: 3, "report-as-issue": false });
         } else {
             assert.equal(Object.hasOwn(source, key), false, `Do not override shared ${key} controls`);
         }
@@ -97,13 +118,15 @@ test("drafting reuses the proven tools and model without enabling the future bui
     assert.ok(!agent.steps.some(step => step.uses?.startsWith("actions/checkout@")));
 });
 
-test("only the main agent and detector can infer, and no drafting job can publish", () => {
+test("only the main agent and detector can infer, and reaction writes stay in trusted activation", () => {
     assert.deepEqual(compiled.permissions, {});
     for (const [name, job] of Object.entries(compiled.jobs)) {
         const permissions = job.permissions ?? compiled.permissions;
         assert.equal(typeof permissions, "object", `${name} must inherit no permissions or declare them explicitly`);
         for (const [scope, level] of Object.entries(permissions)) {
-            if (scope === "copilot-requests") {
+            if (name === "activation" && ["issues", "discussions", "pull-requests"].includes(scope)) {
+                assert.equal(level, "write");
+            } else if (scope === "copilot-requests") {
                 assert.ok(["agent", "detection"].includes(name));
                 assert.equal(level, "write");
             } else {
@@ -176,27 +199,23 @@ test("file-only candidates are explicit inputs to the pinned detector", () => {
     assert.equal(detectionCommand.env.GH_AW_DETECTION_CONTINUE_ON_ERROR, "false");
 });
 
-test("a file-only model response triggers the compiled detection guard without native model outputs or a patch", () => {
+test("draft preparation must not pre-complete the model with a native noop", () => {
+    assert.equal(source["pre-agent-steps"], undefined);
+    assert.ok(!agent.steps.some(step => step.id === "require_candidate_detection"));
+    const collector = agent.steps.find(step => step.id === "collect_output");
+    assert.ok(agent.steps.indexOf(agentCommand) < agent.steps.indexOf(collector));
+    const handler = compiled.jobs.safe_outputs.steps.find(step => step.id === "process_safe_outputs");
+    const config = JSON.parse(handler.env.GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG);
+    assert.deepEqual(config.noop, { max: 2, "report-as-issue": "false" });
+    assert.ok(Object.hasOwn(config, "report_incomplete"));
+    const text = fs.readFileSync(new URL("discussion-draft.md", directory), "utf8");
+    assert.ok(text.includes("After writing `discussion-draft.json`, call `safeoutputs-noop`"));
+});
+
+test("the compiled detection guard accepts collected outputs but never treats a missing signal as success", () => {
     const working = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-detection-guard-"));
     try {
-        const safeOutputs = path.join(working, "gh-aw", "safeoutputs", "outputs.jsonl");
         const githubOutput = path.join(working, "github-output");
-        const signal = agent.steps.find(step => step.id === "require_candidate_detection");
-        if (signal) {
-            const result = spawnSync(process.execPath, ["--eval", signal.run], {
-                cwd: working, encoding: "utf8", env: { ...process.env, GH_AW_SAFE_OUTPUTS: safeOutputs },
-            });
-            assert.equal(result.status, 0, result.stderr);
-        }
-        fs.writeFileSync(path.join(working, "discussion-draft.json"), JSON.stringify({
-            summary: "File-only model output.", scope: "in_scope", scopeReason: "Clarify the existing API.",
-            readiness: "needs_clarification", readinessReason: "A human decision is needed.",
-            questions: ["Which usage data is needed?"], existingRequirements: [], suggestedCriteria: [],
-            limitations: ["No implementation was tested."], pullRequests: [],
-        }));
-        const records = fs.existsSync(safeOutputs) ?
-            fs.readFileSync(safeOutputs, "utf8").trim().split("\n").map(line => JSON.parse(line)) : [];
-        const outputTypes = [...new Set(records.map(record => record.type))].join(",");
         const guard = compiled.jobs.detection.steps.find(step => step.id === "detection_guard");
         assert.equal(guard.env.OUTPUT_TYPES, "${{ needs.agent.outputs.output_types }}");
         assert.equal(agent.outputs.output_types, "${{ steps.collect_output.outputs.output_types }}");
@@ -206,24 +225,18 @@ test("a file-only model response triggers the compiled detection guard without n
             assert.equal(git.status, 0, git.error?.message ?? git.stderr);
             bash = path.resolve(git.stdout.trim(), "..", "..", "..", "bin", "bash.exe");
         }
-        const result = spawnSync(bash, ["--noprofile", "--norc", "-c", guard.run], {
-            cwd: working, encoding: "utf8",
-            env: {
-                ...process.env, OUTPUT_TYPES: outputTypes, HAS_PATCH: "false",
-                GITHUB_OUTPUT: githubOutput.replaceAll("\\", "/"),
-            },
-        });
-        assert.equal(result.status, 0, result.error?.message ?? result.stderr);
-        assert.match(fs.readFileSync(githubOutput, "utf8"), /^run_detection=true$/m);
-        assert.deepEqual(records.map(record => record.type), ["noop"]);
-        const signalIndex = agent.steps.indexOf(signal);
-        assert.ok(signalIndex >= 0 && signalIndex < agent.steps.indexOf(agentCommand));
-        const collector = agent.steps.find(step => step.id === "collect_output");
-        assert.equal(signal.env.GH_AW_SAFE_OUTPUTS, collector.env.GH_AW_SAFE_OUTPUTS);
-        assert.ok(agent.steps.indexOf(agentCommand) < agent.steps.indexOf(collector));
-        const handler = compiled.jobs.safe_outputs.steps.find(step => step.id === "process_safe_outputs");
-        const config = JSON.parse(handler.env.GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG);
-        assert.deepEqual(config.noop, { max: 3, "report-as-issue": "false" });
+        for (const outputTypes of ["noop", "report_incomplete", ""]) {
+            fs.writeFileSync(githubOutput, "");
+            const result = spawnSync(bash, ["--noprofile", "--norc", "-c", guard.run], {
+                cwd: working, encoding: "utf8",
+                env: {
+                    ...process.env, OUTPUT_TYPES: outputTypes, HAS_PATCH: "false",
+                    GITHUB_OUTPUT: githubOutput.replaceAll("\\", "/"),
+                },
+            });
+            assert.equal(result.status, 0, result.error?.message ?? result.stderr);
+            assert.equal(fs.readFileSync(githubOutput, "utf8").trim(), `run_detection=${outputTypes !== ""}`);
+        }
     }
     finally {
         fs.rmSync(working, { recursive: true });

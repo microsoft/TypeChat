@@ -51,6 +51,10 @@ the command**, with no leading text. Editing an old comment does not trigger it.
 /typechat draft
 ```
 
+The Actions bot acknowledges the command comment with an `eyes` reaction when
+the workflow starts processing it. This is not a success or acceptance signal;
+check Actions for progress and errors.
+
 **2. Review:** Open **Actions > Prepare discussion draft**, wait for the run to
 succeed, and read its summary's exact preview. Check factual accuracy, scope,
 existing contributions, unanswered questions, and suggested criteria.
