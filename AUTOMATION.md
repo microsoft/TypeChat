@@ -466,6 +466,8 @@ The workflow check also runs the contract tests in `tools/` (`npm ci --ignore-sc
 by `npm test`), including checks that the runtime pin matches the compilation
 command, generated drafting jobs cannot write to issues or pull requests, and
 the separate publisher has only its target-specific comment permission.
+The discussion tests execute the compiled detection guard with Bash (Git Bash
+on Windows), including a candidate with no model-emitted safe outputs or patch.
 
 The assessment itself remains report-only and does not change existing
 maintenance and deployment workflows. The separate
@@ -515,6 +517,12 @@ agent examines that snapshot and related contributions. It proposes questions,
 recorded requirements, suggested criteria, and a readiness recommendation.
 Thread context is bounded at 1 MiB and 1,000 comments, including replies;
 incomplete or oversized context is an error, not silent truncation.
+
+Before model execution, a trusted step adds a read-only no-op to the native
+safe-output stream. This makes the pinned runtime's detection guard run even
+when the model writes only the candidate file and emits no safe outputs or patch.
+The no-op limit reserves one slot for that signal in addition to the two existing
+model no-ops; no-op issue reporting remains disabled.
 
 The detector downloads the attempt-specific, immutable candidate artifact.
 Trusted code adds its complete JSON text to the detector's agent-output input,

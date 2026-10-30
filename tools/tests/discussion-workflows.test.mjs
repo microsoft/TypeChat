@@ -62,8 +62,9 @@ test("drafting reuses the proven tools and model without enabling the future bui
     assert.deepEqual(source.imports, ["shared/read-only-analysis.md"]);
     for (const key of Object.keys(shared)) {
         if (key === "safe-outputs") {
-            assert.deepEqual(Object.keys(source[key]), ["report-missing-tool", "threat-detection"]);
+            assert.deepEqual(Object.keys(source[key]), ["report-missing-tool", "noop", "threat-detection"]);
             assert.equal(source[key]["report-missing-tool"], shared[key]["report-missing-tool"]);
+            assert.deepEqual(source[key].noop, { max: 3, "report-as-issue": false });
         } else {
             assert.equal(Object.hasOwn(source, key), false, `Do not override shared ${key} controls`);
         }
@@ -173,6 +174,60 @@ test("file-only candidates are explicit inputs to the pinned detector", () => {
     assert.equal(scan["continue-on-error"], false);
     assert.equal(scan["report-as-issue"], false);
     assert.equal(detectionCommand.env.GH_AW_DETECTION_CONTINUE_ON_ERROR, "false");
+});
+
+test("a file-only model response triggers the compiled detection guard without native model outputs or a patch", () => {
+    const working = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-detection-guard-"));
+    try {
+        const safeOutputs = path.join(working, "gh-aw", "safeoutputs", "outputs.jsonl");
+        const githubOutput = path.join(working, "github-output");
+        const signal = agent.steps.find(step => step.id === "require_candidate_detection");
+        if (signal) {
+            const result = spawnSync(process.execPath, ["--eval", signal.run], {
+                cwd: working, encoding: "utf8", env: { ...process.env, GH_AW_SAFE_OUTPUTS: safeOutputs },
+            });
+            assert.equal(result.status, 0, result.stderr);
+        }
+        fs.writeFileSync(path.join(working, "discussion-draft.json"), JSON.stringify({
+            summary: "File-only model output.", scope: "in_scope", scopeReason: "Clarify the existing API.",
+            readiness: "needs_clarification", readinessReason: "A human decision is needed.",
+            questions: ["Which usage data is needed?"], existingRequirements: [], suggestedCriteria: [],
+            limitations: ["No implementation was tested."], pullRequests: [],
+        }));
+        const records = fs.existsSync(safeOutputs) ?
+            fs.readFileSync(safeOutputs, "utf8").trim().split("\n").map(line => JSON.parse(line)) : [];
+        const outputTypes = [...new Set(records.map(record => record.type))].join(",");
+        const guard = compiled.jobs.detection.steps.find(step => step.id === "detection_guard");
+        assert.equal(guard.env.OUTPUT_TYPES, "${{ needs.agent.outputs.output_types }}");
+        assert.equal(agent.outputs.output_types, "${{ steps.collect_output.outputs.output_types }}");
+        let bash = "bash";
+        if (process.platform === "win32") {
+            const git = spawnSync("git", ["--exec-path"], { encoding: "utf8" });
+            assert.equal(git.status, 0, git.error?.message ?? git.stderr);
+            bash = path.resolve(git.stdout.trim(), "..", "..", "..", "bin", "bash.exe");
+        }
+        const result = spawnSync(bash, ["--noprofile", "--norc", "-c", guard.run], {
+            cwd: working, encoding: "utf8",
+            env: {
+                ...process.env, OUTPUT_TYPES: outputTypes, HAS_PATCH: "false",
+                GITHUB_OUTPUT: githubOutput.replaceAll("\\", "/"),
+            },
+        });
+        assert.equal(result.status, 0, result.error?.message ?? result.stderr);
+        assert.match(fs.readFileSync(githubOutput, "utf8"), /^run_detection=true$/m);
+        assert.deepEqual(records.map(record => record.type), ["noop"]);
+        const signalIndex = agent.steps.indexOf(signal);
+        assert.ok(signalIndex >= 0 && signalIndex < agent.steps.indexOf(agentCommand));
+        const collector = agent.steps.find(step => step.id === "collect_output");
+        assert.equal(signal.env.GH_AW_SAFE_OUTPUTS, collector.env.GH_AW_SAFE_OUTPUTS);
+        assert.ok(agent.steps.indexOf(agentCommand) < agent.steps.indexOf(collector));
+        const handler = compiled.jobs.safe_outputs.steps.find(step => step.id === "process_safe_outputs");
+        const config = JSON.parse(handler.env.GH_AW_SAFE_OUTPUTS_HANDLER_CONFIG);
+        assert.deepEqual(config.noop, { max: 3, "report-as-issue": "false" });
+    }
+    finally {
+        fs.rmSync(working, { recursive: true });
+    }
 });
 
 test("sealing requires an executed successful scan, not just a successful detection job", () => {

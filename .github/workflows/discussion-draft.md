@@ -28,6 +28,10 @@ imports:
   - shared/read-only-analysis.md
 safe-outputs:
   report-missing-tool: false
+  noop:
+    # One trusted scan signal plus the two existing model no-ops.
+    max: 3
+    report-as-issue: false
   threat-detection:
     continue-on-error: false
     report-as-issue: false
@@ -225,6 +229,21 @@ steps:
       artifact-ids: ${{ needs.prepare.outputs.context_artifact_id }}
       merge-multiple: true
       path: .typechat-draft
+pre-agent-steps:
+  # The pinned detection guard only sees native output types, not file artifacts.
+  - name: Require candidate threat detection
+    id: require_candidate_detection
+    env:
+      GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
+    shell: node {0}
+    run: |
+      const fs = require("node:fs");
+      const path = require("node:path");
+      fs.mkdirSync(path.dirname(process.env.GH_AW_SAFE_OUTPUTS), { recursive: true });
+      fs.appendFileSync(process.env.GH_AW_SAFE_OUTPUTS, JSON.stringify({
+        type: "noop",
+        message: "This read-only workflow requires threat detection of its candidate artifact before sealing."
+      }) + "\n");
 post-steps:
   - name: Verify candidate draft file
     if: success()
