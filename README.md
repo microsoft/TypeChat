@@ -58,8 +58,8 @@ To learn more about TypeChat, visit the [documentation](https://microsoft.github
 
 [GOALS.md](./GOALS.md) defines what belongs in TypeChat, what does not, and what
 is still under consideration. It is the primary repository policy for product
-scope. Changes require explicit human approval from the `@microsoft/typechat`
-owner team; community interest and AI recommendations do not change it.
+scope. Changes require explicit approval from the human project owner,
+`@robgruen`; community interest and AI recommendations do not change it.
 Read it before proposing a new direction. Ordinary in-scope maintenance follows
 the normal contribution process.
 
@@ -72,21 +72,19 @@ proposals progress from discussion to accepted, reviewed changes with less
 manual coordination. Read about the [automation experiment](./AUTOMATION.md)
 and how to participate.
 
-**Status as of 2026-10-29 (UTC):** The first read-only pilot is merged in
-[#482](https://github.com/microsoft/TypeChat/pull/482).
-[Post-merge workflow checks](https://github.com/microsoft/TypeChat/actions/runs/40454115457)
-passed, and the
-[manual backlog assessment](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
-is available on `main`. The
-[first live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
-succeeded and verified model access. Its draft covers 24 issues and 26 PRs,
-with partial PR investigation; maintainer review and follow-up remain required.
+**Status as of 2026-10-30 (UTC):** The
+[latest backlog assessment](https://github.com/microsoft/TypeChat/actions/runs/40962028077)
+completed successfully after the higher execution limits merged through
+[#490](https://github.com/microsoft/TypeChat/pull/490). The
+[saved draft](./reports/backlog-assessments/2026-10-29-40962028077.md) inventories
+21 open issues and 25 open pull requests at the assessment time, with
+plain-language next steps and project-direction classifications.
 
-The policy, clearer writing guidance, and 400-credit budget merged through
-[#485](https://github.com/microsoft/TypeChat/pull/485) on 2026-10-27 (UTC).
-The [second run](https://github.com/microsoft/TypeChat/actions/runs/40586341288)
-reached its 120-model-call limit before writing a report. Higher call and timeout
-limits are prepared below; they are not yet activated on GitHub.
+The run used 195 model calls and 387.86 of the main assessment's 400 AI credits.
+Detection used a separate 8.82 credits. The inventory is complete, but
+verification remains partial: two CI definitions were inaccessible, and no
+tests or job logs were checked. The report is not acceptance of work, a
+GitHub Copilot code review, or merge approval.
 
 | Milestone | Implemented | Current status |
 | --- | --- | --- |
@@ -95,12 +93,18 @@ limits are prepared below; they are not yet activated on GitHub.
 | Assessment model and reasoning effort | 2026-10-26 | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC). |
 | Reproducible workflow compilation | 2026-10-27 | [Verified on GitHub](https://github.com/microsoft/TypeChat/actions/runs/40454115457): no generated-file drift and 17 passing tests. |
 | First live backlog assessment | 2026-10-27 | [Completed successfully](https://github.com/microsoft/TypeChat/actions/runs/40461739316); 24 issues and 26 PRs enumerated. PR investigation is partial; no dispositions are approved. |
-| Clearer report language | 2026-10-27 | [Writing guidance](./AUTOMATION.md#report-language) merged via [#485](https://github.com/microsoft/TypeChat/pull/485) and loaded in the second run. No report was produced to evaluate the prose. |
-| Assessment budget | 2026-10-27 | [Main-assessment budget](./AUTOMATION.md#inference-budget) raised to 400 AI credits via [#485](https://github.com/microsoft/TypeChat/pull/485) and confirmed in the second run. Detection remains separately budgeted. |
-| Owner-controlled project direction | 2026-10-27 | [Policy](./GOALS.md), assessment guidance, and [CODEOWNERS](./.github/CODEOWNERS) merged via [#485](https://github.com/microsoft/TypeChat/pull/485). The policy was read at the trusted run commit; report classifications and GitHub enforcement remain unverified. |
-| Call and execution-time limits | 2026-10-29 | [Raised to 1,000 calls and 60 minutes of agent execution](./AUTOMATION.md#execution-limits), within a 100-minute job for setup and post-processing. Credit budgets unchanged. Prepared for review; activation pending. |
+| Clearer report language | 2026-10-27 | [Writing guidance](./AUTOMATION.md#report-language) merged via [#485](https://github.com/microsoft/TypeChat/pull/485). The successful October 29 report uses narrative entries and separates evidence from suggestions; human review remains required. |
+| Assessment budget | 2026-10-27 | [Main-assessment budget](./AUTOMATION.md#inference-budget) raised to 400 AI credits via [#485](https://github.com/microsoft/TypeChat/pull/485), confirmed in the latest run. Detection remains separately budgeted. |
+| Owner-controlled project direction | 2026-10-27 | [Policy](./GOALS.md), assessment guidance, and [CODEOWNERS](./.github/CODEOWNERS) merged via [#485](https://github.com/microsoft/TypeChat/pull/485). The latest draft classifies every item against the pinned policy. Classifications are advisory; full GitHub enforcement still needs verification. |
+| Call and execution-time limits | 2026-10-29 | [1,000 calls, 60-minute agent execution, and a 100-minute enclosing job](./AUTOMATION.md#execution-limits) merged via [#490](https://github.com/microsoft/TypeChat/pull/490) and used in the successful October 29 run. Credit budgets unchanged. |
+| Successful policy-aware assessment | 2026-10-29 | [Run details](./AUTOMATION.md#successful-policy-aware-assessment): 21 issues and 25 open PRs inventoried, with partial verification and human review still required. |
+| Human follow-through | 2026-10-29 | Maintainers subsequently merged [#433](https://github.com/microsoft/TypeChat/pull/433) and [#437](https://github.com/microsoft/TypeChat/pull/437). These were human decisions, not automated acceptance. |
+| Selected report archive | 2026-10-30 | The [October 29 draft](./reports/backlog-assessments/2026-10-29-40962028077.md) is preserved unchanged with [provenance and review limits](./AUTOMATION.md#archived-snapshot), for normal PR review. No automatic archiving is enabled. |
+| Named project owner | 2026-10-30 | [Policy](./GOALS.md) and [CODEOWNERS](./.github/CODEOWNERS) name `@robgruen`. Prepared for review; the change takes effect after merge. Existing branch-review protections are unchanged. |
+| Tool boundaries and run diagnostics | 2026-10-30 | [Restricted model tools and native-only metrics](./AUTOMATION.md#tool-boundaries-and-trustworthy-diagnostics) prepared for review. Offline replay corrects the misleading tool totals; live activation remains pending. CI access restrictions are not bypassed. |
 | Owner-approved budget overrides | Not yet | [Future work](./AUTOMATION.md#owner-approved-budget-overrides-planned); no override input or approval mechanism is enabled. |
-| Automatic Copilot PR reviews and human approval gates | Not yet | Next rollout step; live repository settings still need verification. |
+| Automatic Copilot PR reviews | 2026-10-30 | [Active review rule](https://github.com/microsoft/TypeChat/rules/26174313) for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Configuration verified; observation on an eligible PR remains a follow-up. |
+| Stricter human-review enforcement | Not enabled | Existing branch-review protections are retained at the owner's request. Copilot reviews do not replace human approval. |
 | GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
 
@@ -108,6 +112,9 @@ Implementation dates do not mean a feature is enabled on GitHub. Existing
 maintenance and deployment workflows are unchanged. See the
 [detailed status](./AUTOMATION.md#status-and-implementation-history) and
 [workflow model configuration](./AUTOMATION.md#model-selection).
+
+The saved report is a historical snapshot, not today's backlog. Later merges
+and decisions do not rewrite it or turn its recommendations into project policy.
 
 ## Contributing
 

@@ -1,6 +1,6 @@
 # Request owner review for project-direction and automation controls.
-/GOALS.md @microsoft/typechat
-/AUTOMATION.md @microsoft/typechat
-AGENTS.md @microsoft/typechat
-/.github/ @microsoft/typechat
-/tools/ @microsoft/typechat
+/GOALS.md @robgruen
+/AUTOMATION.md @robgruen
+AGENTS.md @robgruen
+/.github/ @robgruen
+/tools/ @robgruen
