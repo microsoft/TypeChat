@@ -1,6 +1,7 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+import { isUtf8 } from "node:buffer";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -561,15 +562,21 @@ export async function sealDraft(github, context, env, prepared, candidate, clock
     return bundle;
 }
 
-export function readJson(directory, filename, maximum) {
+function readArtifact(directory, filename, maximum) {
     const entries = fs.readdirSync(directory);
     requireValue(entries.length === 1 && entries[0] === filename, "Unexpected files in the downloaded artifact.");
     const file = path.join(directory, filename);
     const info = fs.lstatSync(file);
     requireValue(info.isFile() && !info.isSymbolicLink() && info.size > 0 && info.size <= maximum,
         "The artifact must contain one bounded regular JSON file.");
+    const bytes = fs.readFileSync(file);
+    requireValue(isUtf8(bytes), "The artifact must contain UTF-8 JSON.");
+    return bytes.toString("utf8");
+}
+
+function parseJson(text) {
     try {
-        return JSON.parse(fs.readFileSync(file, "utf8"));
+        return JSON.parse(text);
     }
     catch (error) {
         if (error instanceof SyntaxError) {
@@ -577,6 +584,41 @@ export function readJson(directory, filename, maximum) {
         }
         throw error;
     }
+}
+
+export function readJson(directory, filename, maximum) {
+    return parseJson(readArtifact(directory, filename, maximum));
+}
+
+export function stageCandidateForDetection(directory, detectionDirectory) {
+    const text = readArtifact(directory, "discussion-draft.json", MAX_DRAFT_BYTES);
+    validateDraft(parseJson(text));
+    const outputPath = path.join(detectionDirectory, "agent_output.json");
+    const output = fs.existsSync(outputPath) ? parseJson(fs.readFileSync(outputPath, "utf8")) : { items: [] };
+    requireValue(output && Array.isArray(output.items), "The detector's agent output is malformed.");
+    output.items.push({ type: "discussion-draft", content: text });
+    fs.mkdirSync(detectionDirectory, { recursive: true });
+    fs.writeFileSync(outputPath, JSON.stringify(output) + "\n");
+    return digest(text);
+}
+
+export function createCandidateScan(hash, outcome, runId, attempt) {
+    requireValue(typeof hash === "string" && SHA256.test(hash), "Missing candidate threat-scan hash.");
+    requireValue(outcome === "success", "The candidate threat scan did not execute successfully.");
+    return {
+        version: 1, sha256: hash, outcome,
+        runId: integer(Number(runId), "Invalid candidate scan run ID."),
+        attempt: integer(Number(attempt), "Invalid candidate scan attempt."),
+    };
+}
+
+export function readDetectedDraft(directory, scan, runId, attempt) {
+    exactKeys(scan, ["version", "sha256", "outcome", "runId", "attempt"], "Missing or malformed candidate threat-scan binding.");
+    requireValue(equal(scan, createCandidateScan(scan.sha256, scan.outcome, runId, attempt)),
+        "The candidate threat-scan binding belongs to a different run or attempt.");
+    const text = readArtifact(directory, "discussion-draft.json", MAX_DRAFT_BYTES);
+    requireValue(digest(text) === scan.sha256, "The candidate differs from the threat-scanned artifact. Request a new draft.");
+    return parseJson(text);
 }
 
 export function writeJson(directory, filename, value) {
@@ -664,60 +706,28 @@ export function publishedComment(thread, bundle) {
     return matches[0];
 }
 
-async function listArtifacts(github, runId) {
-    const artifacts = [];
-    let total;
-    for (let page = 1; page <= 10; page++) {
-        const data = (await github.rest.actions.listWorkflowRunArtifacts({ ...API_REPO, run_id: runId, per_page: 100, page })).data;
-        requireValue(Array.isArray(data.artifacts) && Number.isSafeInteger(data.total_count) &&
-            data.total_count >= 0 && data.total_count <= 1000, "Artifact history is unavailable or exceeds the pilot limit.");
-        requireValue(total === undefined || total === data.total_count, "Artifact history changed during pagination.");
-        total = data.total_count;
-        artifacts.push(...data.artifacts);
-        if (artifacts.length === total) {
-            return artifacts;
-        }
-        requireValue(artifacts.length < total && data.artifacts.length === 100, "Artifact history is incomplete.");
-    }
-    throw new Error("Artifact history exceeds the pilot limit. Human inspection is required.");
-}
-
 async function priorIntent(github, publication, excludeId) {
-    const prefix = `${INTENT_PREFIX}${publication.artifact.id}-`;
-    const current = await listArtifacts(github, publication.request.runId);
-    const existing = current.find(artifact => artifact.id !== excludeId && artifact.name.startsWith(prefix));
-    if (existing) {
-        return { runId: publication.request.runId, artifactId: existing.id };
-    }
+    const name = `${INTENT_PREFIX}${publication.artifact.id}`;
+    // At most one result can be this run's new intent; any other match blocks publication.
+    const data = (await github.rest.actions.listArtifactsForRepo({ ...API_REPO, name, per_page: 2, page: 1 })).data;
+    requireValue(data && Array.isArray(data.artifacts) && Number.isSafeInteger(data.total_count) &&
+        data.total_count >= 0 && data.artifacts.length === Math.min(data.total_count, 2),
+    "Publication intent history is unavailable or incomplete.");
     const seen = new Set();
-    let total;
-    for (let page = 1; page <= 10; page++) {
-        const data = (await github.rest.actions.listWorkflowRuns({
-            ...API_REPO, workflow_id: path.posix.basename(PUBLISH_WORKFLOW), actor: OWNER.login,
-            created: `>=${publication.artifact.created_at}`, per_page: 100, page,
-        })).data;
-        requireValue(Array.isArray(data.workflow_runs) && Number.isSafeInteger(data.total_count) &&
-            data.total_count >= 0 && data.total_count <= 1000, "Publication history is unavailable or exceeds the pilot limit.");
-        requireValue(total === undefined || total === data.total_count, "Publication history changed during pagination.");
-        total = data.total_count;
-        for (const run of data.workflow_runs) {
-            integer(run.id, "Invalid publication history run ID.");
-            requireValue(!seen.has(run.id), "Publication history changed during pagination.");
-            seen.add(run.id);
-            if (run.id === publication.request.runId) {
-                continue;
-            }
-            const found = (await listArtifacts(github, run.id)).find(artifact => artifact.name.startsWith(prefix));
-            if (found) {
-                return { runId: run.id, artifactId: found.id };
-            }
-        }
-        if (seen.size === total) {
-            return null;
-        }
-        requireValue(seen.size < total && data.workflow_runs.length === 100, "Publication history is incomplete.");
+    for (const artifact of data.artifacts) {
+        requireValue(artifact && Number.isSafeInteger(artifact.id) && artifact.id > 0 &&
+            artifact.name === name && !seen.has(artifact.id) &&
+            artifact.workflow_run?.repository_id === REPOSITORY.id &&
+            Number.isSafeInteger(artifact.workflow_run.id) && artifact.workflow_run.id > 0,
+        "Publication intent history contains invalid or duplicate artifacts.");
+        seen.add(artifact.id);
     }
-    throw new Error("Publication history exceeds the pilot limit. No comment will be posted.");
+    const prior = data.artifacts.find(artifact => artifact.id !== excludeId);
+    if (prior) {
+        return { runId: prior.workflow_run.id, artifactId: prior.id };
+    }
+    requireValue(excludeId === undefined || seen.has(excludeId), "The current publication intent is missing from artifact history.");
+    return null;
 }
 
 async function verifyBundleContext(github, publication, bundle) {
@@ -746,7 +756,7 @@ export async function checkPublication(github, context, env, bundle, clock = () 
     requireValue(!prior, "A previous publication intent exists without a confirmed comment. Inspect that run; automatic retry is blocked.");
     return {
         shouldPost: true,
-        intentName: `${INTENT_PREFIX}${publication.artifact.id}-${publication.request.attempt}`,
+        intentName: `${INTENT_PREFIX}${publication.artifact.id}`,
         intent: {
             version: 1, artifactId: publication.artifact.id, bodyHash: bundle.bodyHash,
             target: bundle.target, approvalComment: publication.request.commentId,
@@ -763,7 +773,7 @@ export async function publishDraft(github, context, env, bundle, intentId, clock
     }
     const intent = (await github.rest.actions.getArtifact({ ...API_REPO, artifact_id: integer(Number(intentId), "Missing durable publication intent.") })).data;
     requireValue(intent.id === Number(intentId) &&
-        intent.name === `${INTENT_PREFIX}${publication.artifact.id}-${publication.request.attempt}` &&
+        intent.name === `${INTENT_PREFIX}${publication.artifact.id}` &&
         intent.workflow_run?.id === publication.request.runId &&
         intent.workflow_run.repository_id === REPOSITORY.id && intent.workflow_run.head_sha === context.sha &&
         intent.expired === false &&
