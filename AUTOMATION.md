@@ -467,7 +467,7 @@ by `npm test`), including checks that the runtime pin matches the compilation
 command, generated drafting jobs cannot write to issues or pull requests, and
 the separate publisher has only its target-specific comment permission.
 The discussion tests execute the compiled detection guard with Bash (Git Bash
-on Windows), including a candidate with no model-emitted safe outputs or patch.
+on Windows), covering collected completion/incomplete signals and a missing signal.
 
 The assessment itself remains report-only and does not change existing
 maintenance and deployment workflows. The separate
@@ -501,7 +501,16 @@ Editing a command does not trigger or authorize a run. Other users, bots, PR
 comments, non-default-branch code, and changed or deleted commands cannot
 authorize drafting or publication. Comment events may still show ignored or
 skipped workflow runs; they do not authorize model inference or posting.
+An `eyes` reaction on the triggering command comment acknowledges that the
+workflow has started processing the request. It is not confirmation that a draft
+is ready, that scanning succeeded, or that work was accepted. Check Actions for
+completion and errors. Native workflow code handles the reaction; the model
+retains read-only access.
 No new public bot comment is made just to acknowledge a draft request.
+The pinned compiler grants reaction-write permissions to trusted activation,
+including `pull-requests: write` because GitHub also uses `issue_comment` for PR
+comments. The owner-only workflow guard still excludes PR comments. These write
+permissions are not granted to model execution, detection, or sealing.
 
 If the wording is wrong, do not approve it. Add clarification to the thread and
 request a new draft. There is no force-publish or editable-artifact shortcut.
@@ -518,11 +527,19 @@ recorded requirements, suggested criteria, and a readiness recommendation.
 Thread context is bounded at 1 MiB and 1,000 comments, including replies;
 incomplete or oversized context is an error, not silent truncation.
 
-Before model execution, a trusted step adds a read-only no-op to the native
-safe-output stream. This makes the pinned runtime's detection guard run even
-when the model writes only the candidate file and emits no safe outputs or patch.
-The no-op limit reserves one slot for that signal in addition to the two existing
-model no-ops; no-op issue reporting remains disabled.
+Do not seed a native `noop` before model execution: the pinned runtime interprets
+it as completed work and skips the model. The model writes the candidate first,
+then emits its native completion signal. If it emits no terminal safe output,
+the pinned collector records an explicit `report_incomplete` signal rather than
+treating silence as successful work. The detection guard consumes the collected
+output types; a missing signal cannot authorize sealing.
+
+The first owner-commanded [draft run](https://github.com/microsoft/TypeChat/actions/runs/41136773812)
+on 2026-10-30 exposed this preflight behavior. The synthetic pre-agent no-op caused
+the model to be skipped, so no candidate or sealed draft was produced. Detection
+and sealing failed closed, and nothing was published. Removing that premature
+completion signal needs a fresh owner-commanded live verification after merge;
+the failed run is not evidence that drafting or scanning succeeded.
 
 The detector downloads the attempt-specific, immutable candidate artifact.
 Trusted code adds its complete JSON text to the detector's agent-output input,

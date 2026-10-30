@@ -9,6 +9,8 @@ on:
     types: [created]
   roles: [admin, maintain, write]
   github-token: ${{ secrets.GITHUB_TOKEN }}
+  reaction: eyes
+  status-comment: false
 if: &draft_request >-
   github.repository == 'microsoft/TypeChat' &&
   github.event.sender.type == 'User' &&
@@ -28,10 +30,6 @@ imports:
   - shared/read-only-analysis.md
 safe-outputs:
   report-missing-tool: false
-  noop:
-    # One trusted scan signal plus the two existing model no-ops.
-    max: 3
-    report-as-issue: false
   threat-detection:
     continue-on-error: false
     report-as-issue: false
@@ -229,21 +227,6 @@ steps:
       artifact-ids: ${{ needs.prepare.outputs.context_artifact_id }}
       merge-multiple: true
       path: .typechat-draft
-pre-agent-steps:
-  # The pinned detection guard only sees native output types, not file artifacts.
-  - name: Require candidate threat detection
-    id: require_candidate_detection
-    env:
-      GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
-    shell: node {0}
-    run: |
-      const fs = require("node:fs");
-      const path = require("node:path");
-      fs.mkdirSync(path.dirname(process.env.GH_AW_SAFE_OUTPUTS), { recursive: true });
-      fs.appendFileSync(process.env.GH_AW_SAFE_OUTPUTS, JSON.stringify({
-        type: "noop",
-        message: "This read-only workflow requires threat detection of its candidate artifact before sealing."
-      }) + "\n");
 post-steps:
   - name: Verify candidate draft file
     if: success()
@@ -348,6 +331,10 @@ exactly `number`, `headSha` (the full inspected commit), and `updatedAt` (the
 inspected API update timestamp). Include at most eight PRs. Do not invent
 references or claim tests were executed.
 
+After writing `discussion-draft.json`, call `safeoutputs-noop` with a brief
+completion summary. Do not report completion before the file exists. This
+native completion signal does not publish a comment or approve the draft.
+
 The workflow will validate and freeze the exact rendered comment. Only a later
-human-owner publish command can authorize posting it. Finish with a brief
-summary; do not claim that anything was posted or accepted.
+human-owner publish command can authorize posting it. Do not claim that anything
+was posted or accepted.
