@@ -32,8 +32,12 @@ Install TypeChat:
 pip install typechat
 ```
 
+To use TypeChat in an existing backend without an interactive chat loop, follow the
+[non-interactive Python quickstart](../site/src/docs/python/non-interactive.md).
+It includes a [standalone sentiment example](./examples/sentiment/non_interactive.py) and an async function you can call from application code.
+
 You can also develop TypeChat from source, which needs [Python >=3.11](https://www.python.org/downloads/),
-[hatch](https://hatch.pypa.io/1.6/install/), and [Node.js >=20](https://nodejs.org/en/download):
+[hatch](https://hatch.pypa.io/1.6/install/), and [Node.js >=24.22.1](https://nodejs.org/en/download):
 
 ```sh
 git clone https://github.com/microsoft/TypeChat

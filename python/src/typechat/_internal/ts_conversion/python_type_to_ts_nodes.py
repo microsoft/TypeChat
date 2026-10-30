@@ -236,6 +236,11 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         if py_type is Self:
             return ThisTypeReferenceNode
 
+        # A NewType has the same runtime representation as its underlying type,
+        # so we emit the underlying type (which may itself be a NewType).
+        if is_new_type(py_type):
+            return convert_to_type_node(py_type.__supertype__)
+
         # TODO: consider handling bare 'tuple' (and list, etc.)
         # https://docs.python.org/3/library/typing.html#annotating-tuples
         # Using plain tuple as an annotation is equivalent to using tuple[Any, ...]:
@@ -280,7 +285,10 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                         )
                         return ArrayTypeNode(AnyTypeReferenceNode)
 
-                    return ArrayTypeNode(convert_to_type_node(type_args[0]))
+                    element_type = convert_to_type_node(type_args[0])
+                    if isinstance(element_type, UnionTypeNode):
+                        return TypeReferenceNode(IdentifierNode("Array"), [element_type])
+                    return ArrayTypeNode(element_type)
 
                 return TupleTypeNode([convert_to_type_node(py_type_arg) for py_type_arg in type_args])
 

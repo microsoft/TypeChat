@@ -18,6 +18,9 @@ Types are all you need!
 
 # Getting Started
 
+Requires [Node.js 24.22.1 or newer](https://nodejs.org/en/download).
+The development version is pinned in [.nvmrc](../.nvmrc).
+
 Install TypeChat:
 
 ```sh
