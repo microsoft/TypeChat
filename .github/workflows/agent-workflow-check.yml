@@ -12,8 +12,7 @@ on:
       - ".github/workflows/**"
       - ".github/aw/**"
       - ".gitattributes"
-      - "tools/package*.json"
-      - "tools/tests/**"
+      - "tools/**"
       - ".nvmrc"
   pull_request:
     branches: [main]
@@ -26,8 +25,7 @@ on:
       - ".github/workflows/**"
       - ".github/aw/**"
       - ".gitattributes"
-      - "tools/package*.json"
-      - "tools/tests/**"
+      - "tools/**"
       - ".nvmrc"
 
 permissions:
@@ -47,11 +45,11 @@ jobs:
             https://raw.githubusercontent.com/github/gh-aw/32ecafbc061c9af57e9361942099e381102ae304/install-gh-aw.sh \
             --output "$RUNNER_TEMP/install-gh-aw.sh"
           bash "$RUNNER_TEMP/install-gh-aw.sh" v0.93.5
-      - name: Validate and compile the assessment
+      - name: Validate and compile agent workflows
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          gh aw compile backlog-assessment --strict --no-check-update --no-logo
+          gh aw compile backlog-assessment discussion-draft --strict --no-check-update --no-logo
           --action-tag 32ecafbc061c9af57e9361942099e381102ae304
       - name: Check generated files are current
         run: |
@@ -66,7 +64,7 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           cache-dependency-path: tools/package-lock.json
-      - name: Test the read-only pilot contract
+      - name: Test the automation pilot contracts
         working-directory: tools
         run: |
           npm ci --ignore-scripts

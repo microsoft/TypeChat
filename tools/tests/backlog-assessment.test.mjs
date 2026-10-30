@@ -14,7 +14,18 @@ const workflowDirectory = new URL("../../.github/workflows/", import.meta.url);
 const markdown = fs.readFileSync(new URL("backlog-assessment.md", workflowDirectory), "utf8");
 const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(markdown);
 assert.ok(frontmatter, "The assessment must have YAML frontmatter");
-const source = parse(frontmatter[1]);
+const localSource = parse(frontmatter[1]);
+const sharedMarkdown = fs.readFileSync(new URL("shared/read-only-analysis.md", workflowDirectory), "utf8");
+const sharedFrontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(sharedMarkdown);
+assert.ok(sharedFrontmatter);
+assert.equal(sharedMarkdown.slice(sharedFrontmatter[0].length).trim(), "", "Shared controls must not change workflow prompts");
+const sharedSource = parse(sharedFrontmatter[1]);
+assert.deepEqual(localSource.imports, ["shared/read-only-analysis.md"]);
+assert.deepEqual(Object.keys(sharedSource).toSorted(), ["engine", "graders", "safe-outputs", "tools"]);
+for (const key of Object.keys(sharedSource)) {
+    assert.equal(Object.hasOwn(localSource, key), false, `Do not override shared controls: ${key}`);
+}
+const source = { ...sharedSource, ...localSource };
 const compiled = parse(fs.readFileSync(new URL("backlog-assessment.lock.yml", workflowDirectory), "utf8"));
 const checks = parse(fs.readFileSync(new URL("agent-workflow-check.yml", workflowDirectory), "utf8"));
 const steps = Object.values(compiled.jobs).flatMap(job => job.steps ?? []);
@@ -426,7 +437,7 @@ test("every remote action and reusable workflow is pinned to a full commit", () 
 });
 
 test("the compiler runtime action pin is cached for reproducible compilation", () => {
-    const compile = checks.jobs.compile.steps.find(step => step.name === "Validate and compile the assessment");
+    const compile = checks.jobs.compile.steps.find(step => step.name === "Validate and compile agent workflows");
     assert.ok(compile);
     const actionTag = /--action-tag\s+([a-f0-9]{40})(?:\s|$)/.exec(compile.run);
     assert.ok(actionTag, "Compilation must select an immutable runtime");
