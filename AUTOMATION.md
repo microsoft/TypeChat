@@ -516,11 +516,21 @@ recorded requirements, suggested criteria, and a readiness recommendation.
 Thread context is bounded at 1 MiB and 1,000 comments, including replies;
 incomplete or oversized context is an error, not silent truncation.
 
-After successful agent execution and threat detection, a separate trusted job
-validates the structured output and downloads the **original** context again.
-It checks for changes, renders the comment, and seals its exact bytes and
-provenance. Model output cannot choose the publishing target, owner, workflow
-identity, or approval record.
+The detector downloads the attempt-specific, immutable candidate artifact.
+Trusted code adds its complete JSON text to the detector's agent-output input,
+preserving any native safe outputs. This includes file-only candidates, not just
+text the model sends to safe-output tools. Sealing requires an executed,
+successful scan with a successful verdict; skipped scans, warnings, and failures
+cannot authorize sealing.
+
+After detection, a separate trusted job downloads that same candidate artifact
+and checks its SHA-256 against an immutable scan-binding artifact from the same
+run and attempt. The binding records the bytes staged for scanning and the
+detector step's successful execution; the job's final verdict must also succeed.
+The sealing job validates the structured output and downloads the **original**
+context again. It checks for changes, renders the comment, and seals its exact
+bytes and provenance. Model output cannot choose the publishing target, owner,
+workflow identity, or approval record.
 
 The [publisher](./.github/workflows/publish-discussion-draft.yml) runs no model.
 Its Issue job has `issues: write`; its Discussion job has `discussions: write`.
@@ -548,7 +558,7 @@ Publishing invokes no model. A **1,000-credit implementation budget** is a
 future owner-approved implementation-stage setting only; this pilot enables
 neither that spending nor a build command.
 
-Context, candidate, and sealed draft artifacts are retained for seven days.
+Context, candidate, scan-binding, and sealed draft artifacts are retained for seven days.
 Approval validity ends at the earlier of artifact expiry or seven days after
 artifact creation. Artifacts and Actions summaries follow repository visibility;
 they are not a private channel and must not contain secrets or sensitive data.
@@ -558,6 +568,13 @@ for 30 days and verifies it outlives the draft's approval window. The repository
 must permit that retention; an upload or retention check failure prevents the
 write. The resulting receipt is also retained for 30 days. Do not delete
 publication runs or intent artifacts while the associated draft remains valid.
+
+Intent names are keyed by the sealed draft's artifact ID, not the publishing run
+or attempt; the intent document still records both. Each history check makes one
+repository-artifact request filtered by that exact name and reads at most two
+matches. Only one match can be the current upload, so a second match always blocks
+another write. Missing, malformed, or incomplete history fails closed. This avoids
+enumerating unrelated workflow runs while finding intents across runs and reruns.
 
 An existing exact comment from the verified Actions bot makes a retry a no-op.
 A prior intent without a confirmed matching comment blocks another write,

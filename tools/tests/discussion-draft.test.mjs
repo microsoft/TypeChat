@@ -13,7 +13,7 @@ import {
     OWNER, REPOSITORY, ACTIONS_BOT_ID, DRAFT_WORKFLOW, PUBLISH_WORKFLOW, DRAFT_ARTIFACT_PREFIX, INTENT_PREFIX,
     CONTROL_PATHS, MAX_AGE_MS, MAX_BUNDLE_BYTES, authorize, parseCommand, digest, readThread, readControls,
     prepareDraft, validateDraft, renderDraft, sealDraft, identifyPublication, checkPublication, publishDraft,
-    readJson, writeJson,
+    readJson, writeJson, stageCandidateForDetection, createCandidateScan, readDetectedDraft,
 } from "../discussion-draft.mjs";
 
 const SHA = "a".repeat(40);
@@ -85,7 +85,7 @@ function setup(kind = "issue") {
             head_branch: "main", head_sha: SHA,
             actor: { id: OWNER.id, type: "User" }, triggering_actor: { id: OWNER.id, type: "User" },
         },
-        publisherRuns: [], posts: [], references: new Map(), comment,
+        historyRequests: [], posts: [], references: new Map(), comment,
         postError: null, persistBeforeError: false, onHistory: null,
     };
     function event(action = "draft", body = "/typechat draft", commentId = "request", runId = 100, attempt = 1) {
@@ -218,17 +218,15 @@ function setup(kind = "issue") {
                     assert.equal(workflow_id, path.posix.basename(DRAFT_WORKFLOW));
                     return { data: { id: 900 } };
                 },
-                listWorkflowRunArtifacts: async ({ run_id, page: pageNumber }) => {
-                    const list = [...artifacts.values()].filter(item => item.workflow_run.id === run_id);
-                    return { data: { artifacts: structuredClone(list.slice((pageNumber - 1) * 100, pageNumber * 100)), total_count: list.length } };
-                },
-                listWorkflowRuns: async ({ actor: login, workflow_id, page: pageNumber }) => {
-                    assert.equal(login, OWNER.login);
-                    assert.equal(workflow_id, path.posix.basename(PUBLISH_WORKFLOW));
+                listArtifactsForRepo: async ({ name, per_page, page: pageNumber, ...repo }) => {
+                    assert.deepEqual(repo, { owner: "microsoft", repo: "TypeChat" });
+                    assert.equal(per_page, 2);
+                    assert.equal(pageNumber, 1);
+                    state.historyRequests.push({ method: "listArtifactsForRepo", name, per_page, page: pageNumber });
                     state.onHistory?.();
+                    const list = [...artifacts.values()].filter(item => item.name === name);
                     return { data: {
-                        workflow_runs: structuredClone(state.publisherRuns.slice((pageNumber - 1) * 100, pageNumber * 100)),
-                        total_count: state.publisherRuns.length,
+                        artifacts: structuredClone(list.slice(0, per_page)), total_count: list.length,
                     } };
                 },
             },
@@ -518,12 +516,40 @@ test("a prior intent blocks a second attempt when no published comment can be co
 
 test("intents from earlier publisher runs also block duplicate writes", async () => {
     const fixture = await ready();
-    fixture.state.publisherRuns.push({ id: 199 });
     fixture.state.artifacts.set(499, {
-        id: 499, name: `${INTENT_PREFIX}500-1`, expired: false,
+        id: 499, name: `${INTENT_PREFIX}500`, expired: false,
         workflow_run: { id: 199, repository_id: REPOSITORY.id, head_sha: SHA },
     });
     await assert.rejects(checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock), /previous publication intent/);
+});
+
+test("intents from earlier attempts of the same publisher run block reruns", async () => {
+    const fixture = await ready();
+    const id = await reserve(fixture);
+    fixture.publication.env.GITHUB_RUN_ATTEMPT = "2";
+    await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+        /previous publication intent/);
+    assert.equal(fixture.state.artifacts.get(id).name, `${INTENT_PREFIX}500`);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("the final intent lookup excludes only the current upload, not another run's intent", async () => {
+    for (const priorFirst of [false, true]) {
+        const fixture = await ready();
+        const id = await reserve(fixture);
+        fixture.state.artifacts.set(499, {
+            id: 499, name: `${INTENT_PREFIX}500`, expired: false,
+            workflow_run: { id: 199, repository_id: REPOSITORY.id, head_sha: SHA },
+        });
+        if (priorFirst) {
+            const current = fixture.state.artifacts.get(id);
+            fixture.state.artifacts.delete(id);
+            fixture.state.artifacts.set(id, current);
+        }
+        await assert.rejects(() => publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock),
+            /previous publication attempt/);
+        assert.equal(fixture.state.posts.length, 0);
+    }
 });
 
 test("publication needs a current durable intent retained beyond the draft lifetime", async () => {
@@ -599,26 +625,82 @@ test("a copied marker from another bot cannot impersonate an Actions publication
 
 test("missing or incomplete publication history fails closed", async () => {
     for (const data of [
-        { workflow_runs: [] },
-        { workflow_runs: [], total_count: 1 },
-        { workflow_runs: [], total_count: 1001 },
+        null,
+        { artifacts: [] },
+        { artifacts: [], total_count: -1 },
+        { artifacts: [], total_count: 1 },
+        { artifacts: [], total_count: 1001 },
     ]) {
         const fixture = await ready();
-        fixture.github.rest.actions.listWorkflowRuns = async () => ({ data });
+        fixture.github.rest.actions.listArtifactsForRepo = async () => ({ data });
         await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
             /history/);
         assert.equal(fixture.state.posts.length, 0);
     }
 });
 
-test("exactly 1,000 history entries are supported without silently ignoring an extra page", async () => {
+test("invalid or duplicate filtered intent artifacts fail closed", async () => {
     const fixture = await ready();
-    fixture.state.publisherRuns = Array.from({ length: 1000 }, (_, index) => ({ id: 1000 + index }));
-    const checked = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock);
-    assert.equal(checked.shouldPost, true);
-    fixture.state.publisherRuns.push({ id: 2000 });
+    const artifact = {
+        id: 499, name: `${INTENT_PREFIX}500`,
+        workflow_run: { id: 199, repository_id: REPOSITORY.id, head_sha: SHA },
+    };
+    for (const artifacts of [
+        [null],
+        [{ ...artifact, id: 0 }],
+        [{ ...artifact, name: `${INTENT_PREFIX}501` }],
+        [{ ...artifact, workflow_run: { id: 199, repository_id: 1 } }],
+        [{ ...artifact, workflow_run: { id: 0, repository_id: REPOSITORY.id } }],
+        [artifact, artifact],
+    ]) {
+        fixture.github.rest.actions.listArtifactsForRepo = async () => ({ data: { artifacts, total_count: artifacts.length } });
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+            /history/);
+    }
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("a missing current intent in the filtered history blocks publication", async () => {
+    const fixture = await ready();
+    const id = await reserve(fixture);
+    fixture.github.rest.actions.listArtifactsForRepo = async () => ({ data: { artifacts: [], total_count: 0 } });
+    await assert.rejects(() => publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock),
+        /current publication intent is missing/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("two filtered matches suffice to block even a long matching history", async () => {
+    const fixture = await ready();
+    for (let index = 0; index < 1000; index++) {
+        fixture.state.artifacts.set(1000 + index, {
+            id: 1000 + index, name: `${INTENT_PREFIX}500`,
+            workflow_run: { id: 1000 + index, repository_id: REPOSITORY.id, head_sha: SHA },
+        });
+    }
     await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
-        /history/);
+        /previous publication intent/);
+    assert.equal(fixture.state.historyRequests.length, 1);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("publication history uses one draft-keyed request per phase regardless of unrelated runs", async () => {
+    const fixture = await ready();
+    for (let index = 0; index < 1001; index++) {
+        fixture.state.artifacts.set(1000 + index, {
+            id: 1000 + index, name: `${INTENT_PREFIX}${1000 + index}`,
+            workflow_run: { id: 1000 + index, repository_id: REPOSITORY.id, head_sha: SHA },
+        });
+    }
+    const id = await reserve(fixture);
+    await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock);
+    assert.equal(fixture.state.historyRequests.length, 2);
+    for (const request of fixture.state.historyRequests) {
+        assert.equal(request.method, "listArtifactsForRepo");
+        assert.equal(request.name, `${INTENT_PREFIX}500`);
+        assert.equal(request.per_page, 2);
+        assert.equal(request.page, 1);
+    }
+    assert.deepEqual(fixture.state.posts, [fixture.bundle.body]);
 });
 
 test("exactly 1,000 comments are supported but one more is an explicit context error", async () => {
@@ -702,6 +784,19 @@ for (const kind of ["issue", "discussion"]) {
             fs.copyFileSync(prepared.path, path.join(contextDirectory, "context.json"));
             const candidateDirectory = downloadDirectory(sealing.find(step => step.name === "Download candidate"));
             writeJson(candidateDirectory, "discussion-draft.json", candidate());
+            const detection = draftWorkflow["safe-outputs"]["threat-detection"];
+            const scanCandidateDirectory = downloadDirectory(detection.steps.find(step => step.name === "Download candidate for detection"));
+            fs.mkdirSync(scanCandidateDirectory);
+            fs.copyFileSync(path.join(candidateDirectory, "discussion-draft.json"), path.join(scanCandidateDirectory, "discussion-draft.json"));
+            const staged = await execute(detection.steps.find(step => step.id === "stage_candidate"), draftRun, {
+                TYPECHAT_DETECTION_DIRECTORY: path.join(temporary, "threat-detection"),
+            });
+            const scanned = await execute(detection["post-steps"].find(step => step.id === "candidate_scan"), draftRun, {
+                TYPECHAT_CANDIDATE_SHA256: staged.sha256, TYPECHAT_SCAN_OUTCOME: "success",
+            });
+            const scanDirectory = downloadDirectory(sealing.find(step => step.name === "Download candidate scan binding"));
+            fs.mkdirSync(scanDirectory);
+            fs.copyFileSync(scanned.path, path.join(scanDirectory, "candidate-scan.json"));
             const sealed = await execute(sealing.find(step => step.id === "seal"), draftRun);
             const bundle = readJson(path.dirname(sealed.path), "sealed-draft.json", MAX_BUNDLE_BYTES);
             assert.equal(fixture.state.posts.length, 0);
@@ -757,6 +852,69 @@ for (const kind of ["issue", "discussion"]) {
         }
     });
 }
+
+test("a file-only candidate is included in detector input and bound to the exact scanned bytes", t => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-file-only-scan-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const candidateDirectory = path.join(directory, "candidate");
+    const detectionDirectory = path.join(directory, "detection");
+    writeJson(candidateDirectory, "discussion-draft.json", candidate());
+    const file = path.join(candidateDirectory, "discussion-draft.json");
+    const text = fs.readFileSync(file, "utf8");
+    const hash = stageCandidateForDetection(candidateDirectory, detectionDirectory);
+    const input = JSON.parse(fs.readFileSync(path.join(detectionDirectory, "agent_output.json"), "utf8"));
+    assert.deepEqual(input.items, [{ type: "discussion-draft", content: text }]);
+    assert.equal(hash, digest(text));
+    const scan = createCandidateScan(hash, "success", 100, "1");
+    assert.deepEqual(readDetectedDraft(candidateDirectory, scan, 100, "1"), candidate());
+    fs.appendFileSync(file, "\n");
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), candidate());
+    assert.throws(() => readDetectedDraft(candidateDirectory, scan, 100, "1"), /differs from the threat-scanned artifact/);
+});
+
+test("candidate staging preserves native outputs and rejects invalid candidates or native inputs", t => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-native-scan-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const candidateDirectory = path.join(directory, "candidate");
+    const detectionDirectory = path.join(directory, "detection");
+    const original = { items: [{ type: "noop", message: "Draft prepared." }], errors: [] };
+    writeJson(candidateDirectory, "discussion-draft.json", candidate());
+    writeJson(detectionDirectory, "agent_output.json", original);
+    stageCandidateForDetection(candidateDirectory, detectionDirectory);
+    const input = JSON.parse(fs.readFileSync(path.join(detectionDirectory, "agent_output.json"), "utf8"));
+    assert.deepEqual(input.items.slice(0, -1), original.items);
+    assert.deepEqual(input.errors, []);
+    assert.deepEqual(JSON.parse(input.items.at(-1).content), candidate());
+    const outputFile = path.join(detectionDirectory, "agent_output.json");
+    for (const invalid of ["{malformed", '{"items":null}']) {
+        fs.writeFileSync(outputFile, invalid);
+        assert.throws(() => stageCandidateForDetection(candidateDirectory, detectionDirectory), /JSON|malformed/);
+        assert.equal(fs.readFileSync(outputFile, "utf8"), invalid);
+    }
+    const candidateFile = path.join(candidateDirectory, "discussion-draft.json");
+    for (const invalid of ["{malformed", "{}", " ".repeat(65537), Buffer.from([0xff])]) {
+        fs.writeFileSync(candidateFile, invalid);
+        assert.throws(() => stageCandidateForDetection(candidateDirectory, detectionDirectory));
+    }
+});
+
+test("scan bindings require successful execution and the current run and attempt", t => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-scan-binding-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    writeJson(directory, "discussion-draft.json", candidate());
+    const hash = digest(fs.readFileSync(path.join(directory, "discussion-draft.json"), "utf8"));
+    const scan = createCandidateScan(hash, "success", 100, 1);
+    for (const outcome of [undefined, "", "skipped", "failure", "cancelled"]) {
+        assert.throws(() => createCandidateScan(hash, outcome, 100, 1), /did not execute successfully/);
+        assert.throws(() => readDetectedDraft(directory, { ...scan, outcome }, 100, 1), /did not execute successfully/);
+    }
+    for (const invalid of [
+        undefined, {}, { ...scan, extra: true }, { ...scan, version: 2 },
+        { ...scan, runId: 99 }, { ...scan, attempt: 2 }, { ...scan, sha256: "" },
+    ]) {
+        assert.throws(() => readDetectedDraft(directory, invalid, 100, 1), /binding|hash/);
+    }
+});
 
 test("artifact files must be bounded regular JSON files with no extra entries", t => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-discussion-test-"));

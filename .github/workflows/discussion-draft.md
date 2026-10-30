@@ -26,6 +26,64 @@ permissions:
   copilot-requests: write
 imports:
   - shared/read-only-analysis.md
+safe-outputs:
+  report-missing-tool: false
+  threat-detection:
+    continue-on-error: false
+    report-as-issue: false
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download candidate for detection
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: typechat-discussion-candidate-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/typechat-detection-candidate
+      - name: Stage the exact candidate for detection
+        id: stage_candidate
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TYPECHAT_DETECTION_DIRECTORY: /tmp/gh-aw/threat-detection
+        with:
+          github-token: ${{ github.token }}
+          retries: 0
+          script: |
+            const path = require("node:path");
+            const { pathToFileURL } = require("node:url");
+            const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
+            const directory = path.join(process.env.RUNNER_TEMP, "typechat-detection-candidate");
+            const hash = helper.stageCandidateForDetection(directory, process.env.TYPECHAT_DETECTION_DIRECTORY);
+            core.setOutput("sha256", hash);
+    post-steps:
+      - name: Record the candidate scan
+        id: candidate_scan
+        if: success() && steps.stage_candidate.outcome == 'success' && steps.detection_agentic_execution.outcome == 'success'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TYPECHAT_CANDIDATE_SHA256: ${{ steps.stage_candidate.outputs.sha256 }}
+          TYPECHAT_SCAN_OUTCOME: ${{ steps.detection_agentic_execution.outcome }}
+        with:
+          github-token: ${{ github.token }}
+          retries: 0
+          script: |
+            const path = require("node:path");
+            const { pathToFileURL } = require("node:url");
+            const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
+            const scan = helper.createCandidateScan(process.env.TYPECHAT_CANDIDATE_SHA256, process.env.TYPECHAT_SCAN_OUTCOME, context.runId, process.env.GITHUB_RUN_ATTEMPT);
+            const directory = path.join(process.env.RUNNER_TEMP, "typechat-candidate-scan");
+            helper.writeJson(directory, "candidate-scan.json", scan);
+            core.setOutput("path", path.join(directory, "candidate-scan.json"));
+      - name: Upload candidate scan binding
+        if: success() && steps.candidate_scan.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: typechat-discussion-scan-${{ github.run_attempt }}
+          path: ${{ steps.candidate_scan.outputs.path }}
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 7
 checkout: false
 network: defaults
 timeout-minutes: 60
@@ -88,7 +146,10 @@ jobs:
   seal:
     name: Seal discussion draft
     needs: [prepare, agent, detection]
-    if: needs.agent.result == 'success' && needs.detection.result == 'success'
+    if: >-
+      needs.agent.result == 'success' && needs.detection.result == 'success' &&
+      needs.detection.outputs.run_detection == 'true' &&
+      needs.detection.outputs.detection_conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -112,6 +173,11 @@ jobs:
         with:
           name: typechat-discussion-candidate-${{ github.run_attempt }}
           path: ${{ runner.temp }}/typechat-seal-candidate
+      - name: Download candidate scan binding
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: typechat-discussion-scan-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/typechat-seal-scan
       - name: Validate and seal the draft
         id: seal
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -123,7 +189,8 @@ jobs:
             const { pathToFileURL } = require("node:url");
             const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
             const prepared = helper.readJson(path.join(process.env.RUNNER_TEMP, "typechat-seal-context"), "context.json", helper.MAX_CONTEXT_BYTES);
-            const candidate = helper.readJson(path.join(process.env.RUNNER_TEMP, "typechat-seal-candidate"), "discussion-draft.json", helper.MAX_DRAFT_BYTES);
+            const scan = helper.readJson(path.join(process.env.RUNNER_TEMP, "typechat-seal-scan"), "candidate-scan.json", 1024);
+            const candidate = helper.readDetectedDraft(path.join(process.env.RUNNER_TEMP, "typechat-seal-candidate"), scan, context.runId, process.env.GITHUB_RUN_ATTEMPT);
             const bundle = await helper.sealDraft(github, context, process.env, prepared, candidate);
             const directory = path.join(process.env.RUNNER_TEMP, "typechat-sealed-draft");
             helper.writeJson(directory, "sealed-draft.json", bundle);

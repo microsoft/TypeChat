@@ -25,6 +25,7 @@ const agent = compiled.jobs.agent;
 const agentCommand = agent.steps.find(step => step.name === "Execute GitHub Copilot CLI");
 const detectionCommand = compiled.jobs.detection.steps.find(step => step.name === "Execute threat detection with AWF");
 const sourceSeal = source.jobs.seal.steps;
+const scan = source["safe-outputs"]["threat-detection"];
 const publishSteps = publisher.jobs.publish_issue.steps;
 
 test("discussion commands are created-comment events guarded by owner and trusted branch", () => {
@@ -60,7 +61,12 @@ test("discussion commands are created-comment events guarded by owner and truste
 test("drafting reuses the proven tools and model without enabling the future build budget", () => {
     assert.deepEqual(source.imports, ["shared/read-only-analysis.md"]);
     for (const key of Object.keys(shared)) {
-        assert.equal(Object.hasOwn(source, key), false, `Do not override shared ${key} controls`);
+        if (key === "safe-outputs") {
+            assert.deepEqual(Object.keys(source[key]), ["report-missing-tool", "threat-detection"]);
+            assert.equal(source[key]["report-missing-tool"], shared[key]["report-missing-tool"]);
+        } else {
+            assert.equal(Object.hasOwn(source, key), false, `Do not override shared ${key} controls`);
+        }
     }
     assert.equal(shared.engine.model, "gpt-6.1-sol");
     assert.equal(source["max-ai-credits"], 50);
@@ -141,6 +147,58 @@ test("trusted preparation gates the model and successful detection gates sealing
     assert.ok(sourceSeal.indexOf(sealedUpload) < sourceSeal.findIndex(step => step.name === "Show the exact preview and approval command"));
 });
 
+test("file-only candidates are explicit inputs to the pinned detector", () => {
+    const detection = compiled.jobs.detection;
+    const download = detection.steps.findIndex(step => step.name === "Download candidate for detection");
+    const stage = detection.steps.findIndex(step => step.id === "stage_candidate");
+    const setup = detection.steps.findIndex(step => step.id === "detection_setup");
+    const execute = detection.steps.findIndex(step => step.id === "detection_agentic_execution");
+    const record = detection.steps.findIndex(step => step.id === "candidate_scan");
+    const upload = detection.steps.findIndex(step => step.name === "Upload candidate scan binding");
+    const conclude = detection.steps.findIndex(step => step.id === "detection_conclusion");
+    assert.ok(download >= 0 && download < stage && stage < setup && setup < execute &&
+        execute < record && record < upload && upload < conclude);
+    const candidateName = "typechat-discussion-candidate-${{ github.run_attempt }}";
+    assert.equal(detection.steps[download].with.name, candidateName);
+    assert.equal(sourceSeal.find(step => step.name === "Download candidate").with.name, candidateName);
+    assert.equal(source["post-steps"].find(step => step.name === "Upload candidate draft").with.name, candidateName);
+    assert.equal(detection.steps[stage].env.TYPECHAT_DETECTION_DIRECTORY, "/tmp/gh-aw/threat-detection");
+    assert.equal(detection.steps[record].env.TYPECHAT_CANDIDATE_SHA256, "${{ steps.stage_candidate.outputs.sha256 }}");
+    assert.equal(detection.steps[record].env.TYPECHAT_SCAN_OUTCOME, "${{ steps.detection_agentic_execution.outcome }}");
+    assert.ok(detection.steps[record].if.includes("steps.detection_agentic_execution.outcome == 'success'"));
+    assert.ok(detection.steps[record].if.includes("steps.stage_candidate.outcome == 'success'"));
+    assert.equal(detection.steps[upload].with.name, "typechat-discussion-scan-${{ github.run_attempt }}");
+    assert.equal(sourceSeal.find(step => step.name === "Download candidate scan binding").with.name,
+        detection.steps[upload].with.name);
+    assert.equal(scan["continue-on-error"], false);
+    assert.equal(scan["report-as-issue"], false);
+    assert.equal(detectionCommand.env.GH_AW_DETECTION_CONTINUE_ON_ERROR, "false");
+});
+
+test("sealing requires an executed successful scan, not just a successful detection job", () => {
+    const condition = compiled.jobs.seal.if.replace(/^\$\{\{\s*|\s*\}\}$/g, "");
+    const canSeal = new Function("needs", `return (${condition});`);
+    const needs = {
+        agent: { result: "success" },
+        detection: {
+            result: "success",
+            outputs: { run_detection: "true", detection_success: "true", detection_conclusion: "success" },
+        },
+    };
+    assert.equal(canSeal(needs), true);
+    for (const [field, values] of Object.entries({
+        run_detection: ["false", ""],
+        detection_success: ["false", ""],
+        detection_conclusion: ["skipped", "warning", "failure", ""],
+    })) {
+        for (const value of values) {
+            const changed = structuredClone(needs);
+            changed.detection.outputs[field] = value;
+            assert.equal(canSeal(changed), false, `${field}=${value} must not seal a draft`);
+        }
+    }
+});
+
 test("publication authenticates provenance before download and reserves intent before its only write", () => {
     const identify = publishSteps.findIndex(step => step.id === "identify");
     const download = publishSteps.findIndex(step => step.name === "Download the approved sealed draft");
@@ -192,7 +250,7 @@ test("trusted scripts, actions, checkouts, and artifact uploads retain their saf
                     assert.equal(step.with.repository, undefined);
                     assert.equal(step.with["persist-credentials"], false);
                 }
-                for (const step of [...source.jobs.prepare.steps, ...sourceSeal, ...publishSteps]) {
+                for (const step of [...source.jobs.prepare.steps, ...sourceSeal, ...scan.steps, ...scan["post-steps"], ...publishSteps]) {
                     if (step.uses?.startsWith("actions/checkout@")) {
                         assert.equal(step.with.ref, "${{ github.sha }}");
                         assert.equal(step.with["persist-credentials"], false);
@@ -206,7 +264,7 @@ test("trusted scripts, actions, checkouts, and artifact uploads retain their saf
             }
         }
     }
-    const uploads = [...source.jobs.prepare.steps, ...sourceSeal, ...source["post-steps"], ...publishSteps]
+    const uploads = [...source.jobs.prepare.steps, ...sourceSeal, ...source["post-steps"], ...scan["post-steps"], ...publishSteps]
         .filter(step => step.uses?.startsWith("actions/upload-artifact@"));
     for (const step of uploads) {
         assert.equal(step.with["if-no-files-found"], "error");
