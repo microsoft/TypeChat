@@ -32,8 +32,12 @@ Install TypeChat:
 pip install typechat
 ```
 
+To use TypeChat in an existing backend without an interactive chat loop, follow the
+[non-interactive Python quickstart](../site/src/docs/python/non-interactive.md).
+It includes a [standalone sentiment example](./examples/sentiment/non_interactive.py) and an async function you can call from application code.
+
 You can also develop TypeChat from source, which needs [Python >=3.11](https://www.python.org/downloads/),
-[hatch](https://hatch.pypa.io/1.6/install/), and [Node.js >=20](https://nodejs.org/en/download):
+[hatch](https://hatch.pypa.io/1.6/install/), and [Node.js >=24.22.1](https://nodejs.org/en/download):
 
 ```sh
 git clone https://github.com/microsoft/TypeChat
@@ -49,6 +53,37 @@ You can try them on your local machine or in a GitHub Codespace.
 To learn more about TypeChat, visit the
 [documentation](https://microsoft.github.io/TypeChat/docs/python/basic-usage/)
 which includes more information on TypeChat and how to get started.
+
+## Accessing failed output
+
+`Failure` retains its existing `message` and can also carry an unvalidated `value: object` and
+`response_text: str | None`. Validators return the rejected input in `value`; translators also retain
+the original model text, including when it is not valid JSON:
+
+```python
+from typechat import Failure
+
+result = await translator.translate(request)
+if isinstance(result, Failure):
+    if result.has_value:
+        rejected = result.value
+        # Validate or repair this value before treating it as the target type.
+    original_response = result.response_text
+```
+
+Check `has_value` before using `value`. It distinguishes unavailable data from a rejected `None`,
+`False`, `0`, or empty string. An unavailable value is represented by an internal missing-value marker,
+not `None`. Custom validators can supply their own payloads using
+`Failure(message, value=rejected, response_text=text)`, and the translator preserves those payloads.
+`Failure(message)` remains valid, and payload fields are omitted from its representation.
+Use `isinstance` with `Success` or `Failure` to distinguish outcomes, not the presence of `value`.
+
+On final failure, automatic repair retains the latest rejected candidate and available response text,
+not a full attempt history. If a repair response cannot be parsed, `value` can come from an earlier
+attempt than `response_text`. An initial network failure has no candidate value. Successful results,
+error messages, and repair limits are unchanged, including Python's existing repair of malformed JSON.
+
+Rejected values and response text may contain sensitive output. Do not log or serialize them blindly.
 
 ## Contributing
 

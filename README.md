@@ -18,6 +18,10 @@ Types are all you need!
 
 # Getting Started
 
+The TypeScript/JavaScript package requires [Node.js 24.22.1 or newer](https://nodejs.org/en/download).
+Development uses Node.js 24.22.1, pinned in [.nvmrc](./.nvmrc), which includes the
+[October 21, 2026 security fixes](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases).
+
 Install TypeChat for TypeScript/JavaScript:
 
 ```
@@ -46,7 +50,73 @@ To see TypeChat in action, we recommend exploring the [TypeChat example projects
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
 
+## Project direction
+
+[GOALS.md](./GOALS.md) defines what belongs in TypeChat, what does not, and what
+is still under consideration. It is the primary repository policy for product
+scope. Changes require explicit human approval from the `@microsoft/typechat`
+owner team; community interest and AI recommendations do not change it.
+Read it before proposing a new direction. Ordinary in-scope maintenance follows
+the normal contribution process.
+
+## Repository automation experiment
+
+We are experimenting with a gradual transition to a semi-automated repository.
+The initial agent-assisted workflow
+keeps humans in the loop, while our longer-term goal is to help community
+proposals progress from discussion to accepted, reviewed changes with less
+manual coordination. Read about the [automation experiment](./AUTOMATION.md)
+and how to participate.
+
+**Status as of 2026-10-29 (UTC):** The first read-only pilot is merged in
+[#482](https://github.com/microsoft/TypeChat/pull/482).
+[Post-merge workflow checks](https://github.com/microsoft/TypeChat/actions/runs/40454115457)
+passed, and the
+[manual backlog assessment](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
+is available on `main`. The
+[first live assessment](https://github.com/microsoft/TypeChat/actions/runs/40461739316)
+succeeded and verified model access. Its draft covers 24 issues and 26 PRs,
+with partial PR investigation; maintainer review and follow-up remain required.
+
+The policy, clearer writing guidance, and 400-credit budget merged through
+[#485](https://github.com/microsoft/TypeChat/pull/485) on 2026-10-27 (UTC).
+The [second run](https://github.com/microsoft/TypeChat/actions/runs/40586341288)
+reached its 120-model-call limit before writing a report. Higher call and timeout
+limits are prepared below; they are not yet activated on GitHub.
+
+| Milestone | Implemented | Current status |
+| --- | --- | --- |
+| Community-facing automation plan | 2026-10-26 | Documented in [AUTOMATION.md](./AUTOMATION.md). |
+| Manual backlog assessment, Copilot guidance, and workflow checks | 2026-10-26 | Merged via [#482](https://github.com/microsoft/TypeChat/pull/482) on 2026-10-27 (UTC); manual assessment available on `main`. |
+| Assessment model and reasoning effort | 2026-10-26 | GPT-6.1-sol and main-assessment `max` effort verified in the first live run on 2026-10-27 (UTC). |
+| Reproducible workflow compilation | 2026-10-27 | [Verified on GitHub](https://github.com/microsoft/TypeChat/actions/runs/40454115457): no generated-file drift and 17 passing tests. |
+| First live backlog assessment | 2026-10-27 | [Completed successfully](https://github.com/microsoft/TypeChat/actions/runs/40461739316); 24 issues and 26 PRs enumerated. PR investigation is partial; no dispositions are approved. |
+| Clearer report language | 2026-10-27 | [Writing guidance](./AUTOMATION.md#report-language) merged via [#485](https://github.com/microsoft/TypeChat/pull/485) and loaded in the second run. No report was produced to evaluate the prose. |
+| Assessment budget | 2026-10-27 | [Main-assessment budget](./AUTOMATION.md#inference-budget) raised to 400 AI credits via [#485](https://github.com/microsoft/TypeChat/pull/485) and confirmed in the second run. Detection remains separately budgeted. |
+| Owner-controlled project direction | 2026-10-27 | [Policy](./GOALS.md), assessment guidance, and [CODEOWNERS](./.github/CODEOWNERS) merged via [#485](https://github.com/microsoft/TypeChat/pull/485). The policy was read at the trusted run commit; report classifications and GitHub enforcement remain unverified. |
+| Call and execution-time limits | 2026-10-29 | [Raised to 1,000 calls and 60 minutes of agent execution](./AUTOMATION.md#execution-limits), within a 100-minute job for setup and post-processing. Credit budgets unchanged. Prepared for review; activation pending. |
+| Owner-approved budget overrides | Not yet | [Future work](./AUTOMATION.md#owner-approved-budget-overrides-planned); no override input or approval mechanism is enabled. |
+| Automatic Copilot PR reviews and human approval gates | Not yet | Next rollout step; live repository settings still need verification. |
+| GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
+| Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
+
+Implementation dates do not mean a feature is enabled on GitHub. Existing
+maintenance and deployment workflows are unchanged. See the
+[detailed status](./AUTOMATION.md#status-and-implementation-history) and
+[workflow model configuration](./AUTOMATION.md#model-selection).
+
 ## Contributing
+
+Start with the [project goals and non-goals](./GOALS.md). Proposals that would
+change these boundaries need an owner-approved policy change before their
+implementation can be accepted.
+
+**Repository automation experiment:** We are experimenting with a gradual
+transition to a semi-automated repository. The initial agent-assisted workflow
+keeps humans in the loop, while our longer-term goal is to help community
+proposals progress from discussion to accepted, reviewed changes with less
+manual coordination. Read about the [automation experiment](./AUTOMATION.md)
+and how to participate.
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
@@ -59,6 +129,24 @@ provided by the bot. You will only need to do this once across all repos using o
 This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
+
+### Website changes
+
+The website source is in [site](./site). From the repository root:
+
+```sh
+npm --prefix site ci
+npm --prefix site run build
+npm --prefix site run serve
+```
+
+For UI changes, check keyboard navigation, including visible focus in Windows high-contrast themes.
+Focus indicators should have at least 3:1 contrast against the adjacent background.
+Check reflow at a 320 x 256 CSS-pixel viewport, equivalent to 400% zoom at 1280 x 1024.
+Also apply text-spacing overrides: line height of 1.5, letter spacing of 0.12em, word spacing of
+0.16em, and paragraph spacing of 2em. The install command must remain readable and its copy button
+visible and keyboard-operable. With JavaScript disabled, the command should remain readable and the
+inactive copy button should be hidden.
 
 ## Trademarks
 
