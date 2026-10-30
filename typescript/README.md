@@ -39,6 +39,14 @@ npm run build
 Run the test suite with `npm test`. The Zod schema tests also compile their generated
 TypeScript schema text to check for syntax errors and unresolved type references.
 
+The TypeScript-backed JSON validator checks its schema and target export before a
+translator makes its first model request. Schema configuration errors are returned
+without asking the model to repair them. This preflight uses the same minimal
+TypeScript library as response validation and is cached for the validator's lifetime.
+Once a schema passes preflight, invalid model responses continue through the normal
+validation and repair flow. Zod and custom validators without schema-only checks keep
+their existing instance-validation behavior.
+
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.

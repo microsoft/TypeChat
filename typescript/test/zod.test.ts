@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { createJsonTranslator } from "../dist/index.js";
 import { createZodJsonValidator, getZodSchemaAsTypeScript } from "../dist/zod/index.js";
 
 // ---------------------------------------------------------------------------
@@ -560,6 +561,27 @@ describe("createZodJsonValidator", () => {
             assert.match(result.message, /\n/);
         });
 
+    });
+
+    describe("translator compatibility", () => {
+        it("keeps instance validation for validators without schema preflight", async () => {
+            const validator = createZodJsonValidator(SentimentSchema, "SentimentResponse");
+            generatedSchemas.push(validator.getSchemaText());
+            assert.equal(validator.validateSchema, undefined);
+
+            let modelCalls = 0;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return { success: true as const, data: '{"sentiment":"positive"}' };
+                }
+            }, validator);
+
+            const result = await translator.translate("positive sentiment");
+            assert.ok(result.success);
+            assert.deepStrictEqual(result.data, { sentiment: "positive" });
+            assert.equal(modelCalls, 1);
+        });
     });
 
 });
