@@ -246,12 +246,12 @@ function setup(kind = "issue") {
     return { state, github, event };
 }
 
-async function ready(kind = "issue") {
+async function ready(kind = "issue", sealedAt = "2026-10-30T00:20:00Z") {
     const fixture = setup(kind);
     const draftRun = fixture.event();
     const prepared = await prepareDraft(fixture.github, draftRun.context, draftRun.env);
     const bundle = await sealDraft(fixture.github, draftRun.context, draftRun.env, prepared, candidate(),
-        () => new Date("2026-10-30T00:20:00Z"));
+        () => new Date(sealedAt));
     fixture.state.artifacts.set(500, {
         id: 500, name: `${DRAFT_ARTIFACT_PREFIX}1`, size_in_bytes: 10000, expired: false,
         created_at: "2026-10-30T00:30:00Z", expires_at: "2026-11-06T00:30:00Z",
@@ -477,6 +477,30 @@ for (const [name, change] of [
         assert.equal(fixture.state.posts.length, 0);
     });
 }
+
+test("same-second sealing and artifact times preserve exact approved publication", async () => {
+    for (const kind of ["issue", "discussion"]) {
+        for (const milliseconds of ["000", "750", "999"]) {
+            const fixture = await ready(kind, `2026-10-30T00:30:00.${milliseconds}Z`);
+            const approved = structuredClone(fixture.bundle);
+            const intentId = await reserve(fixture);
+            const result = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env,
+                fixture.bundle, intentId, clock);
+            assert.equal(result.posted, true);
+            assert.deepEqual(fixture.state.posts, [approved.body]);
+            assert.deepEqual(fixture.bundle, approved, "Precision normalization must not change sealed bytes or approval hashes");
+        }
+    }
+});
+
+test("sealing before the request or in a later artifact second still rejects publication", async () => {
+    for (const sealedAt of ["2026-10-29T23:59:59.999Z", "2026-10-30T00:30:01.000Z"]) {
+        const fixture = await ready("issue", sealedAt);
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, clock), /creation time does not match/);
+        assert.equal(fixture.state.posts.length, 0);
+    }
+});
 
 test("the maximum approval lifetime is enforced even when artifact retention is longer", async () => {
     const fixture = await ready();

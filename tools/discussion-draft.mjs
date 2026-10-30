@@ -640,8 +640,10 @@ function validateBundle(bundle, publication) {
     identifier(bundle.request.commentId, "Missing original request ID.");
     requireValue(parseCommand(bundle.request.commandBody).action === "draft", "The source request was not a draft command.");
     timestamp(bundle.request.commandCreatedAt, "Missing original request time.");
-    requireValue(Date.parse(bundle.createdAt) >= Date.parse(bundle.request.commandCreatedAt) &&
-        Date.parse(bundle.createdAt) <= Date.parse(publication.artifact.created_at),
+    const createdAt = Date.parse(bundle.createdAt);
+    // GitHub artifact creation timestamps have only whole-second precision.
+    requireValue(createdAt >= Date.parse(bundle.request.commandCreatedAt) &&
+        Math.floor(createdAt / 1000) <= Math.floor(Date.parse(publication.artifact.created_at) / 1000),
     "The draft's creation time does not match its recorded provenance.");
     requireValue(equal(validateDraft(bundle.draft), bundle.draft), "The draft does not match the supported schema.");
     requireValue(equal(bundle.fingerprints, publication.controls.fingerprints), "Policy or workflow code changed. Request a new draft.");
