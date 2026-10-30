@@ -73,18 +73,25 @@ manual coordination. Read about the [automation experiment](./AUTOMATION.md)
 and how to participate.
 
 **Status as of 2026-10-30 (UTC):** The
-[latest backlog assessment](https://github.com/microsoft/TypeChat/actions/runs/40962028077)
-completed successfully after the higher execution limits merged through
-[#490](https://github.com/microsoft/TypeChat/pull/490). The
+[latest backlog assessment](https://github.com/microsoft/TypeChat/actions/runs/40997369231)
+completed successfully after the control hardening merged through
+[#491](https://github.com/microsoft/TypeChat/pull/491). It inventories 20 issues
+and 13 open PRs. The earlier
 [saved draft](./reports/backlog-assessments/2026-10-29-40962028077.md) inventories
 21 open issues and 25 open pull requests at the assessment time, with
 plain-language next steps and project-direction classifications.
 
-The run used 195 model calls and 387.86 of the main assessment's 400 AI credits.
-Detection used a separate 8.82 credits. The inventory is complete, but
-verification remains partial: two CI definitions were inaccessible, and no
-tests or job logs were checked. The report is not acceptance of work, a
-GitHub Copilot code review, or merge approval.
+The latest run used 23 model calls and 148.42 of the main assessment's 400 AI
+credits. Detection used a separate 7.89 credits. Its 216 tool calls stayed within
+the allowed set; native diagnostics recorded one failure and no repeated requests.
+Verification remains partial: tests, CI definitions, and job logs were not
+checked. The earlier CI access restriction was not retested. Reports are not
+acceptance of work, GitHub Copilot code reviews, or merge approval.
+
+The next [owner-approved discussion pilot](./AUTOMATION.md#second-pilot-owner-approved-discussion-drafts)
+is prepared for review. It adds `/typechat draft` and exact-draft publication
+for Issues and Discussions, with a 50-credit main drafting budget. It is not
+active until merged and live-verified, and does not enable acceptance or builds.
 
 | Milestone | Implemented | Current status |
 | --- | --- | --- |
@@ -100,12 +107,13 @@ GitHub Copilot code review, or merge approval.
 | Successful policy-aware assessment | 2026-10-29 | [Run details](./AUTOMATION.md#successful-policy-aware-assessment): 21 issues and 25 open PRs inventoried, with partial verification and human review still required. |
 | Human follow-through | 2026-10-29 | Maintainers subsequently merged [#433](https://github.com/microsoft/TypeChat/pull/433) and [#437](https://github.com/microsoft/TypeChat/pull/437). These were human decisions, not automated acceptance. |
 | Selected report archive | 2026-10-30 | The [October 29 draft](./reports/backlog-assessments/2026-10-29-40962028077.md) is preserved unchanged with [provenance and review limits](./AUTOMATION.md#archived-snapshot), for normal PR review. No automatic archiving is enabled. |
-| Named project owner | 2026-10-30 | [Policy](./GOALS.md) and [CODEOWNERS](./.github/CODEOWNERS) name `@robgruen`. Prepared for review; the change takes effect after merge. Existing branch-review protections are unchanged. |
-| Tool boundaries and run diagnostics | 2026-10-30 | [Restricted model tools and native-only metrics](./AUTOMATION.md#tool-boundaries-and-trustworthy-diagnostics) prepared for review. Offline replay corrects the misleading tool totals; live activation remains pending. CI access restrictions are not bypassed. |
+| Named project owner | 2026-10-30 | [Policy](./GOALS.md) and [CODEOWNERS](./.github/CODEOWNERS) name `@robgruen`, merged through [#491](https://github.com/microsoft/TypeChat/pull/491). Existing branch-review protections are unchanged. |
+| Tool boundaries and run diagnostics | 2026-10-30 | [Restricted model tools and native-only metrics](./AUTOMATION.md#tool-boundaries-and-trustworthy-diagnostics) merged through [#491](https://github.com/microsoft/TypeChat/pull/491) and verified in the latest live run. CI access restrictions are not bypassed. |
 | Owner-approved budget overrides | Not yet | [Future work](./AUTOMATION.md#owner-approved-budget-overrides-planned); no override input or approval mechanism is enabled. |
-| Automatic Copilot PR reviews | 2026-10-30 | [Active review rule](https://github.com/microsoft/TypeChat/rules/26174313) for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Configuration verified; observation on an eligible PR remains a follow-up. |
+| Automatic Copilot PR reviews | 2026-10-30 | [Active review rule](https://github.com/microsoft/TypeChat/rules/26174313) for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Configuration and the review on [#491](https://github.com/microsoft/TypeChat/pull/491) were verified. |
 | Stricter human-review enforcement | Not enabled | Existing branch-review protections are retained at the owner's request. Copilot reviews do not replace human approval. |
-| GitHub-native discussion, acceptance, and agent implementation | Not yet | Planned, with human approval initially. |
+| Owner-approved issue and Discussion drafts | 2026-10-30 | [Draft and exact-draft publish commands](./AUTOMATION.md#second-pilot-owner-approved-discussion-drafts) prepared for review; merge and live verification pending. Posting is not acceptance. |
+| Acceptance and agent implementation | Not yet | Separate human decisions. A future 1,000-credit implementation allowance is documented, not enabled. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
 
 Implementation dates do not mean a feature is enabled on GitHub. Existing

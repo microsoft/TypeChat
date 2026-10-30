@@ -1,5 +1,8 @@
 # Experiment: a semi-automated TypeChat repository
 
+For day-to-day commands and next actions, use the separate
+[owner cheat sheet](./OWNER-CHEATSHEET.md).
+
 We are exploring how agents can help maintain TypeChat while keeping community
 discussion, clear acceptance criteria, and human accountability at the center
 of the project.
@@ -20,18 +23,21 @@ is available today.
 **Last updated: 2026-10-30 (UTC).** The read-only
 [Backlog assessment workflow](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
 is available for manual dispatch on `main`. The
-[latest run](https://github.com/microsoft/TypeChat/actions/runs/40962028077)
-completed successfully with the policy, clearer writing guidance, and higher
-execution limits enabled. Its
+[latest run](https://github.com/microsoft/TypeChat/actions/runs/40997369231)
+completed successfully with the named owner, restricted tool choices, and
+native diagnostics enabled after [#491](https://github.com/microsoft/TypeChat/pull/491)
+merged. It inventories 20 issues and 13 open PRs. The earlier October 29
 [preserved draft](./reports/backlog-assessments/2026-10-29-40962028077.md)
-inventories 21 open issues and 25 open PRs at the assessment time.
+remains an unchanged historical snapshot.
 
 The inventory is complete, but verification remains partial. The agent inspected
 PR patches, reviews, and check records; it did not run tests or inspect job logs,
-and two CI definitions were inaccessible. The report's direction classifications
+and did not retest the earlier restriction on two CI definitions. The report's direction classifications
 and next steps remain advisory. Human review is still required. Copilot PR
 reviews are now enabled through a separate repository rule; issue acceptance
-and broader autonomy are not enabled by this pilot.
+and broader autonomy are not enabled. The
+[owner-approved discussion pilot](#second-pilot-owner-approved-discussion-drafts)
+is prepared for review, not yet activated.
 
 | Implemented | Change | Current state |
 | --- | --- | --- |
@@ -50,17 +56,19 @@ and broader autonomy are not enabled by this pilot.
 | 2026-10-29 | [Successful policy-aware assessment](#successful-policy-aware-assessment) | All six jobs succeeded, including report validation and upload. Complete open-item inventory, with partial verification and human review still required. |
 | 2026-10-29 | Human follow-through | Maintainers subsequently merged [#433](https://github.com/microsoft/TypeChat/pull/433) and [#437](https://github.com/microsoft/TypeChat/pull/437). The archive preserves their earlier assessment-time status. |
 | 2026-10-30 | [Selected report archive](#archived-snapshot) | The October 29 draft is preserved unchanged with provenance and review limits, for normal PR review. No automatic archiving is enabled. |
-| 2026-10-30 | Named project owner | [Policy](./GOALS.md), shared guidance, and [CODEOWNERS](./.github/CODEOWNERS) name `@robgruen`. Prepared for review; active only after merge. Existing branch-review protections are unchanged. |
-| 2026-10-30 | [Model-visible tools and native diagnostics](#tool-boundaries-and-trustworthy-diagnostics) | Restricted tool choices and native-only metrics prepared for review. Offline replay and regression tests verify the correction; activation and a live run with these changes remain pending. |
+| 2026-10-30 | Named project owner | [Policy](./GOALS.md), shared guidance, and [CODEOWNERS](./.github/CODEOWNERS) name `@robgruen`. Merged through [#491](https://github.com/microsoft/TypeChat/pull/491) and verified in the latest assessment. Existing branch-review protections are unchanged. |
+| 2026-10-30 | [Model-visible tools and native diagnostics](#tool-boundaries-and-trustworthy-diagnostics) | Merged through [#491](https://github.com/microsoft/TypeChat/pull/491). All seven jobs in run 40997369231 passed; 216 model-selected calls stayed within the allowed set, with one failure and no repeated requests. |
 | Not yet | [Owner-approved budget overrides](#owner-approved-budget-overrides-planned) | Future work only; no budget-override input or approval mechanism is enabled. |
-| 2026-10-30 | [Automatic Copilot PR reviews](#github-copilot-pr-reviews) | Active for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Saved and effective rule configuration verified. Observation on an eligible PR remains a follow-up. |
+| 2026-10-30 | [Automatic Copilot PR reviews](#github-copilot-pr-reviews) | Active for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Configuration and the review on [#491](https://github.com/microsoft/TypeChat/pull/491) were verified. |
 | Not enabled | Stricter human-review enforcement | Existing branch-review protections are retained at the owner's request. The written owner-approval requirement still applies. |
-| Not yet | Agent-assisted discussion and explicit issue acceptance | Planned; no issue-discussion or acceptance commands are enabled by this pilot. |
-| Not yet | Human-approved agent implementation | Planned; the assessment does not start implementation or open PRs. |
+| 2026-10-30 | [Owner-approved issue and Discussion drafts](#second-pilot-owner-approved-discussion-drafts) | Prepared for review: owner-only draft and exact-draft publish commands, using the Actions bot. Merge and owner-commanded live verification remain pending. |
+| Not yet | Explicit work acceptance | Separate human decision; no acceptance command is enabled. Publishing a draft does not accept work. |
+| Not yet | Human-approved agent implementation | Planned with a future 1,000-credit implementation allowance; no build command, implementation workflow, or implementation spending is enabled. |
 | Not yet | Selective automatic adoption | Future work, after public criteria and maintainer approval. |
 
-These are implementation dates, not activation dates. Update this history and
-the README summary as each milestone changes. When a capability is enabled on
+These are implementation dates, not activation dates. Update this history,
+the README summary, and the [owner cheat sheet](./OWNER-CHEATSHEET.md) as each
+milestone changes. When a capability is enabled on
 GitHub, record its activation date and link to the confirming pull request or
 workflow run; do not mark unverified capabilities as active.
 
@@ -83,7 +91,8 @@ subsequent pushes to those PRs. This rule skips draft PRs; personal settings or
 manual requests can still initiate additional reviews independently.
 
 The saved rule and its application to `main` were verified through GitHub's API.
-An actual review under the new rule will be checked on an eligible PR. The rule
+The [review on #491](https://github.com/microsoft/TypeChat/pull/491#pullrequestreview-5707624975)
+was observed before its human-approved merge. The rule
 does not accept issues, start implementation, merge changes, or satisfy a
 required human approval. Existing branch-review protections and team visibility
 were left unchanged at the owner's request.
@@ -207,8 +216,9 @@ Historical artifacts are retained as originally produced, not rewritten.
 
 ### Tool boundaries and trustworthy diagnostics
 
-**Prepared on 2026-10-30 (UTC); active after merge.** The
-[source workflow](./.github/workflows/backlog-assessment.md) now sets an explicit
+**Activated and live-verified on 2026-10-30 (UTC).** The
+[shared read-only controls](./.github/workflows/shared/read-only-analysis.md),
+imported by the assessment and discussion drafter, set an explicit
 Copilot CLI `--available-tools` filter as well as permission approvals. These
 are separate controls: permission approval alone does not hide tools from the
 model. See [Copilot CLI tool controls](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools).
@@ -224,8 +234,12 @@ not additional model-selected actions.
 
 The pinned CLI accepts the exact 16-tool argument, and contract tests check its
 presence in the generated agent command without applying it to threat detection.
-These are offline checks. The next approved live run must confirm useful
-assessment behavior with the restricted choices.
+The [live assessment](https://github.com/microsoft/TypeChat/actions/runs/40997369231)
+also verified all 216 model-selected calls stayed within this set. Its native
+metrics recorded 215 successes, one failed local regular-expression query, and
+zero repeated requests. The main agent used 148.42 credits and detection used
+7.89 credits. The smaller backlog also contributed to the different workload;
+the cost difference is not attributable solely to these controls.
 
 For metrics, the pinned runtime counted transport records as extra failed tool
 calls. Its shared lookup helper did not respect a filtered-session argument, and
@@ -252,8 +266,9 @@ within each session; repeating a request can be legitimate and is not by itself
 proof of a loop.
 
 These diagnostics do not approve work or replace test evidence. Custom graders
-use the runtime's experimental feature, which produces an expected compiler
-warning. They run without model inference in a separate, read-only job after a
+use the runtime's experimental feature. Importing the shared controls may omit
+the compiler's experimental warning; that does not change the feature's status.
+They run without model inference in a separate, read-only job after a
 successful conclusion. If conclusion fails, that job is skipped; missing
 results must not be interpreted as zero failures. The dedicated report
 validation and upload steps, not a general-purpose artifact score, establish
@@ -263,7 +278,8 @@ whether a draft was delivered.
 reads in the recorded run as private-scoped data and denied them. This change
 does not weaken that policy, widen credentials, or use another path to retrieve
 the files. An authorized policy review or human-verified CI evidence is still
-needed; assessments must keep the resulting coverage gap visible.
+needed; assessments must keep the resulting coverage gap visible. The latest
+run did not retry those reads and does not establish that access was restored.
 
 ### Inference budget
 
@@ -398,7 +414,8 @@ owner-reviewed change to the workflow source and generated workflow.
 
 **Pinned on 2026-10-26:** The main assessment uses `gpt-6.1-sol` with `max`
 reasoning effort. The setting is in the
-[workflow's Markdown frontmatter](./.github/workflows/backlog-assessment.md).
+[shared Markdown frontmatter](./.github/workflows/shared/read-only-analysis.md),
+which is also used by the discussion drafter.
 
 `engine.model` pins the model; `engine.args` passes the native Copilot CLI
 `--reasoning-effort max` option and the model-visible tool filter. Preserve the
@@ -429,13 +446,14 @@ its model setting does not configure GitHub Copilot PR reviews.
 ### Validation and rollout
 
 Changes to the workflow are checked by compiling its Markdown source with
-gh-aw **v0.93.5**. Maintainers should regenerate and commit the
-[compiled workflow](./.github/workflows/backlog-assessment.lock.yml) and
+gh-aw **v0.93.5**. Maintainers should regenerate and commit both the
+[compiled assessment](./.github/workflows/backlog-assessment.lock.yml) and
+[compiled discussion drafter](./.github/workflows/discussion-draft.lock.yml), with
 [compiler action pins](./.github/aw/actions-lock.json) together, rather than
 edit the generated workflow directly:
 
 ```shell
-gh aw compile backlog-assessment --strict --no-check-update --no-logo --action-tag 32ecafbc061c9af57e9361942099e381102ae304
+gh aw compile backlog-assessment discussion-draft --strict --no-check-update --no-logo --action-tag 32ecafbc061c9af57e9361942099e381102ae304
 ```
 
 The action reference above pins the v0.93.5 runtime. Keep the compiler pin file
@@ -444,14 +462,123 @@ change generated comments in CI. After committing regenerated files, repeating
 the command should leave `.github/` and `.gitattributes` unchanged, including
 no new untracked files.
 
-The workflow check also runs the contract tests in `tools/` (`npm ci` followed
+The workflow check also runs the contract tests in `tools/` (`npm ci --ignore-scripts` followed
 by `npm test`), including checks that the runtime pin matches the compilation
-command and that generated reporting jobs cannot write to issues or pull requests.
+command, generated drafting jobs cannot write to issues or pull requests, and
+the separate publisher has only its target-specific comment permission.
 
 The assessment itself remains report-only and does not change existing
 maintenance and deployment workflows. The separate
 [Copilot review rule](#github-copilot-pr-reviews) is enabled. Changes to stricter
 human-review enforcement remain a separate owner decision.
+
+## Second pilot: owner-approved discussion drafts
+
+**Prepared on 2026-10-30 (UTC); not active until reviewed and merged to `main`.**
+This pilot adds GitHub-native drafting and approved posting for both Issues and
+Discussions. It does not accept work, change labels, close threads, start
+implementation, create PRs, or merge changes. Existing Copilot PR review remains
+a separate capability.
+
+### Owner commands
+
+Only the human project owner, **@robgruen**, may use these commands. Put the
+command at the start of a **new comment**, with no additional text:
+
+1. Post `/typechat draft` on one open, unlocked issue or Discussion.
+2. Open **Actions > Prepare discussion draft**. After the run succeeds, review
+   the exact preview and the sealed review artifact in its summary.
+3. To approve posting that exact text, copy the summary's
+   `/typechat publish <artifact-id>:<body-sha256>` command into a new comment
+   on the **same thread**. The artifact ID and complete hash are required.
+4. **Publish approved discussion draft** revalidates the approval and posts once
+   as `github-actions[bot]`. For Discussions, this is a **top-level comment**,
+   even if the owner's command was a reply.
+
+Editing a command does not trigger or authorize a run. Other users, bots, PR
+comments, non-default-branch code, and changed or deleted commands cannot
+authorize drafting or publication. Comment events may still show ignored or
+skipped workflow runs; they do not authorize model inference or posting.
+No new public bot comment is made just to acknowledge a draft request.
+
+If the wording is wrong, do not approve it. Add clarification to the thread and
+request a new draft. There is no force-publish or editable-artifact shortcut.
+Readiness classifications and suggested criteria are proposals only; a
+maintainer must still record a separate acceptance decision before development.
+Unclear scope or an item under consideration requires an owner decision.
+
+### Drafting and posting are separate
+
+The [drafting source](./.github/workflows/discussion-draft.md) uses a trusted
+preparation job to freeze the public thread and approved policy. A read-only
+agent examines that snapshot and related contributions. It proposes questions,
+recorded requirements, suggested criteria, and a readiness recommendation.
+Thread context is bounded at 1 MiB and 1,000 comments, including replies;
+incomplete or oversized context is an error, not silent truncation.
+
+After successful agent execution and threat detection, a separate trusted job
+validates the structured output and downloads the **original** context again.
+It checks for changes, renders the comment, and seals its exact bytes and
+provenance. Model output cannot choose the publishing target, owner, workflow
+identity, or approval record.
+
+The [publisher](./.github/workflows/publish-discussion-draft.yml) runs no model.
+Its Issue job has `issues: write`; its Discussion job has `discussions: write`.
+Neither has repository-content write access or Copilot inference permission.
+Both use the repository's short-lived Actions token, not a new personal token
+or bot secret. The [protocol helper](./tools/discussion-draft.mjs) verifies the
+owner, artifact/run provenance, approved body hash, and current context again
+immediately before the one comment write.
+
+Relevant policy or automation-code changes, new discussion evidence, edits,
+closure/locking, or changes to referenced PR revisions invalidate a pending
+draft. Unrelated commits with unchanged controls do not. GitHub does not offer
+an atomic transaction across comments, policy, and PRs: last-moment checks reduce
+races but cannot eliminate a concurrent change between checking and posting.
+The posted body is never silently rewritten.
+
+### Budgets, retention, and retries
+
+The main drafting agent has a **50-AI-credit budget per run**. It reuses the
+assessment's GPT-6.1-sol/max configuration, restricted tools, 1,000-call limit,
+60-minute execution limit, and 100-minute enclosing job. The backlog assessment
+keeps its **400-credit** main budget. Detection retains its **separate
+400-credit default**, so 50 credits is not a combined workflow cap.
+Publishing invokes no model. A **1,000-credit implementation budget** is a
+future owner-approved implementation-stage setting only; this pilot enables
+neither that spending nor a build command.
+
+Context, candidate, and sealed draft artifacts are retained for seven days.
+Approval validity ends at the earlier of artifact expiry or seven days after
+artifact creation. Artifacts and Actions summaries follow repository visibility;
+they are not a private channel and must not contain secrets or sensitive data.
+
+Before posting, the publisher uploads a **publication-intent artifact** retained
+for 30 days and verifies it outlives the draft's approval window. The repository
+must permit that retention; an upload or retention check failure prevents the
+write. The resulting receipt is also retained for 30 days. Do not delete
+publication runs or intent artifacts while the associated draft remains valid.
+
+An existing exact comment from the verified Actions bot makes a retry a no-op.
+A prior intent without a confirmed matching comment blocks another write,
+including reruns and new publish commands for that artifact. A timeout may mean
+GitHub accepted the comment: the workflow never retries that write blindly.
+Inspect the original run and thread manually. Do not delete the intent to force
+a retry; after resolving the uncertain outcome, request and approve a new draft.
+Edited or removed bot comments are not automatically overwritten or recreated.
+
+Owner operations are serialized per thread across both workflows, without
+allowing another user's comments to enter that queue. GitHub concurrency is
+not a FIFO queue: a newer pending owner command can replace an older pending
+one. Wait for each operation to finish during the pilot.
+
+### First live verification
+
+After human review and merge, use **#75** as the first candidate if it remains
+open and suitable. The owner should request a draft, review it, and then approve
+the exact publish command. Verify one correct bot comment and a no-op retry.
+Record the confirming runs before marking this capability active. Local tests
+and compilation do not prove live Actions-token permissions or model access.
 
 ## From discussion to a reviewed change
 
