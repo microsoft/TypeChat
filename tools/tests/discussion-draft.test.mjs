@@ -399,15 +399,30 @@ test("draft schema rejects arbitrary metadata, hidden markup, and premature acce
     assert.equal(validateDraft(scoped).scope, "needs_owner_decision");
 });
 
+test("draft schema rejects HTML comment delimiters in every text field", () => {
+    for (const delimiter of ["<!--", "-->", "--!>"]) {
+        for (const field of ["summary", "scopeReason", "readinessReason", "questions",
+            "existingRequirements", "suggestedCriteria", "limitations"]) {
+            const draft = candidate();
+            const text = `Unexpected ${delimiter} delimiter`;
+            draft[field] = Array.isArray(draft[field]) ? [text] : text;
+            assert.throws(() => validateDraft(draft), /must not contain URLs or hidden markup/,
+                `${field} must reject ${delimiter}`);
+        }
+    }
+});
+
 test("rendering preserves plain text instead of interpreting model-supplied Markdown or entities", async () => {
     const fixture = await ready();
     const draft = validateDraft({
         ...candidate(), summary: "# Not a trusted heading", questions: ["1. Not an ordered list"],
+        existingRequirements: ["Preserve Result<T> when count < 10."],
         limitations: ["&lt;img&gt; is literal text."],
     });
     const text = renderDraft({ ...fixture.bundle, draft });
     assert.ok(text.includes("\\# Not a trusted heading"));
     assert.ok(text.includes("1\\. Not an ordered list"));
+    assert.ok(text.includes("Preserve Result&lt;T&gt; when count &lt; 10\\."));
     assert.ok(text.includes("&amp;lt;img&amp;gt; is literal text\\."));
     assert.ok(!/^# Not a trusted heading$/m.test(text));
 });

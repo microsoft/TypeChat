@@ -425,7 +425,7 @@ function plain(value, field, max = 1000) {
     string(value, `Invalid draft field: ${field}.`, max);
     requireValue(value.trim() === value && value.length > 0 && !/[\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069]/.test(value),
         `${field} must be nonempty, single-line plain text.`);
-    requireValue(!/\b[a-z][a-z0-9+.-]*:\/\/|\bwww\.|<!--|-->/i.test(value),
+    requireValue(!/\b[a-z][a-z0-9+.-]*:\/\/|\bwww\.|<!--|--!?>/i.test(value),
         `${field} must not contain URLs or hidden markup; use structured PR references.`);
     return value;
 }
