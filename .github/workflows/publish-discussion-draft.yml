@@ -118,7 +118,7 @@ jobs:
             const result = await helper.publishDraft(github, context, process.env, bundle, Number(process.env.TYPECHAT_INTENT_ARTIFACT_ID));
             const directory = path.join(process.env.RUNNER_TEMP, "typechat-publication-receipt");
             helper.writeJson(directory, "receipt.json", {
-              ...result, target: bundle.target, producer: bundle.producer, bodyHash: bundle.bodyHash,
+              ...result, target: bundle.target, producer: bundle.producer,
               approvalComment: context.payload.comment.node_id,
             });
             core.setOutput("receipt_path", path.join(directory, "receipt.json"));

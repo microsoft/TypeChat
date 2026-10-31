@@ -88,10 +88,13 @@ Verification remains partial: tests, CI definitions, and job logs were not
 checked. The earlier CI access restriction was not retested. Reports are not
 acceptance of work, GitHub Copilot code reviews, or merge approval.
 
-The next [owner-approved discussion pilot](./AUTOMATION.md#second-pilot-owner-approved-discussion-drafts)
-is prepared for review. It adds `/typechat draft` and exact-draft publication
-for Issues and Discussions, with a 50-credit main drafting budget. It is not
-active until merged and live-verified, and does not enable acceptance or builds.
+The [owner-approved discussion pilot](./AUTOMATION.md#second-pilot-owner-approved-discussion-drafts)
+has a verified Issue draft-only run. The next revision prepares conversational
+replies and adds owner-only `/typechat reply`: one checked public response per
+command, without a second text-approval step. `/typechat draft` remains
+preview-only, followed by exact-text approval through `/typechat publish`.
+The new mode is pending review and live verification, keeps the 50-credit main
+budget and separately budgeted detection, and does not enable acceptance or builds.
 
 | Milestone | Implemented | Current status |
 | --- | --- | --- |
@@ -112,7 +115,8 @@ active until merged and live-verified, and does not enable acceptance or builds.
 | Owner-approved budget overrides | Not yet | [Future work](./AUTOMATION.md#owner-approved-budget-overrides-planned); no override input or approval mechanism is enabled. |
 | Automatic Copilot PR reviews | 2026-10-30 | [Active review rule](https://github.com/microsoft/TypeChat/rules/26174313) for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Configuration and the review on [#491](https://github.com/microsoft/TypeChat/pull/491) were verified. |
 | Stricter human-review enforcement | Not enabled | Existing branch-review protections are retained at the owner's request. Copilot reviews do not replace human approval. |
-| Owner-approved issue and Discussion drafts | 2026-10-30 | [Draft and exact-draft publish commands](./AUTOMATION.md#second-pilot-owner-approved-discussion-drafts) prepared for review; merge and live verification pending. Posting is not acceptance. |
+| Owner-approved issue and Discussion drafts | 2026-10-30 | Merged through [#495](https://github.com/microsoft/TypeChat/pull/495); [run 41147057482](https://github.com/microsoft/TypeChat/actions/runs/41147057482) verified the Issue draft-only path. Publication and Discussion-path verification remain separate. |
+| Owner-commanded direct replies | 2026-10-31 | `/typechat reply` and conversational previews prepared for review. One checked response per owner command; no work acceptance or autonomous follow-up. Merge and live verification pending. |
 | Acceptance and agent implementation | Not yet | Separate human decisions. A future 1,000-credit implementation allowance is documented, not enabled. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
 
