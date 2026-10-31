@@ -17,7 +17,10 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const npmCli = path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+const npmCli = process.env.npm_execpath ?? path.resolve(
+    path.dirname(process.execPath),
+    process.platform === "win32" ? "node_modules/npm/bin/npm-cli.js" : "../lib/node_modules/npm/bin/npm-cli.js"
+);
 const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
 
 function runNpm(args, cwd, cache) {
