@@ -1,6 +1,28 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { stripTypeScriptTypes } from "node:module";
+import { runInNewContext } from "node:vm";
 import { evaluateJsonProgram, createModuleTextFromProgram, Program, FunctionCall } from "../dist/ts/index.js";
+
+describe("generated JSON object property names", () => {
+    for (const value of ["kept", { label: "kept" }, null]) {
+        it(`preserves an own __proto__ field with value ${JSON.stringify(value)}`, async () => {
+            const input = JSON.parse(`{"__proto__": ${JSON.stringify(value)}, "value": 7}`);
+            const program: Program = { "@steps": [{ "@func": "identity", "@args": [input] }] };
+            const module = createModuleTextFromProgram(program);
+            assert.ok(module.success);
+            // The schema import is used only for type checking, not by the host API.
+            const source = stripTypeScriptTypes(module.data.replace(/^import[^\n]*\n/, ""));
+            const generated = runInNewContext(source + "; program") as
+                (api: { identity: (value: unknown) => unknown }) => object;
+            const result = generated({ identity: value => value });
+            assert.ok(Object.prototype.hasOwnProperty.call(result, "__proto__"));
+            assert.equal(JSON.stringify(result), JSON.stringify(input));
+            const interpreted = await evaluateJsonProgram(program, async (_name, args) => args[0]);
+            assert.equal(JSON.stringify(result), JSON.stringify(interpreted));
+        });
+    }
+});
 
 // ---------------------------------------------------------------------------
 // evaluateJsonProgram result-reference bounds checking
