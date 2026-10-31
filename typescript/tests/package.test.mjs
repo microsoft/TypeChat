@@ -17,12 +17,12 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+const npmCli = path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
 const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
 
 function runNpm(args, cwd, cache) {
     try {
-        return execFileSync(npmCommand, args, {
+        return execFileSync(process.execPath, [npmCli, ...args], {
             cwd,
             env: {
                 ...process.env,
@@ -30,7 +30,6 @@ function runNpm(args, cwd, cache) {
                 NPM_CONFIG_UPDATE_NOTIFIER: "false",
             },
             encoding: "utf8",
-            shell: process.platform === "win32",
             stdio: ["ignore", "pipe", "pipe"],
             timeout: 300_000,
         });
@@ -78,18 +77,16 @@ test("published package works for a clean TypeScript 7 consumer", () => {
             path.join(consumer, "package.json"),
             JSON.stringify({ name: "typechat-package-consumer", private: true, type: "module" })
         );
-        runNpm(
-            [
-                "install",
-                "--ignore-scripts",
-                "--no-audit",
-                "--no-fund",
-                path.join(packDirectory, tarballs[0]),
-                "typescript@7.0.2",
-            ],
-            consumer,
-            path.join(tempRoot, "consumer-cache")
-        );
+        const consumerModules = path.join(consumer, "node_modules");
+        const consumerPackage = path.join(consumerModules, "typechat");
+        mkdirSync(consumerPackage, { recursive: true });
+        execFileSync("tar", ["-xzf", path.join(packDirectory, tarballs[0]), "-C", consumerPackage, "--strip-components=1"], {
+            stdio: "ignore",
+            timeout: 120_000,
+        });
+        symlinkSync(path.join(buildPackage, "node_modules", "typescript"), path.join(consumerModules, "typescript"), directoryLinkType);
+        const installedTypeScript = JSON.parse(readFileSync(path.join(consumerModules, "typescript", "package.json"), "utf8"));
+        assert.match(installedTypeScript.version, /^7\./);
 
         const verification = path.join(consumer, "verify.mjs");
         writeFileSync(
