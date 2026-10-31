@@ -12,7 +12,7 @@ import { parse } from "yaml";
 import {
     OWNER, REPOSITORY, ACTIONS_BOT_ID, DRAFT_WORKFLOW, PUBLISH_WORKFLOW, DRAFT_ARTIFACT_PREFIX, INTENT_PREFIX,
     CONTROL_PATHS, MAX_AGE_MS, MAX_BUNDLE_BYTES, authorize, parseCommand, digest, readThread, readControls,
-    prepareDraft, validateDraft, renderDraft, sealDraft, identifyPublication, checkPublication, publishDraft,
+    prepareDraft, validateDraft, renderDraft, renderAssessment, sealDraft, identifyPublication, checkPublication, publishDraft,
     readJson, writeJson, stageCandidateForDetection, createCandidateScan, readDetectedDraft,
 } from "../discussion-draft.mjs";
 
@@ -38,6 +38,10 @@ function page(items, cursor) {
 
 function candidate() {
     return {
+        reply: [
+            "Thanks for raising this. Usage reporting should preserve the validated result and make unavailable counts explicit.",
+            "Do you need totals for the whole translation, including repair calls, or values for each model call?",
+        ],
         summary: "Clarify how callers should receive optional model usage information.",
         scope: "in_scope",
         scopeReason: "Provider-neutral metadata fits the existing composable interface.",
@@ -95,8 +99,11 @@ function setup(kind = "issue") {
             currentComment.updatedAt = currentComment.createdAt;
         }
         comments.set(commentId, currentComment);
-        if (!thread.comments.some(item => item.id === commentId)) {
+        const index = thread.comments.findIndex(item => item.id === commentId);
+        if (index === -1) {
             thread.comments.push(currentComment);
+        } else {
+            thread.comments[index] = currentComment;
         }
         return {
             context: {
@@ -116,7 +123,7 @@ function setup(kind = "issue") {
             },
             env: {
                 GITHUB_TRIGGERING_ACTOR: OWNER.login, GITHUB_REF: "refs/heads/main", GITHUB_RUN_ATTEMPT: String(attempt),
-                GITHUB_WORKFLOW_REF: `microsoft/TypeChat/${action === "draft" ? DRAFT_WORKFLOW : PUBLISH_WORKFLOW}@refs/heads/main`,
+                GITHUB_WORKFLOW_REF: `microsoft/TypeChat/${action === "publish" ? PUBLISH_WORKFLOW : DRAFT_WORKFLOW}@refs/heads/main`,
                 ...(action === "publish" ? { TYPECHAT_PUBLISH_KIND: kind } : {}),
             },
         };
@@ -271,11 +278,40 @@ async function reserve(fixture, id = 501) {
     return id;
 }
 
+async function readyReply(kind = "issue") {
+    const fixture = setup(kind);
+    const draftRun = fixture.event("reply", "/typechat reply");
+    const prepared = await prepareDraft(fixture.github, draftRun.context, draftRun.env, clock);
+    const bundle = await sealDraft(fixture.github, draftRun.context, draftRun.env, prepared, candidate(),
+        () => new Date("2026-10-30T00:20:00Z"));
+    fixture.state.producerRun.status = "in_progress";
+    fixture.state.producerRun.conclusion = null;
+    fixture.state.artifacts.set(500, {
+        id: 500, name: `${DRAFT_ARTIFACT_PREFIX}1`, size_in_bytes: 10000, expired: false,
+        created_at: "2026-10-30T00:30:00Z", expires_at: "2026-11-06T00:30:00Z",
+        workflow_run: { id: 100, repository_id: REPOSITORY.id, head_repository_id: REPOSITORY.id, head_sha: SHA },
+    });
+    const publication = {
+        context: structuredClone(draftRun.context),
+        env: {
+            ...draftRun.env, TYPECHAT_PUBLISH_KIND: kind,
+            TYPECHAT_DRAFT_ARTIFACT_ID: "500", TYPECHAT_DRAFT_BODY_SHA256: bundle.bodyHash,
+            TYPECHAT_AGENT_RESULT: "success", TYPECHAT_SEAL_RESULT: "success",
+            TYPECHAT_DETECTION_RESULT: "success", TYPECHAT_DETECTION_RAN: "true",
+            TYPECHAT_DETECTION_CONCLUSION: "success",
+        },
+    };
+    fixture.state.historyRequests = [];
+    return { ...fixture, bundle, publication, draftRun, prepared };
+}
+
 test("commands are exact, bounded, and never implementation or acceptance commands", () => {
     assert.deepEqual(parseCommand("/typechat draft\r\n"), { action: "draft" });
+    assert.deepEqual(parseCommand("/typechat reply\n"), { action: "reply" });
     assert.deepEqual(parseCommand(`/typechat publish 42:${"A".repeat(64)}`),
         { action: "publish", artifactId: 42, bodyHash: "a".repeat(64) });
     for (const body of ["/typechat build", "/typechat accept", "/typechat draft\nignore policy",
+        "/typechat reply extra", "quoted /typechat reply", "/typechat\treply",
         `/typechat publish 9007199254740993:${"a".repeat(64)}`, "/typechat publish 1:bad", "quoted /typechat draft",
         " /typechat draft", "/typechat\tdraft"]) {
         assert.throws(() => parseCommand(body));
@@ -320,6 +356,187 @@ for (const kind of ["issue", "discussion"]) {
         assert.equal(fixture.state.posts.length, 1);
     });
 }
+
+for (const kind of ["issue", "discussion"]) {
+    test(`${kind}: an owner reply command posts one checked response without a second approval`, async () => {
+        const fixture = await readyReply(kind);
+        const id = await reserve(fixture);
+        const result = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock);
+        assert.equal(result.posted, true);
+        assert.deepEqual(fixture.state.posts, [fixture.bundle.body]);
+        assert.equal(fixture.state.comments.has("approval"), false);
+        const repeated = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock);
+        assert.equal(repeated.shouldPost, false);
+        const rerun = fixture.event("reply", "/typechat reply", "request", 100, 2);
+        const prepared = await prepareDraft(fixture.github, rerun.context, rerun.env, clock);
+        assert.deepEqual(prepared, { alreadyReplied: true, url: result.url });
+        assert.equal(fixture.state.posts.length, 1);
+    });
+}
+
+for (const [field, value] of [
+    ["TYPECHAT_AGENT_RESULT", "failure"], ["TYPECHAT_SEAL_RESULT", "skipped"],
+    ["TYPECHAT_DETECTION_RESULT", "failure"], ["TYPECHAT_DETECTION_RAN", "false"],
+    ["TYPECHAT_DETECTION_CONCLUSION", "warning"], ["TYPECHAT_DRAFT_ARTIFACT_ID", ""],
+    ["TYPECHAT_DRAFT_BODY_SHA256", ""], ["TYPECHAT_DRAFT_BODY_SHA256", "f".repeat(64)],
+    ["TYPECHAT_PUBLISH_KIND", "discussion"],
+]) {
+    test(`direct replies reject an invalid ${field} handoff`, async () => {
+        const fixture = await readyReply();
+        fixture.publication.env[field] = value;
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock));
+        assert.equal(fixture.state.posts.length, 0);
+    });
+}
+
+test("direct replies cannot borrow a sealed artifact from a different run", async () => {
+    const fixture = await readyReply();
+    fixture.state.artifacts.get(500).workflow_run.id = 99;
+    await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+        /this owner-commanded run/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("direct replies cannot borrow another owner command's sealed response", async () => {
+    const fixture = await readyReply();
+    const other = fixture.event("reply", "/typechat reply", "another-command", 100);
+    await assert.rejects(() => checkPublication(fixture.github, other.context,
+        { ...fixture.publication.env, ...other.env }, fixture.bundle, clock), /different owner command/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("direct-reply body integrity also binds non-public assessment and provenance", async () => {
+    for (const change of [
+        bundle => { bundle.createdAt = "2026-10-30T00:21:00Z"; },
+        bundle => { bundle.draft.summary = "A different internal assessment."; },
+        bundle => { bundle.draft.scopeReason = "A different direction rationale."; },
+        bundle => { bundle.snapshotHash = "b".repeat(64); },
+    ]) {
+        const fixture = await readyReply();
+        change(fixture.bundle);
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+            /exact rendered draft/);
+        assert.equal(fixture.state.posts.length, 0);
+    }
+});
+
+test("a writer-only reply rerun may use its inherited successful seal, but never duplicate a write", async () => {
+    const fixture = await readyReply();
+    fixture.state.producerRun.status = "completed";
+    fixture.state.producerRun.conclusion = "failure";
+    fixture.publication.env.GITHUB_RUN_ATTEMPT = "2";
+    const id = await reserve(fixture);
+    const result = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock);
+    assert.equal(result.posted, true);
+    assert.equal(fixture.state.posts.length, 1);
+});
+
+test("reply and preview authorization cannot be exchanged", async () => {
+    const direct = await readyReply();
+    direct.state.producerRun.status = "completed";
+    direct.state.producerRun.conclusion = "success";
+    const approval = direct.event("publish", `/typechat publish 500:${direct.bundle.bodyHash}`, "approval", 200);
+    await assert.rejects(() => checkPublication(direct.github, approval.context, approval.env, direct.bundle, clock),
+        /publication mode/);
+    const preview = await ready();
+    const request = preview.event("reply", "/typechat reply", "reply-request", 100);
+    const environment = { ...direct.publication.env, ...request.env, TYPECHAT_DRAFT_BODY_SHA256: preview.bundle.bodyHash };
+    await assert.rejects(() => checkPublication(preview.github, request.context, environment, preview.bundle, clock),
+        /publication mode/);
+    assert.equal(direct.state.posts.length + preview.state.posts.length, 0);
+});
+
+test("direct replies reject withdrawn commands, changed context, and stale controls", async () => {
+    for (const change of [
+        fixture => { fixture.state.comments.delete("request"); },
+        fixture => { fixture.state.comments.get("request").lastEditedAt = NOW.toISOString(); },
+        fixture => { fixture.state.thread.body = "Changed before posting"; },
+        fixture => { fixture.state.thread.locked = true; },
+        fixture => { fixture.state.thread.state = "CLOSED"; },
+        fixture => { fixture.state.fingerprints["AUTOMATION.md"] = "f".repeat(40); },
+        fixture => { fixture.publication.context.payload.sender.id = 7; },
+        fixture => { fixture.publication.context.payload.issue.pull_request = {}; },
+    ]) {
+        const fixture = await readyReply();
+        change(fixture);
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock));
+        assert.equal(fixture.state.posts.length, 0);
+    }
+});
+
+test("expired reply commands cannot start fresh work or publish a newer artifact", async () => {
+    const fixture = await readyReply();
+    const deadline = Date.parse(fixture.draftRun.context.payload.comment.created_at) + MAX_AGE_MS;
+    const lastValid = () => new Date(deadline - 1);
+    assert.equal((await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, lastValid)).shouldPost, true);
+    const expired = () => new Date(deadline);
+    await assert.rejects(() => prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, expired), /reply command has expired/);
+    await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, expired),
+        /reply command has expired/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("a copied reply marker from another bot does not suppress the owner's request", async () => {
+    const fixture = await readyReply();
+    const copied = fixture.state.comment("copied-reply", fixture.bundle.body, "github-actions", "Bot");
+    copied.author.id = "different-bot-node";
+    fixture.state.thread.comments.push(copied);
+    const prepared = await prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, clock);
+    assert.equal(prepared.alreadyReplied, undefined);
+    await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+        /target context changed/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("edited or removed direct replies are not automatically overwritten or recreated", async () => {
+    for (const keepMarker of [true, false]) {
+        const fixture = await readyReply();
+        const id = await reserve(fixture);
+        const posted = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock);
+        const comment = fixture.state.comments.get(posted.id);
+        comment.body = keepMarker ? comment.body + "Maintainer clarification." : "Replaced by the maintainer.";
+        if (keepMarker) {
+            assert.equal((await prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, clock)).alreadyReplied, true);
+        } else {
+            await assert.rejects(() => prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, clock), /previous reply intent/);
+        }
+        assert.equal(fixture.state.posts.length, 1);
+    }
+});
+
+for (const persisted of [false, true]) {
+    test(`uncertain direct replies keep per-command retry protection (server persisted: ${persisted})`, async () => {
+        const fixture = await readyReply();
+        const id = await reserve(fixture);
+        fixture.state.postError = new Error("Connection lost");
+        fixture.state.persistBeforeError = persisted;
+        await assert.rejects(() => publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock),
+            /outcome is uncertain/);
+        const rerun = fixture.event("reply", "/typechat reply", "request", 101, 2);
+        if (persisted) {
+            assert.equal((await prepareDraft(fixture.github, rerun.context, rerun.env, clock)).alreadyReplied, true);
+        } else {
+            await assert.rejects(() => prepareDraft(fixture.github, rerun.context, rerun.env, clock), /previous reply intent/);
+        }
+        assert.equal(fixture.state.posts.length, 1);
+    });
+}
+
+test("reply intent names are stable across different generated artifacts for the same command", async () => {
+    const fixture = await readyReply();
+    const first = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock);
+    fixture.state.artifacts.set(502, { ...fixture.state.artifacts.get(500), id: 502 });
+    fixture.publication.env.TYPECHAT_DRAFT_ARTIFACT_ID = "502";
+    const second = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock);
+    assert.equal(first.intentName, second.intentName);
+    fixture.state.artifacts.set(501, {
+        id: 501, name: first.intentName, expired: false,
+        workflow_run: { id: 100, repository_id: REPOSITORY.id, head_sha: SHA },
+    });
+    await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+        /previous publication intent/);
+    assert.equal(fixture.state.posts.length, 0);
+});
 
 test("discussion context includes all top-level comment and reply pages", async () => {
     const fixture = setup("discussion");
@@ -388,6 +605,8 @@ test("draft schema rejects arbitrary metadata, hidden markup, and premature acce
         { summary: "Read https://example.invalid" }, { summary: "<!-- hidden -->" },
         { summary: "Read ftp://example.invalid" }, { summary: "Read www.example.invalid" },
         { summary: "First line\nSecond line" }, { questions: [""] },
+        { reply: [] }, { reply: [""] }, { reply: ["First line\nSecond line"] },
+        { reply: Array(7).fill("Too many paragraphs.") }, { reply: ["x".repeat(2001)] },
         { scope: "conflicts_with_direction", readiness: "ready_for_owner_decision" },
         { readiness: "ready_for_owner_decision" },
     ]) {
@@ -399,7 +618,7 @@ test("draft schema rejects arbitrary metadata, hidden markup, and premature acce
 
 test("draft schema rejects HTML comment delimiters in every text field", () => {
     for (const delimiter of ["<!--", "-->", "--!>"]) {
-        for (const field of ["summary", "scopeReason", "readinessReason", "questions",
+        for (const field of ["reply", "summary", "scopeReason", "readinessReason", "questions",
             "existingRequirements", "suggestedCriteria", "limitations"]) {
             const draft = candidate();
             const text = `Unexpected ${delimiter} delimiter`;
@@ -413,9 +632,8 @@ test("draft schema rejects HTML comment delimiters in every text field", () => {
 test("rendering preserves plain text instead of interpreting model-supplied Markdown or entities", async () => {
     const fixture = await ready();
     const draft = validateDraft({
-        ...candidate(), summary: "# Not a trusted heading", questions: ["1. Not an ordered list"],
-        existingRequirements: ["Preserve Result<T> when count < 10."],
-        limitations: ["&lt;img&gt; is literal text."],
+        ...candidate(), reply: ["# Not a trusted heading", "1. Not an ordered list",
+            "Preserve Result<T> when count < 10.", "&lt;img&gt; is literal text.", "@someone is not a notification."],
     });
     const text = renderDraft({ ...fixture.bundle, draft });
     assert.ok(text.includes("\\# Not a trusted heading"));
@@ -423,6 +641,18 @@ test("rendering preserves plain text instead of interpreting model-supplied Mark
     assert.ok(text.includes("Preserve Result&lt;T&gt; when count &lt; 10\\."));
     assert.ok(text.includes("&amp;lt;img&amp;gt; is literal text\\."));
     assert.ok(!/^# Not a trusted heading$/m.test(text));
+    assert.ok(text.includes("\\@someone"));
+});
+
+test("the public response is conversational while assessment metadata stays out of the comment", async () => {
+    const fixture = await ready();
+    assert.ok(fixture.bundle.body.startsWith("Thanks for raising this\\."));
+    for (const heading of ["Project direction", "Readiness recommendation", "Recorded requirements",
+        "Suggested acceptance criteria", "Evidence limits"]) {
+        assert.ok(!fixture.bundle.body.includes(heading));
+        assert.ok(renderAssessment(fixture.bundle).includes(heading));
+    }
+    assert.ok(!fixture.bundle.body.includes(fixture.bundle.draft.summary));
 });
 
 test("sealing rejects changing discussion content, policy, and PR evidence", async () => {
@@ -738,14 +968,14 @@ test("malformed artifact errors do not echo untrusted JSON contents", () => {
     }
 });
 
-for (const kind of ["issue", "discussion"]) {
-    test(`${kind}: the authored workflow scripts prepare, preview, and publish the same approved bytes`, async t => {
+for (const [kind, mode] of [["issue", "draft"], ["discussion", "draft"], ["issue", "reply"], ["discussion", "reply"]]) {
+    test(`${kind}/${mode}: the authored workflow scripts prepare, preview, and publish the exact checked bytes`, async t => {
         const workflowDirectory = new URL("../../.github/workflows/", import.meta.url);
         const markdown = fs.readFileSync(new URL("discussion-draft.md", workflowDirectory), "utf8");
         const draftWorkflow = parse(/^---\r?\n([\s\S]*?)\r?\n---/.exec(markdown)[1]);
         const publisher = parse(fs.readFileSync(new URL("publish-discussion-draft.yml", workflowDirectory), "utf8"));
         const fixture = setup(kind);
-        const draftRun = fixture.event();
+        const draftRun = fixture.event(mode, `/typechat ${mode}`);
         const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-draft-workflow-"));
         const savedEnvironment = { ...process.env };
         const summaries = [];
@@ -778,6 +1008,7 @@ for (const kind of ["issue", "discussion"]) {
             }
 
             const prepared = await execute(draftWorkflow.jobs.prepare.steps.find(step => step.id === "context"), draftRun);
+            assert.equal(prepared.should_draft, "true");
             const sealing = draftWorkflow.jobs.seal.steps;
             const contextDirectory = downloadDirectory(sealing.find(step => step.name === "Download original context"));
             fs.mkdirSync(contextDirectory);
@@ -810,17 +1041,31 @@ for (const kind of ["issue", "discussion"]) {
                 TYPECHAT_DRAFT_ARTIFACT_ID: "500",
                 TYPECHAT_DRAFT_ARTIFACT_URL: `${REPO_URL}/actions/runs/100/artifacts/500`,
             });
-            assert.ok(summaries.at(-1).includes(`/typechat publish 500:${bundle.bodyHash}`));
-            assert.ok(summaries.at(-1).endsWith(bundle.body));
+            assert.equal(summaries.at(-1).includes(`/typechat publish 500:${bundle.bodyHash}`), mode === "draft");
+            assert.ok(summaries.at(-1).includes(bundle.body));
+            assert.ok(summaries.at(-1).includes("Assessment and evidence (not posted)"));
 
             t.mock.timers.setTime(NOW.getTime());
-            const publication = fixture.event("publish", `/typechat publish 500:${bundle.bodyHash}`, "approval", 200);
-            const publishJob = publisher.jobs[`publish_${kind}`];
+            const publication = mode === "draft" ?
+                fixture.event("publish", `/typechat publish 500:${bundle.bodyHash}`, "approval", 200) :
+                { context: structuredClone(draftRun.context), env: { ...draftRun.env } };
+            const publishJob = mode === "draft" ? publisher.jobs[`publish_${kind}`] : draftWorkflow.jobs[`reply_${kind}`];
             Object.assign(publication.env, publishJob.env);
+            if (mode === "reply") {
+                fixture.state.producerRun.status = "in_progress";
+                fixture.state.producerRun.conclusion = null;
+                Object.assign(publication.env, {
+                    TYPECHAT_DRAFT_ARTIFACT_ID: "500", TYPECHAT_DRAFT_BODY_SHA256: sealed.body_hash,
+                    TYPECHAT_AGENT_RESULT: "success", TYPECHAT_SEAL_RESULT: "success",
+                    TYPECHAT_DETECTION_RESULT: "success", TYPECHAT_DETECTION_RAN: "true",
+                    TYPECHAT_DETECTION_CONCLUSION: "success",
+                });
+            }
             const steps = publishJob.steps;
             const identified = await execute(steps.find(step => step.id === "identify"), publication);
             assert.deepEqual(identified, { artifact_id: "500", run_id: "100" });
-            const bundleDirectory = downloadDirectory(steps.find(step => step.name === "Download the approved sealed draft"));
+            const bundleDirectory = downloadDirectory(steps.find(step =>
+                step.name === (mode === "draft" ? "Download the approved sealed draft" : "Download the checked reply")));
             fs.mkdirSync(bundleDirectory);
             fs.copyFileSync(sealed.path, path.join(bundleDirectory, "sealed-draft.json"));
             const checked = await execute(steps.find(step => step.id === "check"), publication);
@@ -830,7 +1075,7 @@ for (const kind of ["issue", "discussion"]) {
             fixture.state.artifacts.set(501, {
                 id: 501, name: checked.intent_name, expired: false,
                 created_at: NOW.toISOString(), expires_at: "2026-11-29T00:00:00Z",
-                workflow_run: { id: 200, repository_id: REPOSITORY.id, head_sha: SHA },
+                workflow_run: { id: publication.context.runId, repository_id: REPOSITORY.id, head_sha: SHA },
             });
             const published = await execute(steps.find(step => step.id === "publish"), publication, {
                 TYPECHAT_INTENT_ARTIFACT_ID: "501",
@@ -842,6 +1087,13 @@ for (const kind of ["issue", "discussion"]) {
             const repeated = await execute(steps.find(step => step.id === "check"), publication);
             assert.equal(repeated.should_post, "false");
             assert.equal(fixture.state.posts.length, 1);
+            if (mode === "reply") {
+                const noOp = await execute(draftWorkflow.jobs.prepare.steps.find(step => step.id === "context"), draftRun);
+                assert.equal(noOp.should_draft, "false");
+                assert.equal(noOp.path, undefined);
+                assert.ok(summaries.at(-1).includes("Command already answered"));
+                assert.equal(fixture.state.posts.length, 1);
+            }
         }
         finally {
             for (const key of Object.keys(process.env)) {

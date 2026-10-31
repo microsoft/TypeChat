@@ -20,7 +20,7 @@ is available today.
 
 ## Status and implementation history
 
-**Last updated: 2026-10-30 (UTC).** The read-only
+**Last updated: 2026-10-31 (UTC).** The read-only
 [Backlog assessment workflow](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
 is available for manual dispatch on `main`. The
 [latest run](https://github.com/microsoft/TypeChat/actions/runs/40997369231)
@@ -37,7 +37,8 @@ and next steps remain advisory. Human review is still required. Copilot PR
 reviews are now enabled through a separate repository rule; issue acceptance
 and broader autonomy are not enabled. The
 [owner-approved discussion pilot](#second-pilot-owner-approved-discussion-drafts)
-is prepared for review, not yet activated.
+has a verified Issue draft-only run. Conversational responses and the owner-only
+direct-reply command are prepared for review; their live verification is pending.
 
 | Implemented | Change | Current state |
 | --- | --- | --- |
@@ -61,7 +62,8 @@ is prepared for review, not yet activated.
 | Not yet | [Owner-approved budget overrides](#owner-approved-budget-overrides-planned) | Future work only; no budget-override input or approval mechanism is enabled. |
 | 2026-10-30 | [Automatic Copilot PR reviews](#github-copilot-pr-reviews) | Active for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Configuration and the review on [#491](https://github.com/microsoft/TypeChat/pull/491) were verified. |
 | Not enabled | Stricter human-review enforcement | Existing branch-review protections are retained at the owner's request. The written owner-approval requirement still applies. |
-| 2026-10-30 | [Owner-approved issue and Discussion drafts](#second-pilot-owner-approved-discussion-drafts) | Prepared for review: owner-only draft and exact-draft publish commands, using the Actions bot. Merge and owner-commanded live verification remain pending. |
+| 2026-10-30 | [Owner-approved issue and Discussion drafts](#second-pilot-owner-approved-discussion-drafts) | Merged through [#493](https://github.com/microsoft/TypeChat/pull/493), [#494](https://github.com/microsoft/TypeChat/pull/494), and [#495](https://github.com/microsoft/TypeChat/pull/495). The Issue draft-only path passed in [run 41147057482](https://github.com/microsoft/TypeChat/actions/runs/41147057482) on 2026-10-31 (UTC); this does not verify publication or the Discussion path. |
+| 2026-10-31 | Conversational responses and `/typechat reply` | Prepared for review. One owner command authorizes one checked advisory reply; `/typechat draft` remains preview-only. Not active until merged and live-verified. |
 | Not yet | Explicit work acceptance | Separate human decision; no acceptance command is enabled. Publishing a draft does not accept work. |
 | Not yet | Human-approved agent implementation | Planned with a future 1,000-credit implementation allowance; no build command, implementation workflow, or implementation spending is enabled. |
 | Not yet | Selective automatic adoption | Future work, after public criteria and maintainer approval. |
@@ -74,9 +76,12 @@ workflow run; do not mark unverified capabilities as active.
 
 ## Human-guided first
 
-The initial agent-assisted workflow will require human approval for issue
-responses and dispositions, acceptance of proposed work, implementation,
-merging, and releases.
+The agent-assisted workflow requires human authorization for public responses.
+`/typechat draft` and `/typechat publish` retain exact-text review. The owner-only
+`/typechat reply` command instead gives advance authorization for one advisory
+response after validation and threat detection; it does not authorize continuing
+autonomous conversation. Dispositions, acceptance of work, implementation,
+merging, and releases remain separate human decisions.
 
 Agents may investigate problems, summarize discussions, suggest questions, write
 tests, and propose changes. Automated tests and GitHub Copilot code reviews will
@@ -464,8 +469,8 @@ no new untracked files.
 
 The workflow check also runs the contract tests in `tools/` (`npm ci --ignore-scripts` followed
 by `npm test`), including checks that the runtime pin matches the compilation
-command, generated drafting jobs cannot write to issues or pull requests, and
-the separate publisher has only its target-specific comment permission.
+command, model execution stays read-only, reactions stay in trusted activation,
+and reply/publication jobs have only their target-specific comment permission.
 The discussion tests execute the compiled detection guard with Bash (Git Bash
 on Windows), covering collected completion/incomplete signals and a missing signal.
 
@@ -477,25 +482,46 @@ human-review enforcement remain a separate owner decision.
 ## Second pilot: owner-approved discussion drafts
 
 **Prepared on 2026-10-30 (UTC); not active until reviewed and merged to `main`.**
-This pilot adds GitHub-native drafting and approved posting for both Issues and
-Discussions. It does not accept work, change labels, close threads, start
+This pilot adds GitHub-native previews and owner-requested replies for both Issues
+and Discussions. It does not accept work, change labels, close threads, start
 implementation, create PRs, or merge changes. Existing Copilot PR review remains
 a separate capability.
 
 ### Owner commands
 
 Only the human project owner, **@robgruen**, may use these commands. Put the
-command at the start of a **new comment**, with no additional text:
+command in a **new comment**, with no additional text:
+
+| Command | Authorization and result |
+| --- | --- |
+| `/typechat draft` | Prepare a conversational reply for review; do not post it. |
+| `/typechat publish <artifact-id>:<body-sha256>` | Approve and post that exact reviewed draft. |
+| `/typechat reply` | Authorize one checked advisory reply to be posted without a second approval command. |
+
+Use `/typechat draft` when you want to review the wording first. Use
+`/typechat reply` only when you want the agent to respond publicly after the
+checks. The public comment addresses the author and answers or asks focused
+clarifying questions; scope analysis, readiness, criteria, and detailed evidence
+remain in Actions rather than being posted as a report. Actions artifacts still
+follow the public repository's visibility.
+
+For the preview-and-approve route:
 
 1. Post `/typechat draft` on one open, unlocked issue or Discussion.
-2. Open **Actions > Prepare discussion draft**. After the run succeeds, review
-   the exact preview and the sealed review artifact in its summary.
+2. Open **Actions > TypeChat discussion response**. After the run succeeds, open
+   the **Seal discussion draft** job summary for the exact preview, approval
+   command, and separate assessment.
 3. To approve posting that exact text, copy the summary's
    `/typechat publish <artifact-id>:<body-sha256>` command into a new comment
    on the **same thread**. The artifact ID and complete hash are required.
 4. **Publish approved discussion draft** revalidates the approval and posts once
    as `github-actions[bot]`. For Discussions, this is a **top-level comment**,
    even if the owner's command was a reply.
+
+For `/typechat reply`, the same preparation, model, scan, and sealing stages run.
+Trusted, target-scoped jobs then post one top-level response as the Actions bot.
+The model itself has no GitHub write access. No publish command is generated for
+this mode, and its artifacts cannot be repurposed as manually approved drafts.
 
 Editing a command does not trigger or authorize a run. Other users, bots, PR
 comments, non-default-branch code, and changed or deleted commands cannot
@@ -506,14 +532,16 @@ workflow has started processing the request. It is not confirmation that a draft
 is ready, that scanning succeeded, or that work was accepted. Check Actions for
 completion and errors. Native workflow code handles the reaction; the model
 retains read-only access.
-No new public bot comment is made just to acknowledge a draft request.
+No new public bot comment is made just to acknowledge a request.
 The pinned compiler grants reaction-write permissions to trusted activation,
 including `pull-requests: write` because GitHub also uses `issue_comment` for PR
 comments. The owner-only workflow guard still excludes PR comments. These write
 permissions are not granted to model execution, detection, or sealing.
 
-If the wording is wrong, do not approve it. Add clarification to the thread and
-request a new draft. There is no force-publish or editable-artifact shortcut.
+If a preview's wording is wrong, do not approve it. Add clarification to the
+thread and request a new draft. Direct replies do not have a pre-post wording
+review; use the preview route when that review is needed. There is no
+force-publish or editable-artifact shortcut.
 Readiness classifications and suggested criteria are proposals only; a
 maintainer must still record a separate acceptance decision before development.
 Unclear scope or an item under consideration requires an owner decision.
@@ -522,8 +550,9 @@ Unclear scope or an item under consideration requires an owner decision.
 
 The [drafting source](./.github/workflows/discussion-draft.md) uses a trusted
 preparation job to freeze the public thread and approved policy. A read-only
-agent examines that snapshot and related contributions. It proposes questions,
-recorded requirements, suggested criteria, and a readiness recommendation.
+agent examines that snapshot and related contributions. It writes the actual
+reply and a separate assessment containing questions, recorded requirements,
+suggested criteria, and a readiness recommendation.
 Thread context is bounded at 1 MiB and 1,000 comments, including replies;
 incomplete or oversized context is an error, not silent truncation.
 
@@ -540,6 +569,15 @@ the model to be skipped, so no candidate or sealed draft was produced. Detection
 and sealing failed closed, and nothing was published. Removing that premature
 completion signal needs a fresh owner-commanded live verification after merge;
 the failed run is not evidence that drafting or scanning succeeded.
+
+The subsequent [run 41147057482](https://github.com/microsoft/TypeChat/actions/runs/41147057482)
+at `6df1633` completed all nine jobs successfully on 2026-10-31 (UTC). The eyes
+reaction appeared on the command comment, model and detector execution were
+recorded, the detector returned no findings or warnings, and the candidate,
+scan binding, and sealed preview passed integrity checks. Reported inference
+usage was 25.20181 drafting credits and 8.94265 detection credits (34.14 total
+after rounding). This verifies that revision's Issue draft-only path, not the
+new response format, direct posting, manual publication, or the Discussion path.
 
 The detector downloads the attempt-specific, immutable candidate artifact.
 Trusted code adds its complete JSON text to the detector's agent-output input,
@@ -565,6 +603,19 @@ or bot secret. The [protocol helper](./tools/discussion-draft.mjs) verifies the
 owner, artifact/run provenance, approved body hash, and current context again
 immediately before the one comment write.
 
+Direct replies use equivalent target-scoped writer jobs in the response
+workflow. They consume the artifact ID and body hash from their own successful
+seal, plus successful model, detection, and sealing job results. The enclosing
+run need not have completed, since its writer is still running. A writer-only
+rerun may inherit a successful seal from an earlier attempt of that same run;
+it cannot substitute another run's artifact or bypass a failed mandatory stage.
+The manual publisher still requires a completed, successful drafting run and
+approval given after the artifact exists.
+
+Response bundles use protocol version 2. Existing artifacts from older control
+revisions are stale; generate a new response instead of editing or converting
+them to bypass validation.
+
 Relevant policy or automation-code changes, new discussion evidence, edits,
 closure/locking, or changes to referenced PR revisions invalidate a pending
 draft. Unrelated commits with unchanged controls do not. GitHub does not offer
@@ -585,7 +636,8 @@ neither that spending nor a build command.
 
 Context, candidate, scan-binding, and sealed draft artifacts are retained for seven days.
 Approval validity ends at the earlier of artifact expiry or seven days after
-artifact creation. Artifacts and Actions summaries follow repository visibility;
+artifact creation. New writes for `/typechat reply` also require a command
+younger than seven days. Artifacts and Actions summaries follow repository visibility;
 they are not a private channel and must not contain secrets or sensitive data.
 
 Before posting, the publisher uploads a **publication-intent artifact** retained
@@ -594,8 +646,11 @@ must permit that retention; an upload or retention check failure prevents the
 write. The resulting receipt is also retained for 30 days. Do not delete
 publication runs or intent artifacts while the associated draft remains valid.
 
-Intent names are keyed by the sealed draft's artifact ID, not the publishing run
-or attempt; the intent document still records both. Each history check makes one
+Manual publication intents are keyed by the sealed draft's artifact ID. Direct
+reply intents and bot-comment markers are keyed by the owner command and target,
+not the generated artifact or attempt. This preserves one reply per command
+across regeneration, new runs, and reruns. The intent document records the mode,
+artifact, body hash, run, and attempt. Each history check makes one
 repository-artifact request filtered by that exact name and reads at most two
 matches. Only one match can be the current upload, so a second match always blocks
 another write. Missing, malformed, or incomplete history fails closed. This avoids
@@ -609,6 +664,13 @@ Inspect the original run and thread manually. Do not delete the intent to force
 a retry; after resolving the uncertain outcome, request and approve a new draft.
 Edited or removed bot comments are not automatically overwritten or recreated.
 
+Before spending inference credits on a reply command, preparation checks for an
+existing Actions-bot reply or unresolved intent. An existing command-specific
+reply returns its link and skips the model at the job level; it does not seed a
+premature native no-op. An unresolved intent without a confirmed reply blocks
+new work. Do not delete the intent or post another command to retry an uncertain
+write blindly; inspect and resolve the outcome first.
+
 Owner operations are serialized per thread across both workflows, without
 allowing another user's comments to enter that queue. GitHub concurrency is
 not a FIFO queue: a newer pending owner command can replace an older pending
@@ -617,8 +679,13 @@ one. Wait for each operation to finish during the pilot.
 ### First live verification
 
 After human review and merge, use **#75** as the first candidate if it remains
-open and suitable. The owner should request a draft, review it, and then approve
-the exact publish command. Verify one correct bot comment and a no-op retry.
+open and suitable. Use a new command, not a rerun of an older workflow revision.
+For `/typechat reply`, that command authorizes a public response: verify model
+execution, detection, sealing, one correct bot comment, and a no-op rerun without
+another model call or comment. Separately test `/typechat draft`, review its
+preview, and approve its exact publish command. Verify a no-op publication retry.
+Exercise the Discussion path separately rather than inferring its permissions
+from an Issue run.
 Record the confirming runs before marking this capability active. Local tests
 and compilation do not prove live Actions-token permissions or model access.
 
