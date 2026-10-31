@@ -8,6 +8,9 @@
   },
   "author": "Microsoft",
   "license": "MIT",
+  "engines": {
+    "node": ">=24.22.1"
+  },
   "devDependencies": {
     "pyright": "1.1.358"
   }

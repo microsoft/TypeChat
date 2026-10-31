@@ -1,6 +1,7 @@
 
 import asyncio
 from dataclasses import dataclass
+from typing import NewType
 from typing_extensions import Any, Iterator, Literal, TypedDict, override
 import typechat
 
@@ -47,6 +48,26 @@ def test_translator_with_immediate_pass(snapshot: Any):
     
     assert m.conversation == snapshot
 
+@dataclass
+class TupleUnionResponse:
+    values: tuple[int | str, ...]
+    optional_values: tuple[str | None, ...]
+    choices: tuple[Literal["yes", "no"], ...]
+
+
+def test_translator_with_variadic_tuple_unions():
+    model = FixedModel([
+        '{"values": [1, "two"], "optional_values": ["three", null], "choices": ["yes", "no"]}',
+    ])
+    validator = typechat.TypeChatValidator(TupleUnionResponse)
+    translator = typechat.TypeChatJsonTranslator(model, validator, TupleUnionResponse)
+
+    result = asyncio.run(translator.translate("Get tuple values."))
+
+    assert result == typechat.Success(TupleUnionResponse((1, "two"), ("three", None), ("yes", "no")))
+    assert len(model.conversation) == 2
+
+
 def test_translator_with_single_failure(snapshot: Any):
     m = FixedModel([
         '{ "a": "hello", "b": true }',
@@ -90,6 +111,24 @@ def test_translator_with_single_failure_and_list_preamble_1(snapshot: Any):
         {"role": "user", "content": "Hey, I need some stuff."},
         {"role": "assistant", "content": "Okay, what kind of stuff?"},
     ]))
+    
+    assert m.conversation == snapshot
+
+UserId = NewType("UserId", str)
+
+@dataclass
+class ExampleWithNewType:
+    user_id: UserId
+    count: int
+
+v_newtype = typechat.TypeChatValidator(ExampleWithNewType)
+
+def test_translator_with_newtype(snapshot: Any):
+    m = FixedModel([
+        '{ "user_id": "abc", "count": 1 }',
+    ])
+    t = typechat.TypeChatJsonTranslator(m, v_newtype, ExampleWithNewType)
+    asyncio.run(t.translate("Get me a user."))
     
     assert m.conversation == snapshot
 

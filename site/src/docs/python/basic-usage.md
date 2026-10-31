@@ -86,7 +86,7 @@ def create_azure_openai_language_model(api_key: str, endpoint: str): ...
 For even more convenience, TypeChat also provides a function to infer whether
 you're using OpenAI or Azure OpenAI.
 
-```ts
+```py
 def create_language_model(
     vals: dict[str, str | None]
 ) -> TypeChatLanguageModel: ...
@@ -96,6 +96,29 @@ With `create_language_model`, you can populate your environment variables and
 pass them in.
 Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get
 a model of the appropriate type.
+
+#### Using OpenAI-compatible gateways
+
+TypeChat works with any service that exposes the OpenAI Chat Completions API.
+To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
+point `create_openai_language_model` at the gateway's endpoint via the
+`endpoint` argument:
+
+```py
+model = create_openai_language_model(
+    api_key, model, endpoint="https://api.orcarouter.ai/v1/chat/completions"
+)
+```
+
+With `create_language_model`, set the `OPENAI_ENDPOINT` environment variable to
+the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
+`OPENAI_MODEL`:
+
+```
+OPENAI_API_KEY=<your API key>
+OPENAI_MODEL=<model name>
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+```
 
 The `TypeChatLanguageModel` returned by these functions has a few writable
 attributes you might find useful:
@@ -148,6 +171,11 @@ That would mean that to access the value of `sentiment`, we would have to write 
 
 Note that while we used [the built-in `typing` module](https://docs.python.org/3/library/typing.html), [`typing_extensions`](https://pypi.org/project/typing-extensions/) is supported as well.
 TypeChat also understands constructs like `Annotated` and `Doc` to add comments to individual attributes.
+
+[`typing.NewType`](https://docs.python.org/3/library/typing.html#typing.NewType) (and `typing_extensions.NewType`) is also supported.
+TypeChat converts a NewType through its `__supertype__`, so the TypeScript schema uses the underlying JSON type: `NewType("UserId", str)` becomes `string`, and a NewType built on another NewType follows the chain.
+Runtime validation still uses the declared Python type; NewType itself does not add checks beyond that underlying type.
+
 
 ## Creating a Validator
 

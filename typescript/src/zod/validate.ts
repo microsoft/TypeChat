@@ -60,8 +60,11 @@ const enum TypePrecedence {
 function getTypePrecedence(type: z.ZodType): TypePrecedence {
     switch (getTypeKind(type)) {
         case "enum":
+        case "optional": // emitted as `T | undefined`
         case "union": // covers both z.union() and z.discriminatedUnion() — Zod v4 merged discriminated unions into the regular union type kind ("ZodDiscriminatedUnion" in v3)
             return TypePrecedence.Union;
+        case "literal": // a multi-value literal is emitted as a union of its values
+            return (type._zod.def as z.core.$ZodLiteralDef<z.core.util.Literal>).values.length > 1 ? TypePrecedence.Union : TypePrecedence.Object;
         case "intersection":
             return TypePrecedence.Intersection;
     }
