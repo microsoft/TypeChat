@@ -222,6 +222,18 @@ test("draft preparation must not pre-complete the model with a native noop", () 
     assert.ok(text.includes("After writing `discussion-draft.json`, call `safeoutputs-noop`"));
 });
 
+test("trusted sealing checks native completion before exposing an artifact to either writer", () => {
+    const seal = sourceSeal.find(step => step.id === "seal");
+    const generated = compiled.jobs.seal.steps.find(step => step.id === "seal");
+    assert.deepEqual(seal.env, { TYPECHAT_AGENT_OUTPUT_TYPES: "${{ needs.agent.outputs.output_types }}" });
+    assert.deepEqual(generated.env, seal.env);
+    assert.equal(generated.with.script, seal.with.script);
+    assert.equal(agent.outputs.output_types, "${{ steps.collect_output.outputs.output_types }}");
+    for (const kind of ["issue", "discussion"]) {
+        assert.ok(compiled.jobs[`reply_${kind}`].if.includes("needs.seal.result == 'success'"));
+    }
+});
+
 test("the compiled detection guard accepts collected outputs but never treats a missing signal as success", () => {
     const working = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-detection-guard-"));
     try {

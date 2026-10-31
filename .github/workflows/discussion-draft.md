@@ -198,10 +198,15 @@ jobs:
       - name: Validate and seal the draft
         id: seal
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TYPECHAT_AGENT_OUTPUT_TYPES: ${{ needs.agent.outputs.output_types }}
         with:
           github-token: ${{ github.token }}
           retries: 0
           script: |
+            if (process.env.TYPECHAT_AGENT_OUTPUT_TYPES !== "noop") {
+              throw new Error("Only a successful native noop completion can be sealed; missing, incomplete, or failure outputs are rejected.");
+            }
             const path = require("node:path");
             const { pathToFileURL } = require("node:url");
             const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);

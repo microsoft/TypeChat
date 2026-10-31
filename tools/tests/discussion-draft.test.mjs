@@ -1028,7 +1028,18 @@ for (const [kind, mode] of [["issue", "draft"], ["discussion", "draft"], ["issue
             const scanDirectory = downloadDirectory(sealing.find(step => step.name === "Download candidate scan binding"));
             fs.mkdirSync(scanDirectory);
             fs.copyFileSync(scanned.path, path.join(scanDirectory, "candidate-scan.json"));
-            const sealed = await execute(sealing.find(step => step.id === "seal"), draftRun);
+            const seal = sealing.find(step => step.id === "seal");
+            for (const outputTypes of [undefined, "", "report_missing_data", "noop,report_missing_data",
+                "report_incomplete", "noop,report_incomplete", "report_missing_tool", "unknown"]) {
+                delete process.env.TYPECHAT_AGENT_OUTPUT_TYPES;
+                await assert.rejects(execute(seal, draftRun, outputTypes === undefined ? {} : {
+                    TYPECHAT_AGENT_OUTPUT_TYPES: outputTypes,
+                }), /Only a successful native noop completion can be sealed/);
+                assert.equal(fs.existsSync(path.join(temporary, "typechat-sealed-draft")), false,
+                    `${outputTypes} must not produce a sealed artifact despite a valid candidate and successful scan`);
+                assert.equal(fixture.state.posts.length, 0);
+            }
+            const sealed = await execute(seal, draftRun, { TYPECHAT_AGENT_OUTPUT_TYPES: "noop" });
             const bundle = readJson(path.dirname(sealed.path), "sealed-draft.json", MAX_BUNDLE_BYTES);
             assert.equal(fixture.state.posts.length, 0);
 

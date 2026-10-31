@@ -561,7 +561,11 @@ it as completed work and skips the model. The model writes the candidate first,
 then emits its native completion signal. If it emits no terminal safe output,
 the pinned collector records an explicit `report_incomplete` signal rather than
 treating silence as successful work. The detection guard consumes the collected
-output types; a missing signal cannot authorize sealing.
+output types. Before rendering or sealing an artifact, the trusted sealing step
+requires `noop` to be the only collected output type. Missing or unknown outputs
+and `report_missing_data` or `report_incomplete` reports fail sealing, including
+reports combined with `noop`. Both reply writers require a successful seal, so
+publication cannot race the later conclusion job's handling of failure reports.
 
 The first owner-commanded [draft run](https://github.com/microsoft/TypeChat/actions/runs/41136773812)
 on 2026-10-30 exposed this preflight behavior. The synthetic pre-agent no-op caused
