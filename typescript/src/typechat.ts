@@ -189,14 +189,14 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
 function stripNulls(obj: any) {
     let keysToDelete: string[] | undefined;
     for (const k in obj) {
-        const value = obj[k];
+        let value = obj[k];
         if (value === null) {
             (keysToDelete ??= []).push(k);
         }
         else {
             if (Array.isArray(value)) {
                 if (value.some(x => x === null)) {
-                    obj[k] = value.filter(x => x !== null);
+                    value = obj[k] = value.filter(x => x !== null);
                 }
             }
             if (typeof value === "object") {
