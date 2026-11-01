@@ -113,21 +113,22 @@ export function parseCommand(body) {
     if (request) {
         return { action: request[1] };
     }
-    const publish = /^\/typechat publish ([1-9][0-9]*):([a-fA-F0-9]{64})\s*$/.exec(body);
+    const publish = /^\/typechat (publish|accept) ([1-9][0-9]*):([a-fA-F0-9]{64})\s*$/.exec(body);
     if (publish) {
         return {
-            action: "publish",
-            artifactId: integer(Number(publish[1]), "The draft artifact ID is not a safe positive integer."),
-            bodyHash: publish[2].toLowerCase(),
+            action: publish[1],
+            artifactId: integer(Number(publish[2]), "The draft artifact ID is not a safe positive integer."),
+            bodyHash: publish[3].toLowerCase(),
         };
     }
-    throw new Error("Invalid command. Use /typechat draft, /typechat reply, or /typechat publish <artifact-id>:<sha256>.");
+    throw new Error("Invalid command. Use /typechat draft, /typechat reply, /typechat publish <artifact-id>:<sha256>, " +
+        "or /typechat accept <artifact-id>:<sha256>.");
 }
 
 function isControlComment(comment) {
     return comment.author?.type === "User" && comment.author.login === OWNER.login &&
         (/^\/typechat (draft|reply)\s*$/.test(comment.body) ||
-            /^\/typechat publish [1-9][0-9]*:[a-fA-F0-9]{64}\s*$/.test(comment.body));
+            /^\/typechat (publish|accept) [1-9][0-9]*:[a-fA-F0-9]{64}\s*$/.test(comment.body));
 }
 
 export function authorize(context, env, action) {
@@ -141,12 +142,12 @@ export function authorize(context, env, action) {
         context.actor === OWNER.login && env.GITHUB_TRIGGERING_ACTOR === OWNER.login,
     "Only the current human project owner can start or rerun this workflow.");
     const branch = identifier(event.repository.default_branch, "Missing default branch.");
-    const workflow = action === "publish" ? PUBLISH_WORKFLOW : DRAFT_WORKFLOW;
+    const workflow = ["publish", "accept"].includes(action) ? PUBLISH_WORKFLOW : DRAFT_WORKFLOW;
     requireValue(env.GITHUB_WORKFLOW_REF === `${REPO_NAME}/${workflow}@refs/heads/${branch}` &&
         env.GITHUB_REF === `refs/heads/${branch}` && SHA1.test(context.sha),
     "The workflow must use trusted default-branch code.");
     const kind = context.eventName === "issue_comment" ? "issue" : "discussion";
-    if (action === "publish" || action === "reply") {
+    if (["publish", "accept", "reply"].includes(action)) {
         requireValue(env.TYPECHAT_PUBLISH_KIND === kind, "The publishing job does not have the target-specific authority.");
     }
     const item = object(kind === "issue" ? event.issue : event.discussion, "Missing target metadata.");
@@ -476,7 +477,7 @@ function textList(value, field, max = 10) {
 
 export function validateDraft(value) {
     exactKeys(value, ["reply", "summary", "scope", "scopeReason", "readiness", "readinessReason", "questions",
-        "existingRequirements", "suggestedCriteria", "limitations", "pullRequests"], "Unexpected draft fields.");
+        "existingRequirements", "suggestedCriteria", "proposal", "limitations", "pullRequests"], "Unexpected draft fields.");
     requireValue(SCOPES.includes(value.scope) && READINESS.includes(value.readiness), "Unsupported scope or readiness recommendation.");
     const result = {
         reply: [],
@@ -488,6 +489,7 @@ export function validateDraft(value) {
         questions: textList(value.questions, "questions"),
         existingRequirements: textList(value.existingRequirements, "existingRequirements"),
         suggestedCriteria: textList(value.suggestedCriteria, "suggestedCriteria"),
+        proposal: null,
         limitations: textList(value.limitations, "limitations"),
         pullRequests: [],
     };
@@ -507,10 +509,22 @@ export function validateDraft(value) {
         requireValue(result.readiness === "needs_owner_scope_decision" && result.questions.length > 0 &&
             result.suggestedCriteria.length === 0, "Unresolved direction cannot become implementation criteria or accepted work.");
     }
+    if (value.proposal !== null) {
+        requireValue(result.scope === "in_scope" && result.readiness === "ready_for_owner_decision" &&
+            result.questions.length === 0, "Only ready, in-scope work without unresolved questions can have an acceptance proposal.");
+        exactKeys(value.proposal, ["goal", "scope", "nonGoals"], "Unexpected acceptance-proposal fields.");
+        result.proposal = {
+            goal: plain(value.proposal.goal, "proposal.goal", 2000),
+            scope: textList(value.proposal.scope, "proposal.scope"),
+            nonGoals: textList(value.proposal.nonGoals, "proposal.nonGoals"),
+        };
+        requireValue(result.proposal.scope.length > 0 && result.proposal.nonGoals.length > 0,
+            "An acceptance proposal needs explicit scope and non-goals.");
+    }
     if (result.readiness === "ready_for_owner_decision") {
         requireValue(result.scope === "in_scope" && result.questions.length === 0 &&
-            result.existingRequirements.length + result.suggestedCriteria.length > 0,
-        "A readiness recommendation needs in-scope criteria and no unresolved questions.");
+            result.suggestedCriteria.length > 0 && result.proposal !== null,
+        "A readiness recommendation needs an explicit in-scope proposal, testable criteria, and no unresolved questions.");
     }
     return result;
 }
@@ -529,14 +543,51 @@ export function renderDraft(bundle) {
             `[#${item.number}](${REPO_URL}/pull/${item.number})`).join(", ")}.`);
     }
     sections.push("*Automated response requested by the project owner. This does not accept work or authorize implementation.*");
-    sections.push(`<!-- typechat-discussion-draft:v2:${bundle.marker} -->`);
+    sections.push(`<!-- typechat-discussion-draft:v3:${bundle.marker} -->`);
     if (parseCommand(bundle.request.commandBody).action === "reply") {
         const key = digest({ target: bundle.target, request: bundle.request });
+        // Keep command-level deduplication stable when the sealed-bundle schema changes.
         sections.push(`<!-- typechat-discussion-reply:v2:${key} -->`);
     }
     const body = sections.join("\n\n") + "\n";
     requireValue(Buffer.byteLength(body) <= MAX_COMMENT_BYTES, "The rendered reply exceeds the comment-size limit.");
     return body;
+}
+
+export function renderAcceptance(bundle) {
+    const { draft, target } = bundle;
+    const proposal = object(draft.proposal, "This draft has no acceptance proposal.");
+    const sections = [
+        "## Accepted work",
+        `Approved by the project owner, [${OWNER.login}](https://github.com/${OWNER.login}), for ` +
+            `[${target.kind} #${target.number}](${target.url}).`,
+        `### Goal\n${markdown(proposal.goal)}`,
+    ];
+    for (const [title, items] of [
+        ["Scope", proposal.scope], ["Non-goals", proposal.nonGoals], ["Acceptance criteria", draft.suggestedCriteria],
+    ]) {
+        sections.push(`### ${title}\n${items.map(item => `- ${markdown(item)}`).join("\n")}`);
+    }
+    if (draft.pullRequests.length) {
+        sections.push(`### Existing contributions\n${draft.pullRequests.map(item =>
+            `- [#${item.number}](${REPO_URL}/pull/${item.number}) at [${item.headSha.slice(0, 7)}](${REPO_URL}/commit/${item.headSha})`).join("\n")}`);
+    }
+    sections.push(`[Proposal run](${REPO_URL}/actions/runs/${bundle.producer.runId}/attempts/${bundle.producer.attempt}) | ` +
+        `[Approved scope policy](${REPO_URL}/blob/${bundle.producer.commit}/GOALS.md)`);
+    sections.push("*This accepts the scope above. It does not start or authorize an automated implementation run, " +
+        "increase any budget, or approve merging. Material scope changes require a new proposal and owner decision.*");
+    sections.push(`<!-- typechat-work-acceptance:v1:${bundle.marker} -->`);
+    const body = sections.join("\n\n") + "\n";
+    requireValue(Buffer.byteLength(body) <= MAX_COMMENT_BYTES, "The rendered acceptance exceeds the comment-size limit.");
+    return body;
+}
+
+function acceptanceFor(bundle) {
+    if (parseCommand(bundle.request.commandBody).action !== "draft" || bundle.draft.proposal === null) {
+        return null;
+    }
+    const body = renderAcceptance(bundle);
+    return { body, bodyHash: digest(body) };
 }
 
 export function renderAssessment(bundle) {
@@ -555,6 +606,12 @@ export function renderAssessment(bundle) {
         `### Project direction\n${scope[draft.scope]}: ${markdown(draft.scopeReason)}`,
         `### Readiness recommendation\n${readiness[draft.readiness]}: ${markdown(draft.readinessReason)}`,
     ];
+    if (draft.proposal) {
+        sections.push(`### Proposed goal\n${markdown(draft.proposal.goal)}`);
+        for (const [title, items] of [["Proposed scope", draft.proposal.scope], ["Proposed non-goals", draft.proposal.nonGoals]]) {
+            sections.push(`### ${title}\n${items.map(item => `- ${markdown(item)}`).join("\n")}`);
+        }
+    }
     for (const [title, items] of [
         ["Questions", draft.questions], ["Recorded requirements", draft.existingRequirements],
         ["Suggested acceptance criteria", draft.suggestedCriteria], ["Evidence limits", draft.limitations],
@@ -607,13 +664,14 @@ export async function sealDraft(github, context, env, prepared, candidate, clock
     const draft = validateDraft(candidate);
     await verifyReferences(github, draft.pullRequests);
     const bundle = {
-        version: 2, target: request.target, request: originalRequest(request), producer: producer(request),
+        version: 3, target: request.target, request: originalRequest(request), producer: producer(request),
         fingerprints: prepared.fingerprints, snapshotHash: prepared.snapshotHash,
         createdAt: clock().toISOString(), draft,
     };
     bundle.marker = markerFor(bundle);
     bundle.body = renderDraft(bundle);
     bundle.bodyHash = digest(bundle.body);
+    bundle.acceptance = acceptanceFor(bundle);
     requireValue(Buffer.byteLength(JSON.stringify(bundle)) <= MAX_BUNDLE_BYTES, "The review bundle is too large.");
     return bundle;
 }
@@ -683,12 +741,14 @@ export function writeJson(directory, filename, value) {
 }
 
 export async function identifyPublication(github, context, env, clock = () => new Date()) {
-    const directReply = parseCommand(context.payload?.comment?.body).action === "reply";
-    const request = authorize(context, env, directReply ? "reply" : "publish");
+    const action = parseCommand(context.payload?.comment?.body).action;
+    requireValue(["publish", "accept", "reply"].includes(action), "This command does not authorize publication.");
+    const directReply = action === "reply";
+    const request = authorize(context, env, action);
     const artifactId = directReply ?
         integer(Number(env.TYPECHAT_DRAFT_ARTIFACT_ID), "Missing sealed reply artifact.") : request.command.artifactId;
     const bodyHash = directReply ? env.TYPECHAT_DRAFT_BODY_SHA256 : request.command.bodyHash;
-    requireValue(typeof bodyHash === "string" && SHA256.test(bodyHash), "Missing exact reply body hash.");
+    requireValue(typeof bodyHash === "string" && SHA256.test(bodyHash), "Missing exact publication body hash.");
     if (directReply) {
         requireValue(env.TYPECHAT_AGENT_RESULT === "success" && env.TYPECHAT_SEAL_RESULT === "success" &&
             env.TYPECHAT_DETECTION_RESULT === "success" && env.TYPECHAT_DETECTION_RAN === "true" &&
@@ -750,8 +810,8 @@ export async function identifyPublication(github, context, env, clock = () => ne
 
 function validateBundle(bundle, publication) {
     exactKeys(bundle, ["version", "target", "request", "producer", "fingerprints", "snapshotHash", "createdAt", "draft",
-        "marker", "body", "bodyHash"], "Unexpected review-bundle fields.");
-    requireValue(bundle.version === 2 && equal(bundle.target, publication.request.target), "The draft belongs to another target or protocol version.");
+        "marker", "body", "bodyHash", "acceptance"], "Unexpected review-bundle fields.");
+    requireValue(bundle.version === 3 && equal(bundle.target, publication.request.target), "The draft belongs to another target or protocol version.");
     requireValue(equal(bundle.producer, {
         runId: publication.run.id, attempt: publication.run.run_attempt,
         commit: publication.run.head_sha, workflow: DRAFT_WORKFLOW,
@@ -777,25 +837,37 @@ function validateBundle(bundle, publication) {
     requireValue(equal(validateDraft(bundle.draft), bundle.draft), "The draft does not match the supported schema.");
     requireValue(equal(bundle.fingerprints, publication.controls.fingerprints), "Policy or workflow code changed. Request a new draft.");
     requireValue(markerFor(bundle) === bundle.marker && renderDraft(bundle) === bundle.body &&
-        digest(bundle.body) === bundle.bodyHash && bundle.bodyHash === publication.bodyHash,
+        digest(bundle.body) === bundle.bodyHash && equal(acceptanceFor(bundle), bundle.acceptance),
+    "The sealed response or acceptance preview changed.");
+    requireValue(publicationContent(bundle, publication.request.command.action).bodyHash === publication.bodyHash,
     "The approval does not match the exact rendered draft.");
 }
 
-export function publishedComment(thread, bundle) {
-    const marker = `<!-- typechat-discussion-draft:v2:${bundle.marker} -->`;
+function publicationContent(bundle, action) {
+    if (action === "accept") {
+        return object(bundle.acceptance, "This draft is not eligible for acceptance. Resolve the questions or scope and request a new draft.");
+    }
+    return bundle;
+}
+
+export function publishedComment(thread, bundle, action = "publish") {
+    const marker = action === "accept" ? `<!-- typechat-work-acceptance:v1:${bundle.marker} -->` :
+        `<!-- typechat-discussion-draft:v3:${bundle.marker} -->`;
     const matches = thread.comments.filter(comment => comment.parentId === null &&
         comment.author?.type === "Bot" && comment.author.id === ACTIONS_BOT_ID && comment.body.includes(marker));
     requireValue(matches.length <= 1, "More than one publication marker exists. Human inspection is required.");
     if (!matches.length) {
         return null;
     }
-    requireValue(lf(matches[0].body) === bundle.body, "An existing bot comment has different content. It will not be overwritten.");
+    requireValue(lf(matches[0].body) === publicationContent(bundle, action).body,
+        "An existing bot comment has different content. It will not be overwritten.");
     return matches[0];
 }
 
 function publicationIntentName(publication) {
     return publication.request.command.action === "reply" ?
-        replyIntentName(publication.request) : `${INTENT_PREFIX}${publication.artifact.id}`;
+        replyIntentName(publication.request) :
+        `${INTENT_PREFIX}${publication.request.command.action === "accept" ? "accept-" : ""}${publication.artifact.id}`;
 }
 
 async function priorIntent(github, name, excludeId) {
@@ -828,7 +900,7 @@ async function verifyBundleContext(github, publication, bundle) {
     });
     const thread = await readThread(github, publication.request.target);
     const existing = publication.request.command.action === "reply" ?
-        existingReply(thread, publication.request) : publishedComment(thread, bundle);
+        existingReply(thread, publication.request) : publishedComment(thread, bundle, publication.request.command.action);
     if (existing) {
         return { existing, thread };
     }
@@ -852,8 +924,8 @@ export async function checkPublication(github, context, env, bundle, clock = () 
         shouldPost: true,
         intentName: publicationIntentName(publication),
         intent: {
-            version: 2, authorization: publication.request.command.action,
-            artifactId: publication.artifact.id, bodyHash: bundle.bodyHash,
+            version: 3, authorization: publication.request.command.action,
+            artifactId: publication.artifact.id, bodyHash: publicationContent(bundle, publication.request.command.action).bodyHash,
             target: bundle.target, approvalComment: publication.request.commentId,
             runId: publication.request.runId, attempt: publication.request.attempt,
         },
@@ -881,17 +953,18 @@ export async function publishDraft(github, context, env, bundle, intentId, clock
         return { posted: false, url: rechecked.existing.url, bodyHash: digest(rechecked.existing.body) };
     }
     await verifyCommand(github, latest.request);
+    const content = publicationContent(bundle, latest.request.command.action);
     let comment;
     try {
         if (bundle.target.kind === "issue") {
             const result = await github.rest.issues.createComment({
-                ...API_REPO, issue_number: bundle.target.number, body: bundle.body,
+                ...API_REPO, issue_number: bundle.target.number, body: content.body,
             });
             comment = { id: result.data.node_id, url: result.data.html_url, body: result.data.body };
         } else {
             const result = await github.graphql(`mutation DiscussionPilotPost($id:ID!,$body:String!) {
               addDiscussionComment(input:{discussionId:$id,body:$body}) { comment { id url body } }
-            }`, { id: bundle.target.id, body: bundle.body });
+            }`, { id: bundle.target.id, body: content.body });
             comment = result.addDiscussionComment?.comment;
         }
     } catch (error) {
@@ -899,9 +972,9 @@ export async function publishDraft(github, context, env, bundle, intentId, clock
     }
     requireValue(comment && typeof comment.id === "string" && typeof comment.url === "string" &&
         comment.url.startsWith(bundle.target.url + "#") &&
-        typeof comment.body === "string" && lf(comment.body) === bundle.body,
+        typeof comment.body === "string" && lf(comment.body) === content.body,
     "GitHub did not confirm the exact comment. The intent is retained; inspect before retrying.");
-    return { posted: true, id: comment.id, url: comment.url, bodyHash: bundle.bodyHash };
+    return { posted: true, id: comment.id, url: comment.url, bodyHash: content.bodyHash };
 }
 
 export async function draftSummary(core, bundle, artifactId, artifactUrl) {
@@ -916,6 +989,18 @@ export async function draftSummary(core, bundle, artifactId, artifactUrl) {
         core.summary.addRaw(`\n\nReview the exact preview, then post this command in the same ${bundle.target.kind} to approve it:\n\n`)
             .addCodeBlock(`/typechat publish ${artifactId}:${bundle.bodyHash}`, "text");
     }
-    await core.summary.addRaw("\n\n---\n\n" + bundle.body)
-        .addRaw("\n\n---\n\n" + renderAssessment(bundle)).write();
+    core.summary.addRaw("\n\n---\n\n" + bundle.body)
+        .addRaw("\n\n---\n\n" + renderAssessment(bundle));
+    if (bundle.acceptance) {
+        core.summary.addHeading("Work acceptance preview (not yet accepted)", 2)
+            .addRaw("This is a separate choice from publishing the response. Review every proposed term below, " +
+                "then post this command in the same thread to accept exactly this scope and these criteria:\n\n")
+            .addCodeBlock(`/typechat accept ${artifactId}:${bundle.acceptance.bodyHash}`, "text")
+            .addRaw("\n\nThis does not authorize an automated implementation run or merging.\n\n---\n\n" + bundle.acceptance.body);
+    } else {
+        core.summary.addRaw(directReply ?
+            "\n\nA reply artifact cannot authorize acceptance. Request `/typechat draft` when the scope and criteria are ready for review.\n" :
+            "\n\nNo acceptance proposal is ready. Resolve the open questions, scope, or evidence gaps before requesting a new draft.\n");
+    }
+    await core.summary.write();
 }
