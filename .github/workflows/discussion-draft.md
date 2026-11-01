@@ -1,6 +1,6 @@
 ---
 name: TypeChat discussion response
-description: Prepare checked discussion responses for owner preview or one explicitly requested reply.
+description: Prepare checked discussion responses and work proposals for separate owner approval.
 run-name: "TypeChat discussion response"
 on:
   issue_comment:
@@ -464,7 +464,7 @@ a moving branch or an unmerged policy proposal.
 - Draft artifacts follow the public repository's visibility. Never reproduce
   credentials, private user data, or sensitive security details.
 
-## Public reply and assessment
+## Public reply, assessment, and proposal
 
 Write `reply` as the actual conversational response to the issue or Discussion
 author, not as a report about them. Answer the question using the inspected code
@@ -480,7 +480,9 @@ and do not mention accounts or teams with `@`. The workflow adds a short
 non-acceptance notice and links any structured PR references.
 
 The other fields are assessment and evidence for the Actions summary and
-artifact, not the public comment. Explain the user's need in plain English.
+artifact, not the conversational reply. Eligible proposal terms also form a
+separate acceptance preview, which only an explicit owner acceptance command
+can publish. Explain the user's need in plain English.
 Preserve contributor credit and prior
 decisions, and check existing PRs rather than proposing duplicate implementation.
 Separate recorded requirements from suggestions. Explain technical terms on
@@ -504,6 +506,7 @@ Create a JSON object with exactly these fields:
   "questions": ["A specific question for the contributor or owner."],
   "existingRequirements": ["A requirement already recorded in the discussion."],
   "suggestedCriteria": ["A proposed, testable completion criterion, not an accepted requirement."],
+  "proposal": null,
   "limitations": ["State which relevant evidence was not checked."],
   "pullRequests": []
 }
@@ -516,13 +519,32 @@ no recorded requirements, suggestions, limitations, or PR references.
 `readiness` must be `needs_clarification`, `ready_for_owner_decision`,
 `existing_pr_review`, `blocked_by_evidence`, or `needs_owner_scope_decision`.
 If scope is unresolved or conflicting, use `needs_owner_scope_decision`, ask at
-least one scope question, and leave `suggestedCriteria` empty. Only recommend
-`ready_for_owner_decision` for in-scope work with criteria and no open questions.
-That recommendation is not acceptance or permission to develop.
+least one scope question, leave `suggestedCriteria` empty, and set `proposal`
+to `null`. Only recommend `ready_for_owner_decision` for in-scope work with
+testable criteria and no open questions. That recommendation is not acceptance
+or permission to develop.
+
+For `ready_for_owner_decision`, provide a `proposal` object with exactly:
+
+```json
+{
+  "goal": "The intended user-visible outcome.",
+  "scope": ["A concrete change included in the proposed work."],
+  "nonGoals": ["A concrete boundary that the proposed work will not cross."]
+}
+```
+
+Each list must be nonempty. Use `suggestedCriteria` as the single list of
+proposed acceptance criteria; it must also be nonempty and describe observable
+pass/fail outcomes. Align the proposal with the recorded discussion and approved
+policy. Do not invent agreement, resolve unanswered questions by guessing, or
+turn an under-consideration item into accepted scope. Preserve existing
+contributions and identify relevant PRs instead of proposing duplicate work.
+For every other readiness value, `proposal` must be `null`.
 
 Use single-line plain-text strings, without URLs, Markdown, hidden markup, or
 control characters. Use one to six reply paragraphs of at most 2,000 characters
-each. Keep the summary under 2,000 characters, reasons under 1,000, and each
+each. Keep the summary and proposal goal under 2,000 characters, reasons under 1,000, and each
 other list item under 800. Use at most ten items in each other list.
 For each existing PR actually inspected, add an object to `pullRequests` with
 exactly `number`, `headSha` (the full inspected commit), and `updatedAt` (the
@@ -533,9 +555,14 @@ After writing `discussion-draft.json`, call `safeoutputs-noop` with a brief
 completion summary. Do not report completion before the file exists. This
 native completion signal does not publish a comment or approve the draft.
 
-The workflow will validate, scan, and freeze the exact rendered response.
-`/typechat draft` produces a preview and requires a later owner publish command.
+The workflow will validate, scan, and freeze the exact rendered response and any
+eligible acceptance preview. `/typechat draft` produces a response preview and
+requires a later owner publish command. When a proposal is ready, it also shows
+the exact work-acceptance preview and a separate `/typechat accept` command.
 `/typechat reply` authorizes one response after the trusted checks, without a
-second approval command. You do not post anything yourself. Neither command
-accepts work or authorizes implementation. Keep all assessment metadata factual
-and nonsensitive: Actions artifacts follow the public repository's visibility.
+second approval command; its artifact cannot authorize acceptance. You do not
+post anything yourself. Drafting, replying, and publishing a response never
+accept work. Only the owner's exact acceptance command can accept the proposal,
+and even that does not authorize an automated implementation run or merging.
+Keep all assessment metadata factual and nonsensitive: Actions artifacts follow
+the public repository's visibility.

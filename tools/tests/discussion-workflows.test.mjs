@@ -58,7 +58,58 @@ test("discussion commands are created-comment events guarded by owner and truste
     assert.ok(publisher.jobs.publish_discussion.if.includes("github.event_name == 'discussion_comment'"));
     for (const job of Object.values(publisher.jobs)) {
         assert.ok(job.if.includes("startsWith(github.event.comment.body, '/typechat publish ')"));
+        assert.ok(job.if.includes("startsWith(github.event.comment.body, '/typechat accept ')"));
     }
+});
+
+test("exact owner acceptance uses only the target-scoped manual publisher", () => {
+    assert.deepEqual(Object.keys(publisher.jobs), ["publish_issue", "publish_discussion"]);
+    for (const kind of ["issue", "discussion"]) {
+        const job = publisher.jobs[`publish_${kind}`];
+        const github = {
+            repository: "microsoft/TypeChat", event_name: `${kind}_comment`,
+            triggering_actor: "robgruen", ref: "refs/heads/main",
+            event: { sender: { type: "User", id: 25374553 },
+                comment: { user: { id: 25374553 }, body: `/typechat accept 500:${"a".repeat(64)}` },
+                repository: { default_branch: "main" }, issue: {} },
+        };
+        const evaluate = new Function("github", "startsWith", "format", `return (${job.if});`);
+        const allowed = context => evaluate(context,
+            (value, prefix) => value.startsWith(prefix), (_, branch) => `refs/heads/${branch}`);
+        assert.equal(allowed(github), true);
+        for (const change of [
+            value => { value.event.sender.id = 7; },
+            value => { value.event.sender.type = "Bot"; },
+            value => { value.event.comment.user.id = 7; },
+            value => { value.triggering_actor = "someone-else"; },
+            value => { value.repository = "other/repository"; },
+            value => { value.ref = "refs/pull/1/merge"; },
+            value => { value.event_name = "workflow_dispatch"; },
+        ]) {
+            const altered = structuredClone(github);
+            change(altered);
+            assert.equal(allowed(altered), false);
+        }
+        for (const body of ["/typechat accept", "/typechat accept-latest", "/typechat reply", "/typechat draft", "/typechat build"]) {
+            const altered = structuredClone(github);
+            altered.event.comment.body = body;
+            assert.equal(allowed(altered), false);
+        }
+        if (kind === "issue") {
+            const pullRequest = structuredClone(github);
+            pullRequest.event.issue.pull_request = {};
+            assert.equal(allowed(pullRequest), false);
+        }
+        assert.deepEqual(job.permissions, {
+            contents: "read", actions: "read", "pull-requests": "read",
+            [kind === "issue" ? "issues" : "discussions"]: "write",
+        });
+        assert.equal(job.env.TYPECHAT_PUBLISH_KIND, kind);
+    }
+    assert.ok(publisher.concurrency.group.includes("startsWith(github.event.comment.body, '/typechat accept ')"));
+    const publish = publishSteps.find(step => step.id === "publish");
+    assert.ok(publish.with.script.includes("authorization"));
+    assert.ok(publish.with.script.includes("does not authorize an automated implementation run"));
 });
 
 test("draft requests use the native eyes acknowledgment without public status comments", () => {
@@ -345,7 +396,7 @@ test("direct replies require the reply command and every mandatory successful st
         const allowed = (context, results) => evaluate(context, results,
             (value, prefix) => value.startsWith(prefix), (_, branch) => `refs/heads/${branch}`);
         assert.equal(allowed(github, needs), true);
-        for (const body of ["/typechat draft", `/typechat publish 500:${"a".repeat(64)}`]) {
+        for (const body of ["/typechat draft", `/typechat publish 500:${"a".repeat(64)}`, `/typechat accept 500:${"a".repeat(64)}`]) {
             assert.equal(allowed({ ...github, event: { ...github.event, comment: { ...github.event.comment, body } } }, needs), false);
         }
         for (const dependency of ["agent", "seal", "detection"]) {
