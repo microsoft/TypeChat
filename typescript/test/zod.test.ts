@@ -135,6 +135,18 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(schemaOf("T", z.array(z.array(z.number()))), /type T = number\[\]\[\];/);
         });
 
+        it("parenthesizes a multi-value literal element type", () => {
+            assert.match(schemaOf("T", z.array(z.literal(["a", "b"]))), /type T = \("a" \| "b"\)\[\];/);
+        });
+
+        it("parenthesizes an optional element type", () => {
+            assert.match(schemaOf("T", z.array(z.string().optional())), /type T = \(string \| undefined\)\[\];/);
+        });
+
+        it("does not parenthesize a single-value literal element type", () => {
+            assert.match(schemaOf("T", z.array(z.literal("a"))), /type T = "a"\[\];/);
+        });
+
     });
 
     // -----------------------------------------------------------------------
@@ -195,6 +207,11 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(out, /string \| number \| boolean/);
         });
 
+        it("does not parenthesize optional or multi-value literal members", () => {
+            const out = schemaOf("T", z.union([z.string().optional(), z.literal(["a", "b"])]));
+            assert.match(out, /type T = string \| undefined \| "a" \| "b";/);
+        });
+
     });
 
     describe("z.discriminatedUnion()", () => {
@@ -224,6 +241,11 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(out, /\{[^}]*a: string[^}]*\} & \{[^}]*b: number[^}]*\}/s);
         });
 
+        it("parenthesizes optional and multi-value literal operands", () => {
+            const out = schemaOf("T", z.intersection(z.string().optional(), z.literal(["a", "b"])));
+            assert.match(out, /type T = \(string \| undefined\) & \("a" \| "b"\);/);
+        });
+
     });
 
     // -----------------------------------------------------------------------
@@ -248,6 +270,21 @@ describe("getZodSchemaAsTypeScript", () => {
         it("emits a tuple with an optional element", () => {
             const out = schemaOf("T", z.tuple([z.string(), z.number().optional()]));
             assert.match(out, /\[string, number\?\]/);
+        });
+
+        it("parenthesizes an optional rest element type", () => {
+            const out = schemaOf("T", z.tuple([z.string()]).rest(z.number().optional()));
+            assert.match(out, /\[string, \.\.\.\(number \| undefined\)\[\]\]/);
+        });
+
+        it("parenthesizes a multi-value literal rest element type", () => {
+            const out = schemaOf("T", z.tuple([z.string()]).rest(z.literal(["a", "b"])));
+            assert.match(out, /\[string, \.\.\.\("a" \| "b"\)\[\]\]/);
+        });
+
+        it("parenthesizes a multi-value literal optional element", () => {
+            const out = schemaOf("T", z.tuple([z.string(), z.literal(["a", "b"]).optional()]));
+            assert.match(out, /\[string, \("a" \| "b"\)\?\]/);
         });
 
     });

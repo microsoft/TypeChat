@@ -1,0 +1,169 @@
+name: Publish approved response or work acceptance
+run-name: Publish approved TypeChat response or work acceptance
+
+on:
+  issue_comment:
+    types: [created]
+  discussion_comment:
+    types: [created]
+
+permissions: {}
+
+concurrency:
+  group: >-
+    ${{ github.event.sender.type == 'User' &&
+        github.event.sender.id == 25374553 &&
+        github.event.comment.user.id == 25374553 &&
+        github.triggering_actor == 'robgruen' &&
+        (startsWith(github.event.comment.body, '/typechat publish ') ||
+        startsWith(github.event.comment.body, '/typechat accept ')) &&
+        format('typechat-discussion-{0}-{1}-{2}', github.repository_id, github.event_name, github.event.issue.number || github.event.discussion.number) ||
+        format('typechat-ignored-publish-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  publish_issue:
+    name: Publish approved issue response or acceptance
+    if: >-
+      github.repository == 'microsoft/TypeChat' &&
+      github.event_name == 'issue_comment' &&
+      github.event.sender.type == 'User' &&
+      github.event.sender.id == 25374553 &&
+      github.event.comment.user.id == 25374553 &&
+      github.triggering_actor == 'robgruen' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      !github.event.issue.pull_request &&
+      (startsWith(github.event.comment.body, '/typechat publish ') ||
+      startsWith(github.event.comment.body, '/typechat accept '))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      issues: write
+    env:
+      TYPECHAT_PUBLISH_KIND: issue
+    steps: &publish_steps
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Authenticate the command and identify its immutable draft
+        id: identify
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ github.token }}
+          retries: 0
+          script: |
+            const path = require("node:path");
+            const { pathToFileURL } = require("node:url");
+            const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
+            const publication = await helper.identifyPublication(github, context, process.env);
+            core.setOutput("artifact_id", String(publication.artifact.id));
+            core.setOutput("run_id", String(publication.run.id));
+      - name: Download the approved sealed draft
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ steps.identify.outputs.artifact_id }}
+          run-id: ${{ steps.identify.outputs.run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/typechat-approved-draft
+      - name: Validate approval, freshness, and previous publication attempts
+        id: check
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ github.token }}
+          retries: 0
+          script: |
+            const path = require("node:path");
+            const { pathToFileURL } = require("node:url");
+            const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
+            const bundle = helper.readJson(path.join(process.env.RUNNER_TEMP, "typechat-approved-draft"), "sealed-draft.json", helper.MAX_BUNDLE_BYTES);
+            const result = await helper.checkPublication(github, context, process.env, bundle);
+            core.setOutput("should_post", result.shouldPost ? "true" : "false");
+            if (result.shouldPost) {
+              const directory = path.join(process.env.RUNNER_TEMP, "typechat-publication-intent");
+              helper.writeJson(directory, "intent.json", result.intent);
+              core.setOutput("intent_name", result.intentName);
+              core.setOutput("intent_path", path.join(directory, "intent.json"));
+            } else {
+              const accepting = helper.parseCommand(context.payload.comment.body).action === "accept";
+              core.notice(accepting ? "This exact work proposal was already accepted; no new comment was created." :
+                "This exact draft was already published; no new comment was created.");
+              await core.summary.addHeading(accepting ? "Work already accepted" : "Draft already published")
+                .addLink("Existing comment", result.url).write();
+            }
+      - name: Record durable publication intent before writing
+        if: success() && steps.check.outputs.should_post == 'true'
+        id: intent_artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.check.outputs.intent_name }}
+          path: ${{ steps.check.outputs.intent_path }}
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30
+      - name: Revalidate and post the exact approved comment
+        if: success() && steps.check.outputs.should_post == 'true'
+        id: publish
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TYPECHAT_INTENT_ARTIFACT_ID: ${{ steps.intent_artifact.outputs.artifact-id }}
+        with:
+          github-token: ${{ github.token }}
+          retries: 0
+          script: |
+            const path = require("node:path");
+            const { pathToFileURL } = require("node:url");
+            const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
+            const bundle = helper.readJson(path.join(process.env.RUNNER_TEMP, "typechat-approved-draft"), "sealed-draft.json", helper.MAX_BUNDLE_BYTES);
+            const result = await helper.publishDraft(github, context, process.env, bundle, Number(process.env.TYPECHAT_INTENT_ARTIFACT_ID));
+            const authorization = helper.parseCommand(context.payload.comment.body).action;
+            const accepting = authorization === "accept";
+            const directory = path.join(process.env.RUNNER_TEMP, "typechat-publication-receipt");
+            helper.writeJson(directory, "receipt.json", {
+              ...result, authorization, target: bundle.target, producer: bundle.producer,
+              approvalComment: context.payload.comment.node_id,
+            });
+            core.setOutput("receipt_path", path.join(directory, "receipt.json"));
+            const heading = accepting ? (result.posted ? "Work accepted" : "Work already accepted") :
+              (result.posted ? "Approved draft published" : "Draft already published");
+            await core.summary.addHeading(heading)
+              .addLink("Discussion comment", result.url)
+              .addRaw(accepting ?
+                "\n\nAccepted scope and criteria recorded. This does not authorize an automated implementation run, increase any budget, or approve merging.\n" :
+                "\n\nPublication does not accept work or authorize implementation.\n").write();
+      - name: Preserve the publication receipt
+        if: success() && steps.publish.outputs.receipt_path != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: typechat-publication-receipt-${{ github.run_attempt }}
+          path: ${{ steps.publish.outputs.receipt_path }}
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30
+  publish_discussion:
+    name: Publish approved Discussion response or acceptance
+    if: >-
+      github.repository == 'microsoft/TypeChat' &&
+      github.event_name == 'discussion_comment' &&
+      github.event.sender.type == 'User' &&
+      github.event.sender.id == 25374553 &&
+      github.event.comment.user.id == 25374553 &&
+      github.triggering_actor == 'robgruen' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
+      (startsWith(github.event.comment.body, '/typechat publish ') ||
+      startsWith(github.event.comment.body, '/typechat accept '))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      discussions: write
+    env:
+      TYPECHAT_PUBLISH_KIND: discussion
+    steps: *publish_steps

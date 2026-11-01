@@ -68,7 +68,7 @@ For convenience, TypeChat provides two functions out of the box to connect to th
 You can call these directly.
 
 ```ts
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint? string): TypeChatLanguageModel;
+export function createOpenAILanguageModel(apiKey: string, model: string, endPoint?: string): TypeChatLanguageModel;
 
 export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string): TypeChatLanguageModel;
 ```
@@ -81,6 +81,27 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
 
 With `createLanguageModel`, you can populate your environment variables and pass them in.
 Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get a model of the appropriate type.
+
+#### Using OpenAI-compatible gateways
+
+TypeChat works with any service that exposes the OpenAI Chat Completions API.
+To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
+point `createOpenAILanguageModel` at the gateway's endpoint via the `endPoint`
+argument:
+
+```ts
+const model = createOpenAILanguageModel(apiKey, model, "https://api.orcarouter.ai/v1/chat/completions");
+```
+
+With `createLanguageModel`, set the `OPENAI_ENDPOINT` environment variable to
+the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
+`OPENAI_MODEL`:
+
+```
+OPENAI_API_KEY=<your API key>
+OPENAI_MODEL=<model name>
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+```
 
 Regardless, of how you decide to construct your model, it is important to avoid committing credentials directly in source.
 One way to make this work between production and development environments is to use a `.env` file in development, and specify that `.env` in your `.gitignore`.
@@ -170,7 +191,7 @@ export interface TypeChatJsonValidator<T extends object> {
     /**
      * Validates the given JSON object according to the associated TypeScript schema. Returns a
      * `Success<T>` object containing the JSON object if validation was successful. Otherwise, returns
-     * an `Error` object with a `message` property describing the error.
+     * an `Error` object with a `message` describing the error and, when available, rejected `data`.
      * @param jsonText The JSON object to validate.
      * @returns The JSON object or an error message.
      */
@@ -322,6 +343,33 @@ If something goes wrong, TypeChat will retry requests up to a maximum specified 
 However, if the initial request as well as all retries fail, `response.success` will be `false` and we'll be able to grab a `message` explaining what went wrong.
 
 In the ideal case, `response.success` will be `true` and we'll be able to access our well-typed `data` property!
+
+## Accessing Failed Output
+
+A failed response may also provide `data: unknown` and `responseText: string`.
+The data is the rejected value, not a validated `SentimentResponse`.
+The response text is the original model output, including when it cannot be parsed as JSON.
+
+```ts
+const response = await translator.translate(request);
+if (!response.success) {
+    const originalResponse = response.responseText;
+    if ("data" in response) {
+        const rejected: unknown = response.data;
+        // Validate or repair this value before using it as a SentimentResponse.
+    }
+}
+```
+
+Use `success` to distinguish outcomes, not the presence of `data`.
+TypeScript and Zod validators also retain rejected inputs when used directly.
+Custom validators can return `error(message, { data, responseText })`, and the translator preserves
+their payloads. To manage validation repairs yourself, set `translator.attemptRepair = false`.
+
+If automatic repair fails, TypeChat retains the latest rejected candidate and available model text,
+not a full attempt history. These can refer to different attempts if the repair response could not
+be parsed. A network failure before any output has no candidate data.
+Rejected values and response text may contain sensitive output; do not log them automatically.
 This will correspond to the type that we passed in when we created our translator object (i.e. `SentimentResponse`).
 
 That's it!
