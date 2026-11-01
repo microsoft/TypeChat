@@ -66,8 +66,8 @@ before they can become accepted implementation work.
 
 ## Who decides
 
-The project direction owner is **@microsoft/typechat**. Direction decisions
-require explicit approval from a human member of that owner team.
+The project direction owner is **@robgruen**. Direction decisions require this
+human owner's explicit approval.
 
 Every change to this document requires explicit owner approval, including
 changes to the goals, non-goals, ownership rules, and items under consideration.
@@ -93,27 +93,31 @@ implementation. Material scope changes return to discussion.
 
 ## Approval and enforcement
 
-The [CODEOWNERS file](./.github/CODEOWNERS) requests review from the owner team
+The [CODEOWNERS file](./.github/CODEOWNERS) requests review from `@robgruen`
 for this policy, [AUTOMATION.md](./AUTOMATION.md), any `AGENTS.md` guidance,
 the `.github/` controls
 (including CODEOWNERS itself, agent instructions, and workflows), and the
 repository automation tools and tests in `tools/`. It does not assign all
 library changes to the direction owner.
 
-**Prepared on 2026-10-27 (UTC).** These repository files do not by themselves
-make owner approval mandatory in GitHub. No live settings were changed as part
-of this work. A repository administrator still needs to verify:
+**Ownership update prepared on 2026-10-30 (UTC).** These repository files do not
+by themselves make owner approval mandatory in GitHub. The owner chose to keep
+existing branch-review protections unchanged. The written owner-approval
+requirement still applies; mergeability is not approval.
 
-- The owner team is visible and has explicit write access to this repository.
+A separate decision to enforce stricter review in GitHub would require an
+administrator to verify:
+
+- The named owner account has write access to this repository.
 - The default branch requires pull requests and code-owner approval.
 - New changes cannot rely on stale approval; configure dismissal of stale
   approvals and approval of the most recent reviewable push.
 - Bypass permissions and direct pushes are restricted so people, bots, and apps
   cannot silently skip owner review.
 
-The first pull request introducing these rules needs deliberate human approval
-from the owner team. GitHub uses CODEOWNERS from the pull request's base branch,
-so a new CODEOWNERS file does not enforce its own initial adoption.
+Introducing or changing these rules needs deliberate approval from the human
+project owner. GitHub uses CODEOWNERS from the pull request's base branch, so
+a proposed ownership change does not enforce its own adoption.
 
 Record verified activation dates in the
 [automation status history](./AUTOMATION.md#status-and-implementation-history).
