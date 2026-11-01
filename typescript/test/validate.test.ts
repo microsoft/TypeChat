@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createTypeScriptJsonValidator } from "../dist/ts/index.js";
 
@@ -43,8 +43,12 @@ export interface Point {
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
+const openValidators: { close(): void }[] = [];
+
 function validatorFor<T extends object>(schema: string, typeName: string) {
-    return createTypeScriptJsonValidator<T>(schema, typeName);
+    const validator = createTypeScriptJsonValidator<T>(schema, typeName);
+    openValidators.push(validator);
+    return validator;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,6 +56,11 @@ function validatorFor<T extends object>(schema: string, typeName: string) {
 // ---------------------------------------------------------------------------
 
 describe("createTypeScriptJsonValidator", () => {
+    afterEach(() => {
+        for (const validator of openValidators.splice(0)) {
+            validator.close();
+        }
+    });
 
     describe("valid objects", () => {
         it("accepts an object that satisfies all required properties", () => {
