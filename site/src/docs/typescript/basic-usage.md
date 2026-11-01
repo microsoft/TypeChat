@@ -68,7 +68,7 @@ For convenience, TypeChat provides two functions out of the box to connect to th
 You can call these directly.
 
 ```ts
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint? string): TypeChatLanguageModel;
+export function createOpenAILanguageModel(apiKey: string, model: string, endPoint?: string): TypeChatLanguageModel;
 
 export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string): TypeChatLanguageModel;
 ```
@@ -81,6 +81,27 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
 
 With `createLanguageModel`, you can populate your environment variables and pass them in.
 Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get a model of the appropriate type.
+
+#### Using OpenAI-compatible gateways
+
+TypeChat works with any service that exposes the OpenAI Chat Completions API.
+To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
+point `createOpenAILanguageModel` at the gateway's endpoint via the `endPoint`
+argument:
+
+```ts
+const model = createOpenAILanguageModel(apiKey, model, "https://api.orcarouter.ai/v1/chat/completions");
+```
+
+With `createLanguageModel`, set the `OPENAI_ENDPOINT` environment variable to
+the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
+`OPENAI_MODEL`:
+
+```
+OPENAI_API_KEY=<your API key>
+OPENAI_MODEL=<model name>
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+```
 
 Regardless, of how you decide to construct your model, it is important to avoid committing credentials directly in source.
 One way to make this work between production and development environments is to use a `.env` file in development, and specify that `.env` in your `.gitignore`.
@@ -111,6 +132,10 @@ export interface SentimentResponse {
     sentiment: "negative" | "neutral" | "positive";  // The sentiment of the text
 }
 ```
+
+The validator type-checks against a minimal library rather than the full TypeScript standard library, since responses are always plain JSON.
+Besides primitives, object types, arrays, and unions, schemas can use `ReadonlyArray`, `Partial`, `Required`, `Readonly`, `Pick`, `Omit`, `Record`, `Exclude`, `Extract`, `NonNullable`, `ReturnType`, `Awaited`, `Uppercase`, `Lowercase`, `Capitalize`, and `Uncapitalize`.
+Runtime types such as `Date`, `Map`, or `Set` aren't JSON values and aren't available; describe their JSON representation instead (for example, an ISO date `string`).
 
 It also means we will need to manually load up an input `.ts` file verbatim.
 

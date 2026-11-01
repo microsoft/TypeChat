@@ -28,7 +28,7 @@ We recommend reading each example in the following order.
 
 You can experiment with these TypeChat examples on your local machine with just Node.js.
 
-Ensure [Node.js (18.16.0 LTS or newer)](https://nodejs.org/en) or newer is installed.
+Ensure [Node.js 24.22.1 or newer](https://nodejs.org/en/download) is installed.
 
 ```
 git clone https://github.com/microsoft/TypeChat
@@ -92,6 +92,13 @@ OPENAI_API_KEY=...
 # For Azure OpenAI
 AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_KEY=...
+```
+
+The examples also work against any OpenAI-compatible gateway, such as [OrcaRouter](https://www.orcarouter.ai), by pointing `OPENAI_ENDPOINT` at the gateway's Chat Completions URL in addition to the OpenAI variables above:
+
+```
+# Optional: use an OpenAI-compatible gateway instead of api.openai.com
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
 ```
 
 ## Step 4: Run the examples

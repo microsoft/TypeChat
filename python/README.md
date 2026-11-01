@@ -37,7 +37,7 @@ To use TypeChat in an existing backend without an interactive chat loop, follow 
 It includes a [standalone sentiment example](./examples/sentiment/non_interactive.py) and an async function you can call from application code.
 
 You can also develop TypeChat from source, which needs [Python >=3.11](https://www.python.org/downloads/),
-[hatch](https://hatch.pypa.io/1.6/install/), and [Node.js >=20](https://nodejs.org/en/download):
+[hatch](https://hatch.pypa.io/1.6/install/), and [Node.js >=24.22.1](https://nodejs.org/en/download):
 
 ```sh
 git clone https://github.com/microsoft/TypeChat
@@ -53,6 +53,34 @@ You can try them on your local machine or in a GitHub Codespace.
 To learn more about TypeChat, visit the
 [documentation](https://microsoft.github.io/TypeChat/docs/python/basic-usage/)
 which includes more information on TypeChat and how to get started.
+
+## Documenting schema fields
+
+Trailing Python comments on directly declared `TypedDict` and dataclass fields become
+documentation in the generated TypeScript schema:
+
+```python
+from typing import Annotated
+from typing_extensions import Doc, TypedDict
+
+class Point(TypedDict):
+    x: int  # X-coordinate
+    y: Annotated[int, Doc("Y-coordinate")]  # Explicit documentation takes precedence.
+```
+
+Explicit `Annotated` documentation, supplied through `Doc` or a string, takes precedence
+over an inline comment, including when that explicit documentation is empty.
+Comments are recognized using Python's tokenizer, so `#` inside a string literal is not
+treated as documentation. For multiline field declarations, put the comment on the final line.
+`# type: ignore` directives, including those with bracketed error codes, are not treated
+as field documentation.
+
+Source inspection is read-only and supports nested class definitions with multiline strings.
+If source is unavailable, such as for dynamically created types or deployments without source files,
+conversion continues using the type annotations
+and explicit documentation without inline comments. If available source cannot be parsed,
+the problem is reported in `TypeScriptSchemaConversionResult.errors` rather than silently
+discarding the comments.
 
 ## Accessing failed output
 

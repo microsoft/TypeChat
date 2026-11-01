@@ -202,4 +202,105 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(result.data.includes("const json: Point ="));
         });
     });
+
+    describe("standard-library helper types", () => {
+        const helperSchema = `
+declare function makeConfig(): { port: number; host: string };
+declare function load(): Promise<{ id: string }>;
+export interface Payload {
+    values: ReadonlyArray<string>;
+    readonlySyntax: readonly number[];
+    counts: Record<string, number>;
+    metadata: Partial<{ name: string; size: number }>;
+    required: Required<{ id?: string }>;
+    frozen: Readonly<{ x: number }>;
+    picked: Pick<{ a: string; b: number }, "a">;
+    omitted: Omit<{ a: string; b: number }, "b">;
+    color: Exclude<"red" | "green" | "blue", "green">;
+    kind: Extract<"a" | "b" | 1, string>;
+    label: NonNullable<string | null>;
+    config: ReturnType<typeof makeConfig>;
+    loaded: Awaited<ReturnType<typeof load>>;
+    nested: Awaited<Promise<Promise<number>>>;
+    upper: Uppercase<"get" | "post">;
+    lower: Lowercase<"HeLLo">;
+    capitalized: Capitalize<"hello">;
+    uncapitalized: Uncapitalize<"Hello">;
+}`;
+        const validPayload = {
+            values: ["a"],
+            readonlySyntax: [1],
+            counts: { a: 1 },
+            metadata: {},
+            required: { id: "x" },
+            frozen: { x: 1 },
+            picked: { a: "x" },
+            omitted: { a: "x" },
+            color: "red",
+            kind: "a",
+            label: "l",
+            config: { port: 1, host: "h" },
+            loaded: { id: "x" },
+            nested: 1,
+            upper: "POST",
+            lower: "hello",
+            capitalized: "Hello",
+            uncapitalized: "hello"
+        };
+
+        it("accepts a payload that satisfies every helper type", () => {
+            const v = validatorFor(helperSchema, "Payload");
+            const result = v.validate(validPayload);
+            assert.ok(result.success, `expected validation to succeed, got: ${!result.success && result.message}`);
+        });
+
+        it("accepts the reproduction from issue #452", () => {
+            const v = validatorFor(`
+export interface Payload {
+    values: ReadonlyArray<string>;
+    counts: Record<string, number>;
+    metadata: Partial<{ name: string }>;
+}`, "Payload");
+            const result = v.validate({ values: ["a"], counts: { a: 1 }, metadata: {} });
+            assert.ok(result.success, `expected validation to succeed, got: ${!result.success && result.message}`);
+        });
+
+        const invalidCases: [string, object, RegExp][] = [
+            ["ReadonlyArray element type", { values: [1] }, /'number' is not assignable to type 'string'/],
+            ["readonly array syntax element type", { readonlySyntax: ["x"] }, /'string' is not assignable to type 'number'/],
+            ["Record value type", { counts: { a: "1" } }, /'string' is not assignable to type 'number'/],
+            ["Partial property type", { metadata: { name: 1 } }, /'number' is not assignable to type 'string'/],
+            ["Required missing property", { required: {} }, /Property 'id' is missing/],
+            ["Readonly property type", { frozen: { x: "1" } }, /'string' is not assignable to type 'number'/],
+            ["Pick property type", { picked: { a: 1 } }, /'number' is not assignable to type 'string'/],
+            ["Omit removed property", { omitted: { a: "x", b: 1 } }, /'"?b"?' does not exist/],
+            ["Exclude removed member", { color: "green" }, /'"green"' is not assignable/],
+            ["Extract non-matching member", { kind: 1 }, /'number' is not assignable/],
+            ["NonNullable null", { label: null }, /'null' is not assignable to type 'string'/],
+            ["ReturnType property type", { config: { port: "1", host: "h" } }, /'string' is not assignable to type 'number'/],
+            ["Awaited property type", { loaded: { id: 1 } }, /'number' is not assignable to type 'string'/],
+            ["nested Awaited type", { nested: "1" }, /'string' is not assignable to type 'number'/],
+            ["Uppercase member", { upper: "PUT" }, /'"PUT"' is not assignable/],
+            ["Lowercase value", { lower: "HELLO" }, /'"HELLO"' is not assignable to type '"hello"'/],
+            ["Capitalize value", { capitalized: "hello" }, /'"hello"' is not assignable to type '"Hello"'/],
+            ["Uncapitalize value", { uncapitalized: "Hello" }, /'"Hello"' is not assignable to type '"hello"'/],
+        ];
+
+        it("rejects any JSON value for a Promise property", () => {
+            const v = validatorFor(`export interface Holder { value: Promise<number>; }`, "Holder");
+            for (const value of [1, {}, { then: "x" }]) {
+                const result = v.validate({ value });
+                assert.ok(!result.success, `expected validation to fail for ${JSON.stringify(value)}`);
+            }
+        });
+
+        for (const [name, override, expected] of invalidCases) {
+            it(`rejects an invalid value for ${name}`, () => {
+                const v = validatorFor(helperSchema, "Payload");
+                const result = v.validate({ ...validPayload, ...override });
+                assert.ok(!result.success, "expected validation to fail");
+                assert.match(result.message, expected);
+            });
+        }
+    });
 });

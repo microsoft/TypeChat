@@ -7,9 +7,33 @@
 
 import { test, describe, after } from "node:test";
 import assert from "node:assert/strict";
+import { cpSync, mkdtempSync, rmSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 // Load the compiled module from dist
-import { createOpenAILanguageModel, createLanguageModel } from "../dist/index.js";
+import { createOpenAILanguageModel, createAzureOpenAILanguageModel, createLanguageModel } from "../dist/index.js";
+
+test("missing optional undici returns an actionable result for both API paths", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "typechat-no-undici-"));
+    try {
+        for (const name of ["model", "result"]) {
+            cpSync(new URL(`../dist/${name}.js`, import.meta.url), join(dir, `${name}.js`));
+        }
+        const { createOpenAILanguageModel: isolatedModel } = createRequire(join(dir, "model.js"))("./model.js");
+        for (const endpoint of ["https://api.openai.com/v1/chat/completions", "https://api.openai.com/v1/responses"]) {
+            const model = isolatedModel("sk-test", "gpt-4", endpoint, "", { proxyUrl: "http://localhost:8080" });
+            const result = await model.complete("test");
+            assert.deepEqual(result, {
+                success: false,
+                message: 'REST API fetch error: A proxy was configured, but the optional "undici" package is not installed. Run "npm install undici" to enable proxy support.'
+            });
+        }
+    } finally {
+        rmSync(dir, { recursive: true, force: true });
+    }
+});
 
 // ---------------------------------------------------------------------------
 // Helpers: build mock Response objects
@@ -274,6 +298,28 @@ describe("createOpenAILanguageModel (Chat Completions API)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// createAzureOpenAILanguageModel
+// ---------------------------------------------------------------------------
+
+describe("createAzureOpenAILanguageModel", () => {
+    after(teardownFetch);
+
+    test("sends both Authorization Bearer and api-key headers", async () => {
+        setupFetch([makeChatCompletionsResponse("Hello from Azure!")]);
+        const model = createAzureOpenAILanguageModel(
+            "azure-test-key",
+            "https://example.openai.azure.com/openai/deployments/gpt-4/chat/completions?api-version=2023-05-15"
+        );
+        const result = await model.complete("Say hello");
+        assert.equal(result.success, true);
+        assert.equal(result.data, "Hello from Azure!");
+        const headers = capturedRequests[0].options.headers;
+        assert.equal(headers["Authorization"], "Bearer azure-test-key");
+        assert.equal(headers["api-key"], "azure-test-key");
+    });
+});
+
+// ---------------------------------------------------------------------------
 // Responses API via createOpenAILanguageModel
 // ---------------------------------------------------------------------------
 
@@ -509,4 +555,3 @@ describe("request timeout and response size limits", () => {
         assert.equal(result.data, "Streamed!");
     });
 });
-
