@@ -55,6 +55,42 @@ test("native budgets, execution limits, exact completion, and separate usage are
     assert.equal(source.jobs.publish.env.TYPECHAT_DETECTION_CREDITS, "${{ needs.detection.outputs.aic }}");
 });
 
+test("failed prerequisites cannot authorize detector inference", () => {
+    const job = compiled.jobs.detection;
+    const eligible = new Function("needs", "always", `return ${job.if};`);
+    const needs = { prepare: { result: "success" }, agent: { result: "success", outputs: { output_types: "noop" } } };
+    assert.equal(eligible(needs, () => true), true);
+    for (const result of ["failure", "cancelled", "skipped"]) {
+        assert.equal(eligible({ ...needs, prepare: { result } }, () => true), false);
+        assert.equal(eligible({ ...needs, agent: { ...needs.agent, result } }, () => true), false);
+    }
+    assert.equal(eligible({ ...needs, agent: { result: "success", outputs: { output_types: "noop,report_incomplete" } } }, () => true), false);
+
+    const engine = job.steps.find(step => step.id === "detection_agentic_execution");
+    const gate = "${{ job.status == 'success' && steps.stage_patch.outcome == 'success' && github.token || '' }}";
+    assert.equal(engine.env.COPILOT_GITHUB_TOKEN, gate);
+    assert.equal(engine.env.COPILOT_MODEL, "gpt-6.1-sol");
+    assert.deepEqual(Object.entries(engine.env).filter(([, value]) =>
+        typeof value === "string" && /github\.token|secrets\.GITHUB_TOKEN/.test(value)),
+    [["COPILOT_GITHUB_TOKEN", gate]]);
+    assert.ok(!/github\.token|secrets\.GITHUB_TOKEN/.test(engine.run));
+    const credential = new Function("steps", "github", "job", `return ${gate.slice(3, -2)};`);
+    for (const outcome of [undefined, "", "failure", "cancelled", "skipped"]) {
+        assert.equal(credential({ stage_patch: { outcome } }, { token: "synthetic-authority" }, { status: "success" }), "");
+    }
+    for (const status of [undefined, "", "failure", "cancelled"]) {
+        assert.equal(credential({ stage_patch: { outcome: "success" } }, { token: "synthetic-authority" }, { status }), "");
+    }
+    assert.equal(credential({ stage_patch: { outcome: "success" } }, { token: "synthetic-authority" }, { status: "success" }), "synthetic-authority");
+    for (const env of [compiled.env, job.env, engine.env]) {
+        assert.equal(env?.GH_TOKEN, undefined);
+        assert.equal(env?.GITHUB_TOKEN, undefined);
+        assert.equal(env?.GH_AW_GITHUB_TOKEN, undefined);
+    }
+    assert.equal(compiled.env.COPILOT_GITHUB_TOKEN, undefined);
+    assert.equal(job.env.COPILOT_GITHUB_TOKEN, undefined);
+});
+
 test("App secrets exist only in trusted preflight and publication steps, never coding, detection, or generated checks", () => {
     assert.deepEqual(compiled.permissions, {});
     for (const [id, job] of Object.entries(compiled.jobs)) {

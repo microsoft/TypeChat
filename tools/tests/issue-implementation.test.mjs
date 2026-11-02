@@ -2,11 +2,12 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import childProcess, { execFileSync } from "node:child_process";
 import { generateKeyPairSync, verify } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
 import { ACTIONS_BOT_ID, OWNER, REPOSITORY, digest, readJson, renderAcceptance } from "../discussion-draft.mjs";
 import {
@@ -16,7 +17,7 @@ import {
     validateCompletion, verifyBuildArtifact, verifyBuildAuthorization, verifyBuildStart,
 } from "../issue-implementation.mjs";
 import { IMPLEMENTATION_APP, IMPLEMENTATION_PERMISSIONS, validateAppGrant, withImplementationApp } from "../implementation-app.mjs";
-import { TEST_IMAGE, sandboxArguments, sandboxDockerfile, writeSandboxInputs } from "../implementation-sandbox.mjs";
+import { TEST_IMAGE, runIsolatedChecks, sandboxArguments, sandboxDockerfile, writeSandboxInputs } from "../implementation-sandbox.mjs";
 
 const SHA = "a".repeat(40);
 const POLICY = "b".repeat(40);
@@ -303,6 +304,7 @@ for (const filename of [
     "typescript/package.json", "python/pyproject.toml", "python/conftest.py", "site/.eleventy.js",
     "typescript/tsconfig.json", "typescript/src/../../GOALS.md", "typescript/src/AGENTS.md", "typescript/src/help.instructions.md",
     "typescript/node_modules/attack.js", "typescript/src/secret:stream", "typescript/src/nul.txt",
+    "typescript/src/value.ts.", "typescript/src/parent./value.ts", "python/src/trailing../value.py",
 ]) {
     test(`reject protected or unsafe patch path ${filename}`, async () => {
         const f = await preparedFixture();
@@ -328,6 +330,18 @@ test("candidate validation rejects wrong origin, symlinks, executable modes, bin
         const f = await preparedFixture(); mutate(f);
         assert.throws(() => validateCandidate(f.candidate, f.prepared, { truncated: false, tree: f.state.baseline }));
     }
+});
+
+test("candidate paths cannot alias directory components on Windows", async () => {
+    const f = await preparedFixture();
+    f.state.baseline.push({ path: "typescript/src/Utilities/value.ts", type: "blob", mode: "100644", sha: blobHash(original) });
+    f.candidate.files = [{ path: "typescript/src/utilities/new.ts", previousSha: null, content: "export {};\n" }];
+    assert.throws(() => validateCandidate(f.candidate, f.prepared, { truncated: false, tree: f.state.baseline }), /Case-colliding path components/);
+    f.candidate.files = [
+        { path: "typescript/src/Fresh/first.ts", previousSha: null, content: "export {};\n" },
+        { path: "typescript/src/fresh/second.ts", previousSha: null, content: "export {};\n" },
+    ];
+    assert.throws(() => validateCandidate(f.candidate, f.prepared, { truncated: false, tree: f.state.baseline }), /Case-colliding path components/);
 });
 
 test("native completion, exact scan, deterministic checks, and actual separate usage are mandatory", async () => {
@@ -493,6 +507,53 @@ function collectorFixture(t) {
         "commit", "--quiet", "-m", "Fixture", "-m", "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"]);
     const prepared = { source: { commit: git(["rev-parse", "HEAD"]).trim() } };
     return { directory, file, git, prepared };
+}
+
+test("failed dependency enumeration cannot return a partial candidate", t => {
+    const f = collectorFixture(t);
+    fs.writeFileSync(f.file, original + "// changed\n");
+    const execute = childProcess.execFileSync;
+    const mocked = t.mock.method(childProcess, "execFileSync", (command, args, options) => {
+        if (command === "git" && args.includes("ls-files")) throw new Error("Dependency listing unavailable");
+        return execute(command, args, options);
+    });
+    syncBuiltinESMExports();
+    try {
+        assert.throws(() => collectCandidate(f.prepared, f.directory, "No incomplete manifest."), /Dependency listing unavailable/);
+    } finally {
+        mocked.mock.restore();
+        syncBuiltinESMExports();
+    }
+});
+
+for (const failing of ["archive", "extract", "dependencies"]) {
+    test(`failed ${failing} collection blocks test execution and success evidence`, t => {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-dependency-failure-"));
+        t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+        fs.writeFileSync(path.join(directory, ".nvmrc"), "24.22.1\n");
+        const calls = [];
+        const execute = t.mock.method(childProcess, "execFileSync", command => {
+            if (failing === "archive" && command === "git") throw new Error("Archive unavailable");
+            if (failing === "extract" && command === "tar") throw new Error("Extraction failed");
+            return Buffer.from("");
+        });
+        const spawn = t.mock.method(childProcess, "spawnSync", (command, args) => {
+            assert.equal(command, "docker");
+            calls.push(args[0]);
+            return { status: 1, stdout: "", stderr: "Dependency installation failed" };
+        });
+        syncBuiltinESMExports();
+        try {
+            assert.throws(() => runIsolatedChecks({ source: { commit: SHA } },
+                { files: [{ path: "typescript/src/value.ts", previousSha: null, content: "export {};\n" }] },
+                {}, directory, directory));
+            assert.deepEqual(calls, failing === "dependencies" ? ["build"] : []);
+        } finally {
+            execute.mock.restore();
+            spawn.mock.restore();
+            syncBuiltinESMExports();
+        }
+    });
 }
 
 test("the collector preserves a staged rename as a deletion and addition", t => {

@@ -435,7 +435,7 @@ export async function verifyBuildStart(github, context, env, prepared, intentId,
 function requirePatchPath(name) {
     requireValue(typeof name === "string" && name.length <= 240 &&
         /^(?:README\.md|(?:typescript|python|site)\/[A-Za-z0-9_./-]+)$/.test(name) &&
-        !name.split("/").some(part => !part || part === "." || part === ".." || part.startsWith(".") ||
+        !name.split("/").some(part => !part || part === "." || part === ".." || part.startsWith(".") || part.endsWith(".") ||
             /^(?:node_modules|dist|out|build|coverage|__pycache__|con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(part)) &&
         !/(?:^|\/)(?:AGENTS|CLAUDE|SKILL|GOALS|AUTOMATION|OWNER-CHEATSHEET)\.md$/i.test(name) &&
         !/(?:^|\/)(?:package(?:-lock)?\.json|npm-shrinkwrap\.json|pyproject\.toml|(?:yarn|pnpm|poetry|uv|hatch)\.lock|pnpm-lock\.yaml|(?:tsconfig|jsconfig|pyrightconfig)(?:\.[^/]+)?\.json|[^/]*\.config\.[^/]+|Dockerfile|Makefile|requirements[^/]*|conftest\.py|(?:pytest|tox|setup)\.(?:ini|cfg|py))$/i.test(name) &&
@@ -454,14 +454,30 @@ export function validateCandidate(candidate, prepared, tree) {
         Buffer.byteLength(JSON.stringify(candidate, null, 2) + "\n") <= BUILD_LIMITS.candidateBytes, "The candidate exceeds the pilot's patch bounds.");
     requireValue(tree?.truncated === false && Array.isArray(tree.tree), "The fixed source tree is incomplete.");
     const baseline = new Map(tree.tree.filter(entry => entry.type !== "tree").map(entry => [entry.path, entry]));
-    const folded = new Map([...baseline.keys()].map(file => [file.toLowerCase(), file]));
+    const spellings = new Map();
+    function pathPrefixes(name) {
+        return name.split("/").map((_, index, parts) => parts.slice(0, index + 1).join("/"));
+    }
+    for (const entry of tree.tree) {
+        for (const prefix of pathPrefixes(entry.path)) {
+            const key = prefix.toLowerCase();
+            const known = spellings.get(key) ?? new Set();
+            known.add(prefix);
+            spellings.set(key, known);
+        }
+    }
     const seen = new Set();
     for (const file of candidate.files) {
         keys(file, ["path", "previousSha", "content"], "Unexpected changed-file fields.");
         const name = file.path;
         requirePatchPath(name);
-        requireValue(!seen.has(name.toLowerCase()) && (!folded.has(name.toLowerCase()) || folded.get(name.toLowerCase()) === name),
-            "Case-colliding or duplicated patch paths are not supported.");
+        requireValue(!seen.has(name.toLowerCase()), "Case-colliding or duplicated patch paths are not supported.");
+        for (const prefix of pathPrefixes(name)) {
+            const key = prefix.toLowerCase();
+            const known = spellings.get(key);
+            requireValue(!known || known.size === 1 && known.has(prefix), "Case-colliding path components are not supported.");
+            spellings.set(key, new Set([prefix]));
+        }
         seen.add(name.toLowerCase());
         const previous = baseline.get(name);
         requireValue(previous ? previous.type === "blob" && previous.mode === "100644" && previous.sha === file.previousSha :

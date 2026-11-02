@@ -909,6 +909,13 @@ short-lived App-access proof are frozen. An immutable spending reservation
 precedes inference. The model-start guard repeats authorization and rejects App
 preflight older than 15 minutes. A build command expires after 24 hours.
 
+Detection is eligible only after successful preparation and successful, sole-`noop`
+agent completion. Its inference credential is released only after the trusted
+authorization and exact-patch staging step succeeds and preceding job steps
+have not failed or been cancelled. This explicit credential
+gate is necessary because the pinned runtime can still launch detector setup
+after a failed custom pre-step; that failed step must not grant inference access.
+
 One execution permits at most **1,000 main-agent AI credits** and **400 separate
 detection credits**, not a combined 1,000-credit allowance. The main agent uses
 the established GPT-6.1-sol/max configuration, at most 1,000 calls, 60 minutes
@@ -956,6 +963,10 @@ is bounded at 64 KiB and the entire patch at 128 KiB. Dependencies, configuratio
 automation, policy, permissions, credentials, agent instructions, symlinks,
 binary or executable-mode changes, generated trees, and case collisions are
 rejected. Unsupported work remains maintainer work; nothing is silently omitted.
+Windows-incompatible trailing-dot components and case aliases of directories
+are rejected as well. Failed dependency enumeration, source extraction, or
+dependency installation cannot produce a partial candidate or passing check
+evidence.
 
 The [protocol](./tools/issue-implementation.mjs) validates the candidate against
 the fixed source tree and stages the complete patch, candidate, and accepted

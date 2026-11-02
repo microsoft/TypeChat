@@ -77,6 +77,12 @@ safe-outputs:
   report-incomplete:
     create-issue: false
   threat-detection:
+    engine:
+      id: copilot
+      env:
+        # The pinned launcher can run after a failed custom pre-step.
+        # Do not release inference credentials until authorization and staging succeed.
+        COPILOT_GITHUB_TOKEN: ${{ job.status == 'success' && steps.stage_patch.outcome == 'success' && github.token || '' }}
     max-ai-credits: 400
     continue-on-error: false
     report-as-issue: false
@@ -236,6 +242,7 @@ jobs:
     timeout-minutes: 100
   detection:
     needs: [prepare]
+    if: needs.prepare.result == 'success' && needs.agent.result == 'success' && needs.agent.outputs.output_types == 'noop'
     timeout-minutes: 30
     permissions:
       contents: read
