@@ -424,6 +424,20 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(schemaOf("NumberFromString", NumberFromString), /type NumberFromString = string;/);
         });
 
+        it("preserves input precedence for pipelines in arrays and optional tuples", () => {
+            const Element = z.union([z.string(), z.number()]).transform(String).pipe(z.string());
+            const values = schemaOf("Values", z.array(Element));
+            const row = schemaOf("Row", z.tuple([Element.optional()]));
+
+            assert.equal(values, "type Values = (string | number)[];\n");
+            assert.equal(row, "type Row = [(string | number)?];\n");
+        });
+
+        it("preserves input precedence through nested pipelines", () => {
+            const Nested = z.union([z.string(), z.number()]).pipe(z.string()).pipe(z.string());
+            assert.equal(schemaOf("Nested", Nested), "type Nested = string | number;\n");
+        });
+
         it("preserves transformed runtime values during validation", () => {
             const Event = {
                 Event: z.object({
