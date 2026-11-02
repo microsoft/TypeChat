@@ -450,6 +450,11 @@ test("test containers expose only read-only input data, no network, host workspa
     assert.ok(dockerfile.includes(TEST_IMAGE));
     assert.ok(dockerfile.includes("npm ci --ignore-scripts"));
     assert.ok(dockerfile.includes("hatch env create"));
+    assert.ok(dockerfile.includes("ENV PATH=/work/.venv/bin:/opt/hatch/bin:$PATH"));
+    assert.ok(dockerfile.includes("'virtualenv<20.29'"));
+    assert.ok(dockerfile.indexOf("USER 1000:1000") < dockerfile.indexOf("hatch env create"));
+    assert.ok(dockerfile.includes('test "$(hatch env find)" = "/work/.venv"'));
+    assert.ok(dockerfile.includes("hatch run python --version"));
     assert.ok(!dockerfile.includes("TOKEN"));
     assert.deepEqual(requiredChecks({ files: [{ path: "README.md" }] }), ["git diff --check"]);
 });
@@ -473,6 +478,86 @@ test("candidate byte bounds cover the actual formatted artifact, not just compac
     assert.ok(Buffer.byteLength(JSON.stringify(f.candidate)) < BUILD_LIMITS.candidateBytes);
     assert.ok(Buffer.byteLength(JSON.stringify(f.candidate, null, 2) + "\n") > BUILD_LIMITS.candidateBytes);
     assert.throws(() => validateCandidate(f.candidate, f.prepared, { truncated: false, tree: f.state.baseline }), /patch bounds/);
+});
+
+function collectorFixture(t) {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-collector-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    fs.mkdirSync(path.join(directory, "typescript", "src"), { recursive: true });
+    const file = path.join(directory, "typescript", "src", "value.ts");
+    fs.writeFileSync(file, original);
+    const git = args => execFileSync("git", ["-C", directory, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    git(["init", "--quiet"]);
+    git(["add", "--all"]);
+    git(["-c", "user.name=TypeChat Test", "-c", "user.email=typechat-test@example.invalid", "-c", "commit.gpgsign=false",
+        "commit", "--quiet", "-m", "Fixture", "-m", "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"]);
+    const prepared = { source: { commit: git(["rev-parse", "HEAD"]).trim() } };
+    return { directory, file, git, prepared };
+}
+
+test("the collector preserves a staged rename as a deletion and addition", t => {
+    const f = collectorFixture(t);
+    f.git(["mv", "typescript/src/value.ts", "typescript/src/renamed.ts"]);
+    const candidate = collectCandidate(f.prepared, f.directory, "Rename the value file.");
+    assert.equal(candidate.files.length, 2);
+    assert.deepEqual(candidate.files.find(file => file.path.endsWith("value.ts")),
+        { path: "typescript/src/value.ts", previousSha: blobHash(original), content: null });
+    assert.deepEqual(candidate.files.find(file => file.path.endsWith("renamed.ts")),
+        { path: "typescript/src/renamed.ts", previousSha: null, content: original });
+});
+
+test("the collector rejects executable index modes accompanying text changes", t => {
+    const f = collectorFixture(t);
+    fs.writeFileSync(f.file, original + "// changed\n");
+    f.git(["add", "--", "typescript/src/value.ts"]);
+    f.git(["update-index", "--chmod=+x", "typescript/src/value.ts"]);
+    assert.throws(() => collectCandidate(f.prepared, f.directory, "Not a supported mode change."), /Executable.*index/);
+});
+
+test("the collector rejects executable filesystem modes even when Git ignores mode changes", t => {
+    const f = collectorFixture(t);
+    fs.writeFileSync(f.file, original + "// changed\n");
+    const lstat = fs.lstatSync;
+    t.mock.method(fs, "lstatSync", (filename, options) => {
+        const info = lstat(filename, options);
+        if (filename === f.file) info.mode |= 0o111;
+        return info;
+    });
+    assert.throws(() => collectCandidate(f.prepared, f.directory, "Not a supported mode change."), /executable candidate/);
+});
+
+test("the collector rejects original invalid UTF-8 bytes instead of replacing them", t => {
+    const f = collectorFixture(t);
+    fs.writeFileSync(f.file, Buffer.from([0xff, 0x0a]));
+    assert.throws(() => collectCandidate(f.prepared, f.directory, "Not a supported encoding."), /invalid UTF-8/);
+});
+
+test("binary original files cannot be deleted or replaced through a text-only candidate", t => {
+    const f = collectorFixture(t);
+    fs.writeFileSync(f.file, Buffer.from([0xff, 0x00]));
+    f.git(["add", "--all"]);
+    f.git(["-c", "user.name=TypeChat Test", "-c", "user.email=typechat-test@example.invalid", "-c", "commit.gpgsign=false",
+        "commit", "--quiet", "-m", "Binary fixture", "-m", "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"]);
+    f.prepared.source.commit = f.git(["rev-parse", "HEAD"]).trim();
+    fs.unlinkSync(f.file);
+    assert.throws(() => collectCandidate(f.prepared, f.directory, "Unsupported deletion."), /original files/);
+    fs.writeFileSync(f.file, Buffer.from([0xff, 0x00]));
+    assert.throws(() => applyCandidateFiles({ files: [{ path: "typescript/src/value.ts",
+        previousSha: blobHash(Buffer.from([0xff, 0x00])), content: "replacement\n" }] }, f.directory), /unsupported original bytes/);
+});
+
+test("text patches remain complete even when trusted attributes mark the file binary", t => {
+    const f = collectorFixture(t);
+    fs.writeFileSync(path.join(f.directory, ".gitattributes"), "*.ts binary\n");
+    f.git(["add", "--all"]);
+    f.git(["-c", "user.name=TypeChat Test", "-c", "user.email=typechat-test@example.invalid", "-c", "commit.gpgsign=false",
+        "commit", "--quiet", "-m", "Attribute fixture", "-m", "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"]);
+    f.prepared.source.commit = f.git(["rev-parse", "HEAD"]).trim();
+    const patch = patchForDetection({ files: [{ path: "typescript/src/value.ts",
+        previousSha: blobHash(original), content: "export const value = 2;\n" }] }, f.prepared, f.directory);
+    assert.ok(patch.includes("-export const value = 1;"));
+    assert.ok(patch.includes("+export const value = 2;"));
+    assert.ok(!patch.includes("Binary files"));
 });
 
 const keyPair = generateKeyPairSync("rsa", { modulusLength: 2048 });

@@ -237,6 +237,12 @@ jobs:
   detection:
     needs: [prepare]
     timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+      pull-requests: read
+      copilot-requests: write
   checks:
     name: Run deterministic checks without repository credentials
     needs: [prepare, agent, detection]

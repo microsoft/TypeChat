@@ -71,6 +71,9 @@ test("App secrets exist only in trusted preflight and publication steps, never c
         }
     }
     assert.equal(source.jobs.publish.permissions["copilot-requests"], undefined);
+    for (const permission of ["contents", "actions", "issues", "pull-requests"]) {
+        assert.equal(compiled.jobs.detection.permissions[permission], "read", `Detection needs ${permission} evidence access`);
+    }
     assert.deepEqual([...new Set(JSON.stringify(compiled.jobs.agent).match(/secrets\.[A-Z0-9_]+/g))], ["secrets.GITHUB_TOKEN"]);
     const modelSteps = source["post-steps"];
     assert.ok(!JSON.stringify(modelSteps).includes("import("));

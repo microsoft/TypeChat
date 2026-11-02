@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import { createHash } from "node:crypto";
+import { isUtf8 } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -431,6 +432,17 @@ export async function verifyBuildStart(github, context, env, prepared, intentId,
     requireValue(!await priorIntent(github, name, artifact.id), "A coding run was already reserved for this command.");
 }
 
+function requirePatchPath(name) {
+    requireValue(typeof name === "string" && name.length <= 240 &&
+        /^(?:README\.md|(?:typescript|python|site)\/[A-Za-z0-9_./-]+)$/.test(name) &&
+        !name.split("/").some(part => !part || part === "." || part === ".." || part.startsWith(".") ||
+            /^(?:node_modules|dist|out|build|coverage|__pycache__|con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(part)) &&
+        !/(?:^|\/)(?:AGENTS|CLAUDE|SKILL|GOALS|AUTOMATION|OWNER-CHEATSHEET)\.md$/i.test(name) &&
+        !/(?:^|\/)(?:package(?:-lock)?\.json|npm-shrinkwrap\.json|pyproject\.toml|(?:yarn|pnpm|poetry|uv|hatch)\.lock|pnpm-lock\.yaml|(?:tsconfig|jsconfig|pyrightconfig)(?:\.[^/]+)?\.json|[^/]*\.config\.[^/]+|Dockerfile|Makefile|requirements[^/]*|conftest\.py|(?:pytest|tox|setup)\.(?:ini|cfg|py))$/i.test(name) &&
+        !/\.(?:agent|instructions|prompt)\.md$/i.test(name),
+    "The pilot cannot change automation, policy, dependencies, configuration, credentials, or unsupported paths.");
+}
+
 export function validateCandidate(candidate, prepared, tree) {
     keys(candidate, ["version", "contextHash", "baseSha", "summary", "limitations", "files"], "Unexpected patch candidate fields.");
     requireValue(candidate.version === 1 && candidate.contextHash === digest(prepared) &&
@@ -447,14 +459,7 @@ export function validateCandidate(candidate, prepared, tree) {
     for (const file of candidate.files) {
         keys(file, ["path", "previousSha", "content"], "Unexpected changed-file fields.");
         const name = file.path;
-        requireValue(typeof name === "string" && name.length <= 240 &&
-            /^(?:README\.md|(?:typescript|python|site)\/[A-Za-z0-9_./-]+)$/.test(name) &&
-            !name.split("/").some(part => !part || part === "." || part === ".." || part.startsWith(".") ||
-                /^(?:node_modules|dist|out|build|coverage|__pycache__|con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)/i.test(part)) &&
-            !/(?:^|\/)(?:AGENTS|CLAUDE|SKILL|GOALS|AUTOMATION|OWNER-CHEATSHEET)\.md$/i.test(name) &&
-            !/(?:^|\/)(?:package(?:-lock)?\.json|npm-shrinkwrap\.json|pyproject\.toml|(?:yarn|pnpm|poetry|uv|hatch)\.lock|pnpm-lock\.yaml|(?:tsconfig|jsconfig|pyrightconfig)(?:\.[^/]+)?\.json|[^/]*\.config\.[^/]+|Dockerfile|Makefile|requirements[^/]*|conftest\.py|(?:pytest|tox|setup)\.(?:ini|cfg|py))$/i.test(name) &&
-            !/\.(?:agent|instructions|prompt)\.md$/i.test(name),
-        "The pilot cannot change automation, policy, dependencies, configuration, credentials, or unsupported paths.");
+        requirePatchPath(name);
         requireValue(!seen.has(name.toLowerCase()) && (!folded.has(name.toLowerCase()) || folded.get(name.toLowerCase()) === name),
             "Case-colliding or duplicated patch paths are not supported.");
         seen.add(name.toLowerCase());
@@ -480,6 +485,7 @@ export function blobHash(content) {
 export function applyCandidateFiles(candidate, directory) {
     const root = fs.realpathSync(directory);
     for (const file of candidate.files) {
+        requirePatchPath(file.path);
         const destination = path.join(root, ...file.path.split("/"));
         requireValue(destination.startsWith(root + path.sep), "A candidate path escapes the isolated checkout.");
         let parent = path.dirname(destination);
@@ -489,9 +495,11 @@ export function applyCandidateFiles(candidate, directory) {
             parent = path.dirname(parent);
         }
         const info = fs.lstatSync(destination, { throwIfNoEntry: false });
+        const previous = info?.isFile() && !info.isSymbolicLink() && info.size <= BUILD_LIMITS.patchBytes ?
+            fs.readFileSync(destination) : null;
         requireValue(file.previousSha === null ? !info :
-            info?.isFile() && !info.isSymbolicLink() && blobHash(fs.readFileSync(destination)) === file.previousSha,
-        "The isolated checkout differs from the approved patch base.");
+            previous !== null && isUtf8(previous) && !previous.includes(0) && blobHash(previous) === file.previousSha,
+        "The isolated checkout differs from the approved patch base or contains unsupported original bytes.");
         if (file.content === null) {
             fs.unlinkSync(destination);
         } else {
@@ -508,8 +516,8 @@ export function patchForDetection(candidate, prepared, directory) {
     applyCandidateFiles(candidate, directory);
     const additions = candidate.files.filter(file => file.previousSha === null).map(file => file.path);
     if (additions.length) git(["add", "--intent-to-add", "--", ...additions]);
-    git(["diff", "--check", "HEAD", "--", ...candidate.files.map(file => file.path)]);
-    const patch = git(["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--full-index", "--no-renames", "HEAD",
+    git(["diff", "--text", "--check", "HEAD", "--", ...candidate.files.map(file => file.path)]);
+    const patch = git(["diff", "--text", "--no-ext-diff", "--no-textconv", "--no-color", "--full-index", "--no-renames", "HEAD",
         "--", ...candidate.files.map(file => file.path)]);
     requireValue(patch.length > 0 && Buffer.byteLength(patch) <= BUILD_LIMITS.patchBytes,
         "The full patch cannot be scanned within the pilot's bound.");
@@ -714,17 +722,28 @@ export async function publishBuild(github, writer, app, context, env, prepared, 
 export function collectCandidate(prepared, directory, summary, limitations = []) {
     const git = args => execFileSync("git", ["-C", directory, ...args], { encoding: "utf8", maxBuffer: MAX_CONTEXT_BYTES });
     requireValue(git(["rev-parse", "HEAD"]).trim() === prepared.source.commit, "The coding checkout does not match the frozen source.");
-    const tracked = git(["diff", "--name-only", "-z", "HEAD"]).split("\0").filter(Boolean);
+    const tracked = git(["diff", "--no-renames", "--name-only", "-z", "HEAD"]).split("\0").filter(Boolean);
     const untracked = git(["ls-files", "--others", "--exclude-standard", "-z"]).split("\0").filter(Boolean)
         .filter(file => file !== "implementation-candidate.json" && !file.startsWith(".typechat-build/"));
     const files = [...new Set([...tracked, ...untracked])].sort().map(file => {
+        requirePatchPath(file);
         const entry = git(["ls-tree", "HEAD", "--", file]).trim();
         const match = /^100644 blob ([a-f0-9]{40})\t/.exec(entry);
         requireValue(!entry || match, "Only ordinary tracked text files are supported.");
+        if (match) {
+            const previous = execFileSync("git", ["-C", directory, "show", `HEAD:${file}`], { maxBuffer: BUILD_LIMITS.patchBytes });
+            requireValue(isUtf8(previous) && !previous.includes(0), "Binary or invalid UTF-8 original files are unsupported.");
+        }
+        const index = git(["ls-files", "--stage", "-z", "--", file]).split("\0").filter(Boolean);
+        requireValue(index.length <= 1 && index.every(value => /^100644 [a-f0-9]{40} 0\t/.test(value)),
+            "Executable or conflicted index entries are unsupported.");
         const filename = path.join(directory, ...file.split("/"));
         const info = fs.lstatSync(filename, { throwIfNoEntry: false });
-        requireValue(!info || info.isFile() && !info.isSymbolicLink() && info.size <= BUILD_LIMITS.candidateBytes, "Unsupported candidate file.");
-        return { path: file, previousSha: match?.[1] ?? null, content: info ? fs.readFileSync(filename, "utf8") : null };
+        requireValue(!info || info.isFile() && !info.isSymbolicLink() && (info.mode & 0o111) === 0 &&
+            info.size <= BUILD_LIMITS.candidateBytes, "Unsupported or executable candidate file.");
+        const bytes = info ? fs.readFileSync(filename) : null;
+        requireValue(bytes === null || isUtf8(bytes) && !bytes.includes(0), "Binary or invalid UTF-8 candidate bytes are unsupported.");
+        return { path: file, previousSha: match?.[1] ?? null, content: bytes?.toString("utf8") ?? null };
     });
     return { version: 1, contextHash: digest(prepared), baseSha: prepared.source.commit, summary, limitations, files };
 }

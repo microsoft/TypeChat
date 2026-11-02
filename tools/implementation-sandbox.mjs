@@ -21,15 +21,17 @@ export function sandboxDockerfile(candidate) {
     if (checks.some(check => check.startsWith("python:"))) {
         lines.push(
             "RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv && apt-get clean",
-            "RUN python3 -m venv /opt/hatch && /opt/hatch/bin/pip install --no-cache-dir hatch",
-            "ENV PATH=/opt/hatch/bin:$PATH",
-            "RUN cd python && hatch env create && npm ci --ignore-scripts",
+            "RUN python3 -m venv /opt/hatch && /opt/hatch/bin/pip install --no-cache-dir hatch 'virtualenv<20.29'",
+            "ENV PATH=/work/.venv/bin:/opt/hatch/bin:$PATH",
         );
+    }
+    lines.push("RUN chown -R 1000:1000 /work", "USER 1000:1000", "ENV HOME=/home/node");
+    if (checks.some(check => check.startsWith("python:"))) {
+        lines.push('RUN cd python && hatch env create && test "$(hatch env find)" = "/work/.venv" && hatch run python --version && npm ci --ignore-scripts');
     }
     if (checks.some(check => check.startsWith("typescript:"))) lines.push("RUN cd typescript && npm ci --ignore-scripts");
     if (checks.some(check => check.startsWith("site:"))) lines.push("RUN cd site && npm ci --ignore-scripts");
-    lines.push("RUN chown -R 1000:1000 /work", "USER 1000:1000", "ENV HOME=/home/node",
-        'ENTRYPOINT ["node", "tools/implementation-sandbox.mjs", "inside"]');
+    lines.push('ENTRYPOINT ["node", "tools/implementation-sandbox.mjs", "inside"]');
     return lines.join("\n") + "\n";
 }
 
