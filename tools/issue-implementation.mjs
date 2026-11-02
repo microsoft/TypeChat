@@ -265,8 +265,7 @@ async function existingBuild(github, target, acceptance) {
     throw new Error("An implementation branch exists without a confirmed PR; inspect the earlier write before recovery.");
 }
 
-async function competingContributions(github, target, acceptance) {
-    const associated = new Set(acceptance.references.map(reference => reference.number));
+async function competingContributions(github, target) {
     const query = `query ImplementationContributions($owner:String!,$repo:String!,$number:Int!,$after:String) {
       repository(owner:$owner,name:$repo) { issue(number:$number) {
         timelineItems(first:100,after:$after,itemTypes:[CROSS_REFERENCED_EVENT,CONNECTED_EVENT]) {
@@ -309,7 +308,7 @@ async function competingContributions(github, target, acceptance) {
         for (const pr of prs) {
             requireValue(typeof pr.title === "string" && (pr.body === null || typeof pr.body === "string"),
                 "Open-contribution metadata is incomplete.");
-            requireValue(!associated.has(pr.number) && !mention.test(`${pr.title}\n${pr.body ?? ""}`),
+            requireValue(!mention.test(`${pr.title}\n${pr.body ?? ""}`),
                 `Open PR #${pr.number} may already implement this Issue; obtain owner guidance instead of a competing patch.`);
         }
         if (prs.length < 100) return;
@@ -338,7 +337,7 @@ export async function prepareBuild(github, context, env, clock = () => new Date(
         request.mode === "command" ? request.acceptanceId : request.command.acceptanceId, request.command?.bodyHash, current);
     const existing = await existingBuild(github, target, acceptance);
     if (existing) return existing;
-    await competingContributions(github, target, acceptance);
+    await competingContributions(github, target);
     requireValue(!await priorIntent(github, `${BUILD_WRITE_PREFIX}${scopeKey(target, acceptance)}`),
         "An earlier publication is unresolved; inspect it before requesting more work.");
     if (request.mode === "command") {
@@ -395,7 +394,7 @@ export async function verifyBuildAuthorization(github, context, env, prepared, c
     const acceptance = await acceptanceRecord(github, thread, request.command.acceptanceId, request.command.bodyHash, current);
     requireValue(same(acceptance, prepared.acceptance) && snapshotHash(thread) === prepared.snapshotHash,
         "The acceptance or discussion changed after authorization; obtain a new owner decision.");
-    await competingContributions(github, request.target, acceptance);
+    await competingContributions(github, request.target);
     return request;
 }
 

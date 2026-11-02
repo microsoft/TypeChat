@@ -29,14 +29,14 @@ const repo = { id: REPOSITORY.id, full_name: "microsoft/TypeChat", private: fals
 const target = { kind: "issue", number: 75, id: "I_75", url: "https://github.com/microsoft/TypeChat/issues/75" };
 const original = "export const value = 1;\n";
 
-function fixture() {
+function fixture(references = []) {
     const policyText = "The project direction owner is **@robgruen**.\nPreserve schema accuracy.\n";
     const fingerprints = Object.fromEntries(BUILD_CONTROL_PATHS.map(file => [file, blobHash(file)]));
     fingerprints["GOALS.md"] = blobHash(policyText);
     const body = renderAcceptance({
         target, producer: { runId: 50, attempt: 1, commit: POLICY }, marker: "e".repeat(64),
         draft: { proposal: { goal: "Preserve correct values.", scope: ["Fix the agreed value."], nonGoals: ["No other behavior changes."] },
-            suggestedCriteria: ["A deterministic test verifies the value."], pullRequests: [] },
+            suggestedCriteria: ["A deterministic test verifies the value."], pullRequests: references },
     });
     const owner = { __typename: "User", login: OWNER.login, id: "OWNER" };
     const bot = { __typename: "Bot", login: "github-actions", id: ACTIONS_BOT_ID };
@@ -53,7 +53,13 @@ function fixture() {
             lastEditedAt: null, author: owner, repository: { nameWithOwner: "microsoft/TypeChat", isPrivate: false } },
         baseline: [...Object.entries(fingerprints).map(([file, sha]) => ({ path: file, type: "blob", mode: "100644", sha })),
             { path: "typescript/src/value.ts", type: "blob", mode: "100644", sha: blobHash(original) }],
-        ref: null, pr: null, competitors: [], linked: [], writes: [], createdEntries: [], persistPrError: false, prError: null,
+        ref: null, pr: null, competitors: references.map(reference => ({
+            number: reference.number, title: "Related work on another Issue", body: "Fixes #454",
+        })),
+        referenceData: new Map(references.map(reference => [reference.number, {
+            number: reference.number, state: "open", head: { sha: reference.headSha }, base: { repo: { id: REPOSITORY.id } },
+        }])),
+        linked: [], writes: [], createdEntries: [], persistPrError: false, prError: null,
     };
     const context = {
         eventName: "issue_comment", actor: OWNER.login, sha: SHA, runId: 100,
@@ -100,7 +106,10 @@ function fixture() {
             },
             pulls: {
                 list: async input => ({ data: structuredClone(input.state === "all" ? state.pr ? [state.pr] : [] : state.competitors) }),
-                get: async () => { throw new Error("No contribution fetch expected."); },
+                get: async ({ pull_number }) => {
+                    assert.ok(state.referenceData.has(pull_number), "No unexpected contribution fetch.");
+                    return { data: structuredClone(state.referenceData.get(pull_number)) };
+                },
             },
             git: {
                 getTree: async ({ tree_sha }) => ({ data: { truncated: false, tree: structuredClone(tree_sha === TREE ? state.createdEntries :
@@ -172,8 +181,8 @@ function fixture() {
     return { state, context, env, github, writer, proof, artifact };
 }
 
-async function preparedFixture() {
-    const f = fixture();
+async function preparedFixture(references = []) {
+    const f = fixture(references);
     const plan = await prepareBuild(f.github, f.context, f.env, clock);
     f.prepared = freezeBuild(plan, f.proof, clock);
     f.candidate = { version: 1, contextHash: digest(f.prepared), baseSha: SHA, summary: "Correct the agreed value.", limitations: [],
@@ -203,6 +212,55 @@ test("the public durable acceptance generates an exact, copyable Issue command",
     assert.equal(f.state.artifacts.size, 0);
     assert.equal(f.state.writes.length, 0);
     assert.equal(parseAcceptedWork(f.state.comments[1].body, target).terms.goal, "Preserve correct values.");
+});
+
+test("a cited open PR for different work does not block command preparation", async () => {
+    const f = fixture([{ number: 466, headSha: "f".repeat(40) }]);
+    f.context.eventName = "workflow_dispatch";
+    f.context.payload.inputs = { issue: "75", acceptance: "41" };
+    delete f.env.TYPECHAT_IMPLEMENTATION_ENABLED;
+    const result = await prepareBuild(f.github, f.context, f.env, clock);
+    assert.equal(result.mode, "command");
+    assert.equal(result.command, buildCommand(41, digest(f.state.comments[1].body)));
+    assert.equal(result.enabled, false);
+    assert.equal(f.state.artifacts.size, 0);
+    assert.equal(f.state.writes.length, 0);
+});
+
+test("a related citation is preserved through preflight and verified publication", async () => {
+    const references = [{ number: 466, headSha: "f".repeat(40) }];
+    const f = await preparedFixture(references);
+    assert.deepEqual(f.prepared.acceptance.references, references);
+    const result = await f.publish();
+    assert.equal(result.mode, "published");
+    assert.ok(f.state.pr.body.includes("https://github.com/microsoft/TypeChat/pull/466"));
+    assert.equal(f.state.writes.filter(operation => operation === "branch").length, 1);
+    assert.equal(f.state.writes.filter(operation => operation === "pr").length, 1);
+});
+
+test("a cited PR still blocks when it is linked to or names the target Issue", async () => {
+    for (const linked of [true, false]) {
+        const f = fixture([{ number: 466, headSha: "f".repeat(40) }]);
+        if (linked) f.state.linked.push({ source: { number: 466, state: "OPEN" } });
+        else f.state.competitors[0].body = "Fixes #75";
+        await assert.rejects(() => prepareBuild(f.github, f.context, f.env, clock), /linked to this Issue|may already implement/);
+        assert.equal(f.state.writes.length, 0);
+    }
+});
+
+test("a related reference becoming competing work blocks publication", async () => {
+    const f = await preparedFixture([{ number: 466, headSha: "f".repeat(40) }]);
+    f.state.competitors[0].body = "Implements #75";
+    await assert.rejects(() => checkBuildPublication(f.github, f.context, f.env,
+        f.prepared, f.candidate, f.scan, f.checks, f.evidence, clock), /may already implement/);
+    assert.equal(f.state.writes.length, 0);
+});
+
+test("a related reference still requires its approved revision to remain current", async () => {
+    const f = await preparedFixture([{ number: 466, headSha: "f".repeat(40) }]);
+    f.state.referenceData.get(466).head.sha = "0".repeat(40);
+    await assert.rejects(() => verifyBuildAuthorization(f.github, f.context, f.env, f.prepared, clock), /Accepted contribution #466 changed/);
+    assert.equal(f.state.writes.length, 0);
 });
 
 for (const body of ["/typechat build 1:abc", `/typechat build 1:${"f".repeat(64)}\nAdd another feature`,
