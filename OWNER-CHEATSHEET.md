@@ -211,6 +211,19 @@ delete retained intents or overwrite a partial branch to force recovery.
 To stop an active run, cancel it or withdraw the command as well as disabling
 the activation variable. No activation or live coding run was performed here.
 
+## Website deployments
+
+The [Pages workflow](./.github/workflows/github-pages.yml) deploys `main`.
+Deployments share one concurrency group without cancelling an active publish.
+Within each workflow run, every attempt uploads and deploys its matching
+`github-pages-<attempt>` artifact, so retained earlier attempts do not make
+artifact selection ambiguous.
+
+Before retrying a failed deployment, check that a newer successful run has not
+superseded it. A rerun uses its original workflow version: after a deployment
+fix is merged, follow the new default-branch run instead of retrying an older
+failure. No artifact deletion or coding-pilot activation is needed.
+
 ## If something stalls
 
 | Symptom | Safe next step |
