@@ -1,6 +1,6 @@
 # TypeChat owner cheat sheet
 
-**For @robgruen. Last checked: 2026-11-02 (UTC).**
+**For @robgruen. Last checked: 2026-10-31 (UTC).**
 
 [Issues](https://github.com/microsoft/TypeChat/issues) |
 [Discussions](https://github.com/microsoft/TypeChat/discussions) |
@@ -10,8 +10,8 @@
 [Full automation guide](./AUTOMATION.md)
 
 **Verified:** backlog assessment, automatic Copilot PR reviews, Issue draft generation,
-Issue `/typechat reply` delivery, and exact Issue acceptance with duplicate-free reruns.
-**Awaiting review and live verification:** completion receipts and the disabled coding pilot.
+and Issue `/typechat reply` delivery with a duplicate-free rerun.
+**Awaiting review and live verification:** exact-proposal `/typechat accept`.
 Manual publication and the Discussion path still need live verification.
 **Still human decisions:** work acceptance, implementation handoff, merging, and releases.
 
@@ -23,7 +23,7 @@ Manual publication and the Discussion path still need live verification.
 | Have the agent answer an issue or Discussion | [Request one direct reply](#reply-directly); the Issue path is live-verified. | One checked conversational response, without accepting work. |
 | Review wording before responding | [Request a draft](#draft-and-publish). | The actual reply as a preview; assessment metadata stays in Actions. |
 | Post the proposed response | Review the exact draft, then copy its publish command into the same thread. | One Actions-bot comment, not approval to build. |
-| Accept an agent-prepared proposal | [Review and approve its exact terms](#accept-an-exact-proposal); the Issue path is live-verified. Ordinary [human acceptance](#accept-work-manually) also remains available. | A visible scope agreement; no coding agent starts automatically. |
+| Accept an agent-prepared proposal | After acceptance rollout, [review and approve its exact terms](#accept-an-exact-proposal). Until then, [record a human decision manually](#accept-work-manually). | A visible scope agreement; no coding agent starts automatically. |
 | Move an existing PR forward | [Review the latest revision](#review-and-merge-manually); support the existing contributor rather than duplicate their PR. | A human decision to request changes or merge. |
 | Prepare one bounded coding run | After review/rollout, [prepare its exact build command](#prepare-an-implementation-run-disabled-by-default). | A copyable command, not spending or merge approval. |
 | Resolve unclear or out-of-scope work | Pause dependent work. If changing direction, approve and merge a [policy PR](./GOALS.md#who-decides) first. | An explicit scope decision; popularity or a label is not approval. |
@@ -107,8 +107,8 @@ operation to finish before sending another command on that thread.
 
 ## Accept an exact proposal
 
-**Issue acceptance and its no-op retry were verified on 2026-11-01 (UTC);
-Discussion verification is pending.** This is a real scope decision, not a test acknowledgment.
+**Prepared for review; do not use until merged and ready for owner-commanded
+live verification.** This is a real scope decision, not a test acknowledgment.
 
 1. Resolve open questions, check the approved policy and existing contributions,
    then request a new `/typechat draft` on the same thread.
@@ -150,8 +150,20 @@ This is not approval to merge. Material scope changes return to discussion.
 ```
 
 This remains an ordinary human comment, not an automation command. It does not
-assign a coding agent. Exact-proposal Issue acceptance is live-verified, but
-**the separate implementation workflow remains disabled**.
+assign a coding agent. The separate exact-proposal acceptance command is pending
+rollout; **no `/typechat build` command or implementation workflow is enabled**.
+
+## Review and merge manually
+
+- Make the PR **ready for review**, targeting `main`. Copilot reviews are
+  requested automatically, including on subsequent pushes; drafts are skipped.
+- Review the **latest commit** against the accepted criteria, test/check results,
+  compatibility, documentation, and outstanding comments. A backlog report is
+  not a PR review.
+- Obtain the required human approval; policy/control changes need the relevant
+  owner review. Copilot review and a green merge button do not replace it.
+- Merge only after that decision. Record the outcome in the original thread.
+  Releases remain a separate human-approved operation.
 
 ## Prepare an implementation run (disabled by default)
 
@@ -184,18 +196,6 @@ not spend again. Inspect failures before posting new authorization, and never
 delete retained intents or overwrite a partial branch to force recovery.
 To stop an active run, cancel it or withdraw the command as well as disabling
 the activation variable. No activation or live coding run was performed here.
-
-## Review and merge manually
-
-- Make the PR **ready for review**, targeting `main`. Copilot reviews are
-  requested automatically, including on subsequent pushes; drafts are skipped.
-- Review the **latest commit** against the accepted criteria, test/check results,
-  compatibility, documentation, and outstanding comments. A backlog report is
-  not a PR review.
-- Obtain the required human approval; policy/control changes need the relevant
-  owner review. Copilot review and a green merge button do not replace it.
-- Merge only after that decision. Record the outcome in the original thread.
-  Releases remain a separate human-approved operation.
 
 ## If something stalls
 
