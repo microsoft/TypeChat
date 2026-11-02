@@ -18,6 +18,9 @@ Types are all you need!
 
 # Getting Started
 
+Requires [Node.js 24.22.1 or newer](https://nodejs.org/en/download).
+The development version is pinned in [.nvmrc](../.nvmrc).
+
 Install TypeChat:
 
 ```sh
@@ -35,6 +38,8 @@ npm run build
 
 Run the test suite with `npm test`. The Zod schema tests also compile their generated
 TypeScript schema text to check for syntax errors and unresolved type references.
+Node.js CI runs this suite across its Node.js matrix after a clean dependency
+installation and workspace build.
 
 The TypeScript-backed JSON validator checks its schema and target export before a
 translator makes its first model request. Schema configuration errors are returned

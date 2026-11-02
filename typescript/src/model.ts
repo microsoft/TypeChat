@@ -246,7 +246,12 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
 
     async function complete(prompt: string | PromptSection[]) {
         dispatcherPromise ??= resolveProxyDispatcher(proxy);
-        const dispatcher = await dispatcherPromise;
+        let dispatcher: RequestInit["dispatcher"];
+        try {
+            dispatcher = await dispatcherPromise;
+        } catch (e) {
+            return error(`REST API fetch error: ${getErrorMessage(e)}`);
+        }
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
@@ -339,7 +344,12 @@ function createResponsesFetchLanguageModel(url: string, headers: object, default
 
     async function complete(prompt: string | PromptSection[]) {
         dispatcherPromise ??= resolveProxyDispatcher(proxy);
-        const dispatcher = await dispatcherPromise;
+        let dispatcher: RequestInit["dispatcher"];
+        try {
+            dispatcher = await dispatcherPromise;
+        } catch (e) {
+            return error(`REST API fetch error: ${getErrorMessage(e)}`);
+        }
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
@@ -560,7 +570,8 @@ async function importUndici() {
     try {
         return await import("undici");
     } catch (e) {
-        if (e instanceof Error && /Cannot find module|ERR_MODULE_NOT_FOUND/.test(e.message)) {
+        if (e instanceof Error && "code" in e && e.code === "ERR_MODULE_NOT_FOUND" &&
+            /Cannot find (?:module|package) ['"]undici['"]/.test(e.message)) {
             throw new Error(
                 `A proxy was configured, but the optional "undici" package is not installed. ` +
                 `Run "npm install undici" to enable proxy support.`

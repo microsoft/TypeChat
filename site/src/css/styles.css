@@ -39,6 +39,15 @@
     --typechat-monospace: Consolas, Menlo, Monaco, Roboto, monospace;
     --typechat-inline-code-color: #a10615;
     --typechat-rounding-radius: 0.5rem;
+    --typechat-focus-color: #005a9e;
+}
+
+:focus-visible,
+.btn:focus-visible,
+.nav-link:focus-visible,
+.typechat-prose-content pre:focus {
+    outline: 3px solid var(--typechat-focus-color);
+    outline-offset: 3px;
 }
 
 .typechat-cap-content-width {
@@ -46,6 +55,12 @@
 }
 
 .typechat-hero .typechat-code-copy {
+    --typechat-focus-color: #fff;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
     background-color: #212529;
     color: #fff;
     font-style: var(--typechat-monospace);
@@ -55,18 +70,17 @@
 }
 
 .typechat-hero .typechat-code-copy code {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
     background-color: inherit;
     color: inherit;
 }
 
 .typechat-hero .typechat-code-copy button {
-    height: 100%;
-    width: fit-content;
-    right: 0;
-    top: 0;
+    flex: 0 0 auto;
     border: none;
-    /* border-radius: var(--typechat-rounding-radius) 0 0 var(--typechat-rounding-radius); */
-    border-radius: 0 var(--typechat-rounding-radius) var(--typechat-rounding-radius) 0;
+    border-radius: var(--typechat-rounding-radius);
 }
 
 .typechat-prose-content :is(pre, blockquote) {
@@ -77,11 +91,6 @@
 
 .typechat-prose-content blockquote {
     background-color: #f5f8fa;
-}
-
-.typechat-prose-content pre:focus {
-    outline: 3px solid #0078d4;
-    outline-offset: 2px;
 }
 
 .typechat-prose-content code {
@@ -116,4 +125,11 @@
 
 .typechat-prose-content th {
     border-top: 0;
+}
+
+@media (forced-colors: active) {
+    :root,
+    .typechat-hero .typechat-code-copy {
+        --typechat-focus-color: CanvasText;
+    }
 }
