@@ -64,6 +64,11 @@ scope, non-goals, and criteria; it does not authorize an automated implementatio
 run, a larger budget, or merging. Follow the documented rollout status before
 using it. Keep advisory replies conversational and assessment metadata in Actions;
 only an explicitly approved acceptance record publishes its proposed terms.
+Completion receipts are fixed operational messages from trusted workflow code,
+not model replies or approvals. Only canonical, same-target receipts from the
+verified Actions bot may be excluded from discussion evidence; do not ignore
+real replies, accepted scope records, or member comments. Preserve duplicate-write
+and stale-context safeguards when changing these messages.
 Do not manufacture owner commands, edit sealed artifacts, or bypass
 stale-context, scan, or uncertain-publication checks.
 
