@@ -67,6 +67,8 @@ function getTypePrecedence(type: z.ZodType): TypePrecedence {
             return (type._zod.def as z.core.$ZodLiteralDef<z.core.util.Literal>).values.length > 1 ? TypePrecedence.Union : TypePrecedence.Object;
         case "intersection":
             return TypePrecedence.Intersection;
+        case "pipe":
+            return getTypePrecedence((type._zod.def as z.core.$ZodPipeDef).in as z.ZodType);
     }
     return TypePrecedence.Object;
 }
@@ -179,6 +181,8 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
                 return appendUnionOrIntersectionTypes([(type._zod.def as z.core.$ZodOptionalDef).innerType as z.ZodType, z.undefined()], TypePrecedence.Union);
             case "readonly":
                 return appendReadonlyType(type);
+            case "pipe":
+                return appendType((type._zod.def as z.core.$ZodPipeDef).in as z.ZodType);
         }
         append("any");
     }
