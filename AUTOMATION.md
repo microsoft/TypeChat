@@ -591,9 +591,14 @@ own target's comment-write permission. No model or App credential is used.
 
 Receipts are serialized per command and guarded by durable create/update intents.
 An identical outcome is a no-op; a newer outcome updates the managed comment,
-not another comment. Edited receipts are not overwritten. A retained creation
-intent blocks recreation after deletion; an old command without a managed
-receipt needs a new request. Intents and result artifacts are kept for 30 days.
+not another comment. Update intents bind the exact receipt body being replaced,
+not the source run or attempt. A later completion cannot mutate that same body
+while an earlier update is unresolved. Observing the earlier canonical update
+confirms it has taken effect before another mutation can proceed.
+Edited receipts are not overwritten. A retained creation intent blocks
+recreation after deletion. Both creation and updates require a command younger
+than seven days, so their 30-day intents outlive the write-authorization window.
+Intents and result artifacts are kept for 30 days.
 Do not delete intents to force a retry after an uncertain API outcome.
 
 Delivery is fail-closed, not a guarantee of commenting despite lost permissions

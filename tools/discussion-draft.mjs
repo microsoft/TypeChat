@@ -1264,18 +1264,19 @@ async function statusPlan(github, context, env, bundle, clock) {
         }
     } else if (status.existing) {
         return { shouldWrite: false, reason: "The existing public reply is already the completion message.", url: status.existing.url };
-    } else {
-        const age = clock().getTime() - Date.parse(status.request.commandCreatedAt);
-        requireValue(age >= 0 && age < MAX_AGE_MS, "An old command without a managed receipt needs a new request; it will not be recreated.");
     }
     const body = renderStatusReceipt(status.data);
     if (existing && existing.body === body) {
         return { shouldWrite: false, reason: "This completion outcome is already recorded.", url: existing.url };
     }
-    const intentName = `${STATUS_INTENT_PREFIX}${key}${existing ? `-${status.run.id}-${status.run.run_attempt}` : ""}`;
+    const age = clock().getTime() - Date.parse(status.request.commandCreatedAt);
+    requireValue(age >= 0 && age < MAX_AGE_MS, "An old command needs a new request; its receipt will not be created or updated.");
+    const previousHash = existing ? digest(existing.body) : null;
+    // Lock the observed receipt, not the source attempt, until that mutation is visible.
+    const intentName = `${STATUS_INTENT_PREFIX}${key}${existing ? `-${previousHash}` : ""}`;
     return {
         shouldWrite: true, ...status, existing, body, bodyHash: digest(body), intentName,
-        previousHash: existing ? digest(existing.body) : null,
+        previousHash,
     };
 }
 

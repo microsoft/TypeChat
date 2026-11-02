@@ -419,7 +419,7 @@ async function reserveStatus(fixture, id = 601) {
     fixture.state.artifacts.set(id, {
         id, name: checked.intentName, expired: false,
         created_at: NOW.toISOString(), expires_at: "2026-11-29T00:00:00Z",
-        workflow_run: { id: 300, repository_id: REPOSITORY.id, head_sha: fixture.status.context.sha },
+        workflow_run: { id: fixture.status.context.runId, repository_id: REPOSITORY.id, head_sha: fixture.status.context.sha },
     });
     return id;
 }
@@ -732,6 +732,50 @@ test("an uncertain receipt update is not retried blindly", async () => {
     }
 });
 
+for (const kind of ["issue", "discussion"]) {
+    test(`${kind}: a newer attempt cannot bypass an unresolved update to the same receipt`, async () => {
+        const fixture = await statusFixture(kind);
+        await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, await reserveStatus(fixture), clock);
+        fixture.state.producerRun.run_attempt = 2;
+        fixture.state.producerRun.run_started_at = "2026-10-30T00:40:00Z";
+        fixture.state.producerRun.conclusion = "failure";
+        fixture.status.context.payload.workflow_run.run_attempt = 2;
+        const id = await reserveStatus(fixture, 602);
+        fixture.state.updateError = new Error("Connection lost before the outcome was known");
+        await assert.rejects(() => publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, id, clock),
+            /outcome is uncertain/);
+
+        fixture.state.producerRun.run_attempt = 3;
+        fixture.state.producerRun.run_started_at = "2026-10-30T00:50:00Z";
+        fixture.state.producerRun.conclusion = "cancelled";
+        fixture.status.context.payload.workflow_run.run_attempt = 3;
+        fixture.status.context.runId = 301;
+        fixture.state.updateError = null;
+        await assert.rejects(() => checkStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, clock),
+            /previous status-write intent/);
+        fixture.state.artifacts.set(603, {
+            ...structuredClone(fixture.state.artifacts.get(id)), id: 603,
+            workflow_run: { id: 301, repository_id: REPOSITORY.id, head_sha: fixture.status.context.sha },
+        });
+        await assert.rejects(() => publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, 603, clock),
+            /previous status-write attempt/);
+        assert.equal(fixture.state.posts.length, 1);
+        assert.equal(fixture.state.updates.length, 1);
+
+        const receipt = fixture.state.thread.comments.find(comment => comment.author.__typename === "Bot");
+        receipt.body = fixture.state.updates[0];
+        receipt.lastEditedAt = NOW.toISOString();
+        const confirmed = await reserveStatus(fixture, 604);
+        assert.notEqual(fixture.state.artifacts.get(confirmed).name, fixture.state.artifacts.get(id).name);
+        const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, confirmed, clock);
+        assert.equal(result.updated, true);
+        assert.equal(result.outcome, "cancelled");
+        assert.equal(fixture.state.updates.length, 2);
+        assert.equal(fixture.state.posts.length, 1);
+        assert.match(receipt.body, /attempts\/3/);
+    });
+}
+
 test("managed receipts do not consume the existing 1,000-comment evidence allowance", async () => {
     const fixture = await statusFixture();
     fixture.state.thread.comments.push(...Array.from({ length: 998 }, (_, i) =>
@@ -789,6 +833,16 @@ test("expired artifacts and old commands cannot become new ready receipts", asyn
     await assert.rejects(() => checkStatus(old.github, old.status.context, old.status.env, undefined,
         () => new Date("2026-11-07T01:00:00Z")), /old command/);
     assert.equal(old.state.posts.length, 0);
+
+    const managed = await statusFixture();
+    await publishStatus(managed.github, managed.status.context, managed.status.env, managed.bundle, await reserveStatus(managed), clock);
+    managed.state.producerRun.run_attempt = 2;
+    managed.state.producerRun.run_started_at = "2026-11-07T00:00:00Z";
+    managed.state.producerRun.conclusion = "failure";
+    managed.status.context.payload.workflow_run.run_attempt = 2;
+    await assert.rejects(() => checkStatus(managed.github, managed.status.context, managed.status.env, undefined,
+        () => new Date("2026-11-07T01:00:00Z")), /old command/);
+    assert.equal(managed.state.updates.length, 0);
 });
 
 for (const kind of ["issue", "discussion"]) {
