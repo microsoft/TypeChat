@@ -10,10 +10,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import {
-    OWNER, REPOSITORY, ACTIONS_BOT_ID, DRAFT_WORKFLOW, PUBLISH_WORKFLOW, DRAFT_ARTIFACT_PREFIX, INTENT_PREFIX,
+    OWNER, REPOSITORY, ACTIONS_BOT_ID, DRAFT_WORKFLOW, PUBLISH_WORKFLOW, STATUS_WORKFLOW, DRAFT_ARTIFACT_PREFIX, INTENT_PREFIX,
     CONTROL_PATHS, MAX_AGE_MS, MAX_BUNDLE_BYTES, MAX_COMMENT_BYTES, authorize, parseCommand, digest, readThread, readControls,
     prepareDraft, validateDraft, renderDraft, renderAcceptance, renderAssessment, sealDraft, identifyPublication, checkPublication, publishDraft,
-    readJson, writeJson, stageCandidateForDetection, createCandidateScan, readDetectedDraft,
+    readJson, writeJson, stageCandidateForDetection, createCandidateScan, readDetectedDraft, snapshotHash,
+    renderStatusReceipt, parseStatusRunTitle, identifyStatus, checkStatus, publishStatus,
 } from "../discussion-draft.mjs";
 
 const SHA = "a".repeat(40);
@@ -148,6 +149,7 @@ function setup(kind = "issue") {
     async function post(body) {
         state.posts.push(body);
         const result = comment(`posted-${state.posts.length}`, body, "github-actions", "Bot");
+        result.url = `${target.url}#${kind === "issue" ? "issuecomment" : "discussioncomment"}-${10000 + state.posts.length}`;
         if (!state.postError || state.persistBeforeError) {
             thread.comments.push(result);
             comments.set(result.id, result);
@@ -326,6 +328,588 @@ async function readyReply(kind = "issue", draft = candidate()) {
     };
     fixture.state.historyRequests = [];
     return { ...fixture, bundle, publication, draftRun, prepared };
+}
+
+async function statusFixture(kind = "issue", action = "draft", draft = candidate()) {
+    const fixture = setup(kind);
+    const { state, github } = fixture;
+    state.comments.delete("request");
+    state.thread.comments = [];
+    const draftRun = fixture.event(action, `/typechat ${action}`, "42");
+    for (const reference of draft.pullRequests) {
+        state.references.set(reference.number, {
+            number: reference.number, base: { repo: { id: REPOSITORY.id } },
+            head: { sha: reference.headSha }, updated_at: reference.updatedAt,
+        });
+    }
+    const prepared = await prepareDraft(github, draftRun.context, draftRun.env, clock);
+    const bundle = await sealDraft(github, draftRun.context, draftRun.env, prepared, draft,
+        () => new Date("2026-10-30T00:20:00Z"));
+    state.artifacts.set(500, {
+        id: 500, name: `${DRAFT_ARTIFACT_PREFIX}1`, size_in_bytes: 10000, expired: false,
+        created_at: "2026-10-30T00:30:00Z", expires_at: "2026-11-06T00:30:00Z",
+        workflow_run: { id: 100, repository_id: REPOSITORY.id, head_repository_id: REPOSITORY.id, head_sha: SHA },
+    });
+    Object.assign(state.producerRun, {
+        repository: { id: REPOSITORY.id }, head_repository: { id: REPOSITORY.id },
+        created_at: "2026-10-30T00:00:01Z", run_started_at: "2026-10-30T00:01:00Z",
+        display_title: `TypeChat response: ${kind}_comment #75 / comment 42`,
+    });
+    state.updates = [];
+    state.updateError = null;
+    state.persistUpdateBeforeError = false;
+    async function update(comment, body) {
+        assert.ok(comment);
+        state.updates.push(body);
+        if (!state.updateError || state.persistUpdateBeforeError) {
+            comment.body = body;
+            comment.updatedAt = NOW.toISOString();
+            comment.lastEditedAt = NOW.toISOString();
+        }
+        if (state.updateError) throw state.updateError;
+        return comment;
+    }
+    const graphql = github.graphql;
+    github.graphql = async (query, variables) => {
+        if (query.includes("DiscussionStatusTarget")) {
+            assert.equal(variables.number, 75);
+            return { repository: { nameWithOwner: "microsoft/TypeChat", isPrivate: false, target: state.target } };
+        }
+        if (query.includes("DiscussionPilotUpdate")) {
+            assert.equal(kind, "discussion");
+            return { updateDiscussionComment: { comment: await update(state.comments.get(variables.id), variables.body) } };
+        }
+        return graphql(query, variables);
+    };
+    github.rest.issues.updateComment = async ({ comment_id, body }) => {
+        assert.equal(kind, "issue");
+        const comment = state.thread.comments.find(value => value.url === `${state.target.url}#issuecomment-${comment_id}`);
+        const result = await update(comment, body);
+        return { data: { node_id: result.id, html_url: result.url, body: result.body } };
+    };
+    github.rest.actions.getWorkflowRun = async ({ run_id }) => {
+        assert.equal(run_id, 100);
+        return { data: structuredClone(state.producerRun) };
+    };
+    github.rest.actions.listWorkflowRunArtifacts = async ({ run_id, name, per_page, page: pageNumber }) => {
+        assert.equal(run_id, 100);
+        assert.equal(per_page, 2);
+        assert.equal(pageNumber, 1);
+        const artifacts = [...state.artifacts.values()].filter(value => value.workflow_run.id === run_id && value.name === name);
+        return { data: { total_count: artifacts.length, artifacts: structuredClone(artifacts.slice(0, 2)) } };
+    };
+    const status = {
+        context: {
+            eventName: "workflow_run", actor: "github-actions[bot]", sha: SHA, runId: 300,
+            payload: { action: "completed", repository: draftRun.context.payload.repository,
+                workflow_run: { id: 100, run_attempt: 1 } },
+        },
+        env: {
+            GITHUB_WORKFLOW_REF: `microsoft/TypeChat/${STATUS_WORKFLOW}@refs/heads/main`,
+            GITHUB_REF: "refs/heads/main", GITHUB_RUN_ATTEMPT: "1",
+            GITHUB_TRIGGERING_ACTOR: "github-actions[bot]", TYPECHAT_STATUS_KIND: kind,
+        },
+    };
+    return { ...fixture, draftRun, prepared, bundle, status };
+}
+
+async function reserveStatus(fixture, id = 601) {
+    const checked = await checkStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, clock);
+    assert.equal(checked.shouldWrite, true);
+    fixture.state.artifacts.set(id, {
+        id, name: checked.intentName, expired: false,
+        created_at: NOW.toISOString(), expires_at: "2026-11-29T00:00:00Z",
+        workflow_run: { id: fixture.status.context.runId, repository_id: REPOSITORY.id, head_sha: fixture.status.context.sha },
+    });
+    return id;
+}
+
+test("completion titles bind only numeric owner-comment and target IDs", () => {
+    assert.deepEqual(parseStatusRunTitle("TypeChat response: issue_comment #504 / comment 6562188203"),
+        { kind: "issue", number: 504, commentId: 6562188203 });
+    assert.deepEqual(parseStatusRunTitle("TypeChat response: discussion_comment #42 / comment 123"),
+        { kind: "discussion", number: 42, commentId: 123 });
+    assert.equal(parseStatusRunTitle("TypeChat discussion response"), null);
+    assert.throws(() => parseStatusRunTitle("TypeChat response: issue_comment #75 / comment 42\nInjected"), /binding/);
+    assert.throws(() => parseStatusRunTitle("TypeChat response: issue_comment #9007199254740993 / comment 42"));
+});
+
+test("receipt rendering accepts only bounded operational metadata, never arbitrary content", () => {
+    const data = {
+        version: 1, kind: "issue", number: 75, commentId: 42, runId: 100, attempt: 1,
+        started: Date.parse("2026-10-30T00:01:00Z"), action: "draft", outcome: "input", result: "",
+    };
+    for (const change of [
+        { message: "Unapproved prose." }, { kind: "pull_request" }, { number: 0 },
+        { commentId: Number.MAX_SAFE_INTEGER + 1 }, { started: -1 }, { action: "accept" },
+        { outcome: "accepted" }, { outcome: "replied", result: "99" },
+        { action: "reply", outcome: "replied", result: "https://example.invalid" },
+        { action: "reply", outcome: "replied", result: "99)\nNew content" },
+        { result: "unexpected" },
+    ]) {
+        assert.throws(() => renderStatusReceipt({ ...data, ...change }), /Invalid completion-receipt metadata/);
+    }
+});
+
+for (const kind of ["issue", "discussion"]) {
+    test(`${kind}: a fixed completion receipt is posted once without publishing model text or invalidating approval`, async () => {
+        const fixture = await statusFixture(kind, "draft", proposalCandidate());
+        const identified = await identifyStatus(fixture.github, fixture.status.context, fixture.status.env, clock);
+        assert.equal(identified.artifact.id, 500);
+        const intent = await reserveStatus(fixture);
+        const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, intent, clock);
+        assert.equal(result.posted, true);
+        assert.equal(result.updated, false);
+        assert.equal(result.outcome, "ready");
+        assert.equal(fixture.state.posts.length, 1);
+        const body = fixture.state.posts[0];
+        assert.match(body, /Draft and work-acceptance preview prepared/);
+        assert.ok(body.includes(`${fixture.state.target.url}#${kind === "issue" ? "issuecomment" : "discussioncomment"}-42`));
+        assert.ok(body.includes("/actions/runs/100/attempts/1"));
+        assert.ok(!body.includes(fixture.bundle.draft.summary));
+        assert.ok(!body.includes(fixture.bundle.draft.reply[0]));
+        assert.ok(!body.includes(fixture.bundle.draft.proposal.goal));
+        const thread = await readThread(fixture.github, fixture.state.target);
+        assert.equal(snapshotHash(thread), fixture.prepared.snapshotHash);
+        const prepared = await prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, clock);
+        assert.equal(prepared.thread.comments.length, 0, "Operational receipts are not model-visible discussion evidence");
+        const repeated = await checkStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, clock);
+        assert.equal(repeated.shouldWrite, false);
+        assert.equal(fixture.state.posts.length, 1);
+        const approval = fixture.event("accept", `/typechat accept 500:${fixture.bundle.acceptance.bodyHash}`, "approval", 200);
+        const accepted = await checkPublication(fixture.github, approval.context, approval.env, fixture.bundle, clock);
+        assert.equal(accepted.shouldPost, true, "The receipt must not make the frozen proposal stale");
+    });
+
+    test(`${kind}: owner/maintainer input is not mislabeled as work acceptance`, async () => {
+        const fixture = await statusFixture(kind);
+        const id = await reserveStatus(fixture);
+        const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, id, clock);
+        assert.equal(result.outcome, "input");
+        assert.match(fixture.state.posts[0], /input is still needed before work acceptance/);
+        assert.ok(!fixture.state.posts[0].includes("/typechat accept"));
+    });
+
+    test(`${kind}: newer completion outcomes update one receipt and older events cannot overwrite it`, async () => {
+        const fixture = await statusFixture(kind);
+        await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, await reserveStatus(fixture), clock);
+        fixture.state.producerRun.run_attempt = 2;
+        fixture.state.producerRun.run_started_at = "2026-10-30T00:40:00Z";
+        fixture.state.producerRun.conclusion = "failure";
+        fixture.status.context.payload.workflow_run.run_attempt = 2;
+        const id = await reserveStatus(fixture, 602);
+        const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, id, clock);
+        assert.equal(result.updated, true);
+        assert.equal(fixture.state.posts.length, 1);
+        assert.equal(fixture.state.updates.length, 1);
+        assert.match(fixture.state.updates[0], /request failed/);
+        assert.ok(fixture.state.updates[0].includes("/attempts/2"));
+        assert.equal(snapshotHash(await readThread(fixture.github, fixture.state.target)), fixture.prepared.snapshotHash);
+        fixture.status.context.payload.workflow_run.run_attempt = 1;
+        assert.equal((await checkStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, clock)).shouldWrite, false);
+        assert.equal(fixture.state.updates.length, 1);
+    });
+
+    test(`${kind}: a public reply is already a completion message`, async () => {
+        const fixture = await statusFixture(kind, "reply");
+        const reply = fixture.state.comment("reply", fixture.bundle.body, "github-actions", "Bot");
+        reply.url = `${fixture.state.target.url}#${kind === "issue" ? "issuecomment" : "discussioncomment"}-99`;
+        fixture.state.thread.comments.push(reply);
+        const result = await checkStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, clock);
+        assert.equal(result.shouldWrite, false);
+        assert.equal(result.url, reply.url);
+        assert.equal(fixture.state.posts.length, 0);
+    });
+}
+
+for (const [label, change] of [
+    ["another event", fixture => { fixture.status.context.eventName = "issue_comment"; }],
+    ["a missing source event attempt", fixture => { delete fixture.status.context.payload.workflow_run.run_attempt; }],
+    ["another repository", fixture => { fixture.status.context.payload.repository.id = 7; }],
+    ["a private repository", fixture => { fixture.status.context.payload.repository.private = true; }],
+    ["untrusted receipt code", fixture => { fixture.status.env.GITHUB_WORKFLOW_REF = "microsoft/TypeChat/other.yml@refs/heads/main"; }],
+    ["a nonowner receipt rerun", fixture => { fixture.status.env.GITHUB_RUN_ATTEMPT = "2"; }],
+    ["another source actor", fixture => { fixture.state.producerRun.actor.id = 7; }],
+    ["a source bot", fixture => { fixture.state.producerRun.actor.type = "Bot"; }],
+    ["another source rerunning actor", fixture => { fixture.state.producerRun.triggering_actor.id = 7; }],
+    ["a source fork", fixture => { fixture.state.producerRun.head_repository.id = 7; }],
+    ["another source repository", fixture => { fixture.state.producerRun.repository.id = 7; }],
+    ["an untrusted source ref", fixture => { fixture.state.producerRun.head_branch = "feature"; }],
+    ["another source workflow", fixture => { fixture.state.producerRun.workflow_id = 7; }],
+    ["another source path", fixture => { fixture.state.producerRun.path = ".github/workflows/other.yml"; }],
+    ["another source trigger", fixture => { fixture.state.producerRun.event = "workflow_dispatch"; }],
+    ["the wrong target authority", fixture => { fixture.status.env.TYPECHAT_STATUS_KIND = "discussion"; }],
+    ["a source run before its command", fixture => { fixture.state.producerRun.created_at = "2026-10-29T23:59:59Z"; }],
+    ["invalid source timing", fixture => { fixture.state.producerRun.run_started_at = "2026-11-01T00:00:00Z"; }],
+    ["an unknown source conclusion", fixture => { fixture.state.producerRun.conclusion = "unknown"; }],
+    ["a malformed source-artifact time", fixture => { fixture.state.artifacts.get(500).created_at = "2026-11-01T00:00:00Z"; }],
+    ["missing artifact availability", fixture => { delete fixture.state.artifacts.get(500).expired; }],
+    ["a mismatched sealed target", fixture => { fixture.bundle.target.number = 1; }],
+    ["a mismatched sealed request", fixture => { fixture.bundle.request.commentId = "other-command"; }],
+    ["tampered draft output", fixture => { fixture.bundle.draft.summary = "Different data."; }],
+]) {
+    test(`completion authorization rejects ${label} without a write`, async () => {
+        const fixture = await statusFixture();
+        change(fixture);
+        await assert.rejects(() => checkStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, clock));
+        assert.equal(fixture.state.posts.length, 0);
+        assert.equal(fixture.state.updates.length, 0);
+    });
+}
+
+test("completion reports failure, cancellation, invalid syntax, and missing evidence explicitly", async () => {
+    for (const [conclusion, body, expected] of [
+        ["failure", "/typechat draft", "failed"],
+        ["cancelled", "/typechat draft", "cancelled"],
+        ["timed_out", "/typechat draft", "cancelled"],
+        ["failure", "/typechat reply", "unconfirmed"],
+        ["failure", "/typechat draft extra", "invalid"],
+        ["success", "/typechat draft", "unavailable"],
+    ]) {
+        const fixture = await statusFixture();
+        fixture.state.producerRun.conclusion = conclusion;
+        fixture.state.comments.get("42").body = body;
+        fixture.state.artifacts.delete(500);
+        const id = await reserveStatus(fixture);
+        const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, id, clock);
+        assert.equal(result.outcome, expected);
+        assert.match(fixture.state.posts[0], /Operational receipt only/);
+        assert.ok(!fixture.state.posts[0].includes("nothing was posted") || expected === "unconfirmed");
+    }
+});
+
+test("receipts honor withdrawal, hidden commands, closed targets, legacy titles, and pending source attempts", async () => {
+    for (const change of [
+        fixture => { fixture.state.comments.get("42").lastEditedAt = NOW.toISOString(); },
+        fixture => { fixture.state.comments.get("42").isMinimized = true; },
+        fixture => { fixture.state.thread.comments = []; fixture.state.comments.delete("42"); },
+        fixture => { fixture.state.thread.state = "CLOSED"; },
+        fixture => { fixture.state.thread.locked = true; },
+        fixture => { fixture.state.producerRun.display_title = "TypeChat discussion response"; },
+        fixture => { fixture.state.producerRun.status = "in_progress"; },
+        fixture => { fixture.state.producerRun.conclusion = "skipped"; },
+    ]) {
+        const fixture = await statusFixture();
+        change(fixture);
+        const result = await checkStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, clock);
+        assert.equal(result.shouldWrite, false);
+        assert.ok(result.reason);
+        assert.equal(fixture.state.posts.length, 0);
+    }
+});
+
+test("new evidence or control changes produce an outdated receipt, not a ready claim", async () => {
+    for (const controlsChanged of [false, true]) {
+        const fixture = await statusFixture();
+        if (controlsChanged) {
+            const fingerprints = { ...fixture.state.fingerprints, "AUTOMATION.md": "d".repeat(40) };
+            fixture.state.revisions.set(OTHER_SHA, { fingerprints, policy });
+            fixture.state.currentCommit = OTHER_SHA;
+            fixture.status.context.sha = OTHER_SHA;
+        } else {
+            fixture.state.thread.body = "Changed requirements";
+        }
+        const id = await reserveStatus(fixture);
+        const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env,
+            controlsChanged ? undefined : fixture.bundle, id, clock);
+        assert.equal(result.outcome, "outdated");
+        assert.match(fixture.state.posts[0], /no longer current/);
+    }
+});
+
+test("changed PR evidence is not reported as an actionable draft", async () => {
+    const draft = proposalCandidate();
+    draft.pullRequests = [{ number: 80, headSha: SHA, updatedAt: NOW.toISOString() }];
+    const fixture = await statusFixture("issue", "draft", draft);
+    fixture.state.references.get(80).head.sha = OTHER_SHA;
+    const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle,
+        await reserveStatus(fixture), clock);
+    assert.equal(result.outcome, "outdated");
+});
+
+test("a confirmed reply updates an earlier failure receipt rather than adding a second status comment", async () => {
+    const fixture = await statusFixture("issue", "reply");
+    fixture.state.producerRun.conclusion = "failure";
+    await publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined,
+        await reserveStatus(fixture), clock);
+    const reply = fixture.state.comment("actual-reply", fixture.bundle.body, "github-actions", "Bot");
+    reply.url = `${fixture.state.target.url}#issuecomment-99`;
+    fixture.state.thread.comments.push(reply);
+    const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined,
+        await reserveStatus(fixture, 602), clock);
+    assert.equal(result.updated, true);
+    assert.equal(result.outcome, "replied");
+    assert.equal(fixture.state.posts.length, 1);
+    assert.equal(fixture.state.updates.length, 1);
+    assert.ok(fixture.state.updates[0].includes(reply.url));
+});
+
+test("receipt publication rechecks owner withdrawal immediately before writing", async () => {
+    const fixture = await statusFixture();
+    const intent = await reserveStatus(fixture);
+    fixture.state.onHistory = () => { fixture.state.comments.get("42").lastEditedAt = NOW.toISOString(); };
+    const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, intent, clock);
+    assert.equal(result.posted, false);
+    assert.match(result.reason, /edited/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("only canonical same-target Actions-bot receipts are excluded from evidence", async () => {
+    const fixture = await statusFixture();
+    const id = await reserveStatus(fixture);
+    await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, id, clock);
+    const original = fixture.state.thread.comments.find(comment => comment.author.__typename === "Bot");
+    for (const change of [
+        comment => { comment.author = { id: "another-bot", login: "another-bot", __typename: "Bot" }; },
+        comment => { comment.author = { id: "user", login: OWNER.login, __typename: "User" }; },
+        comment => { comment.body = "A new requirement.\n\n" + comment.body; },
+        comment => { comment.url = `${REPO_URL}/issues/76#issuecomment-99`; },
+    ]) {
+        const altered = structuredClone(original);
+        change(altered);
+        fixture.state.thread.comments = [fixture.state.comments.get("42"), altered];
+        assert.notEqual(snapshotHash(await readThread(fixture.github, fixture.state.target)), fixture.prepared.snapshotHash);
+    }
+    for (const body of [fixture.bundle.body, renderAcceptance({ ...fixture.bundle, draft: proposalCandidate() })]) {
+        fixture.state.thread.comments = [fixture.state.comments.get("42"), fixture.state.comment("actual-result", body, "github-actions", "Bot")];
+        assert.notEqual(snapshotHash(await readThread(fixture.github, fixture.state.target)), fixture.prepared.snapshotHash);
+    }
+});
+
+test("uncertain receipt creation never duplicates a write or recreates a deleted receipt", async () => {
+    for (const persisted of [false, true]) {
+        const fixture = await statusFixture();
+        const id = await reserveStatus(fixture);
+        fixture.state.postError = new Error("Connection lost");
+        fixture.state.persistBeforeError = persisted;
+        await assert.rejects(() => publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, id, clock),
+            /outcome is uncertain/);
+        if (persisted) {
+            assert.equal((await checkStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, clock)).shouldWrite, false);
+            fixture.state.thread.comments = fixture.state.thread.comments.filter(comment => comment.author.__typename !== "Bot");
+        }
+        await assert.rejects(() => checkStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, clock),
+            /previous status-write intent/);
+        assert.equal(fixture.state.posts.length, 1);
+    }
+});
+
+test("edited receipts are not overwritten and incomplete write history fails closed", async () => {
+    const fixture = await statusFixture();
+    await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, await reserveStatus(fixture), clock);
+    fixture.state.thread.comments.find(comment => comment.author.__typename === "Bot").body += "Owner annotation";
+    await assert.rejects(() => checkStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, clock), /edited or is invalid/);
+    assert.equal(fixture.state.posts.length, 1);
+    assert.equal(fixture.state.updates.length, 0);
+
+    const missing = await statusFixture();
+    missing.github.rest.actions.listArtifactsForRepo = async () => ({ data: { total_count: 1, artifacts: [] } });
+    await assert.rejects(() => checkStatus(missing.github, missing.status.context, missing.status.env, missing.bundle, clock), /history/);
+    assert.equal(missing.state.posts.length, 0);
+});
+
+test("an uncertain receipt update is not retried blindly", async () => {
+    for (const persisted of [false, true]) {
+        const fixture = await statusFixture();
+        await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, await reserveStatus(fixture), clock);
+        fixture.state.producerRun.run_attempt = 2;
+        fixture.state.producerRun.run_started_at = "2026-10-30T00:40:00Z";
+        fixture.state.producerRun.conclusion = "failure";
+        fixture.status.context.payload.workflow_run.run_attempt = 2;
+        const id = await reserveStatus(fixture, 602);
+        fixture.state.updateError = new Error("Connection lost");
+        fixture.state.persistUpdateBeforeError = persisted;
+        await assert.rejects(() => publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, id, clock),
+            /outcome is uncertain/);
+        if (persisted) {
+            assert.equal((await checkStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, clock)).shouldWrite, false);
+        } else {
+            await assert.rejects(() => checkStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, clock),
+                /previous status-write intent/);
+        }
+        assert.equal(fixture.state.posts.length, 1);
+        assert.equal(fixture.state.updates.length, 1);
+    }
+});
+
+for (const kind of ["issue", "discussion"]) {
+    test(`${kind}: a newer attempt cannot bypass an unresolved update to the same receipt`, async () => {
+        const fixture = await statusFixture(kind);
+        await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, await reserveStatus(fixture), clock);
+        fixture.state.producerRun.run_attempt = 2;
+        fixture.state.producerRun.run_started_at = "2026-10-30T00:40:00Z";
+        fixture.state.producerRun.conclusion = "failure";
+        fixture.status.context.payload.workflow_run.run_attempt = 2;
+        const id = await reserveStatus(fixture, 602);
+        fixture.state.updateError = new Error("Connection lost before the outcome was known");
+        await assert.rejects(() => publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, id, clock),
+            /outcome is uncertain/);
+
+        fixture.state.producerRun.run_attempt = 3;
+        fixture.state.producerRun.run_started_at = "2026-10-30T00:50:00Z";
+        fixture.state.producerRun.conclusion = "cancelled";
+        fixture.status.context.payload.workflow_run.run_attempt = 3;
+        fixture.status.context.runId = 301;
+        fixture.state.updateError = null;
+        await assert.rejects(() => checkStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, clock),
+            /previous status-write intent/);
+        fixture.state.artifacts.set(603, {
+            ...structuredClone(fixture.state.artifacts.get(id)), id: 603,
+            workflow_run: { id: 301, repository_id: REPOSITORY.id, head_sha: fixture.status.context.sha },
+        });
+        await assert.rejects(() => publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, 603, clock),
+            /previous status-write attempt/);
+        assert.equal(fixture.state.posts.length, 1);
+        assert.equal(fixture.state.updates.length, 1);
+
+        const receipt = fixture.state.thread.comments.find(comment => comment.author.__typename === "Bot");
+        receipt.body = fixture.state.updates[0];
+        receipt.lastEditedAt = NOW.toISOString();
+        const confirmed = await reserveStatus(fixture, 604);
+        assert.notEqual(fixture.state.artifacts.get(confirmed).name, fixture.state.artifacts.get(id).name);
+        const result = await publishStatus(fixture.github, fixture.status.context, fixture.status.env, undefined, confirmed, clock);
+        assert.equal(result.updated, true);
+        assert.equal(result.outcome, "cancelled");
+        assert.equal(fixture.state.updates.length, 2);
+        assert.equal(fixture.state.posts.length, 1);
+        assert.match(receipt.body, /attempts\/3/);
+    });
+}
+
+test("managed receipts do not consume the existing 1,000-comment evidence allowance", async () => {
+    const fixture = await statusFixture();
+    fixture.state.thread.comments.push(...Array.from({ length: 998 }, (_, i) =>
+        fixture.state.comment(`evidence-${i}`, "Recorded evidence.", "contributor")));
+    const prepared = await prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, clock);
+    fixture.bundle = await sealDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, prepared, candidate(),
+        () => new Date("2026-10-30T00:20:00Z"));
+    await publishStatus(fixture.github, fixture.status.context, fixture.status.env, fixture.bundle, await reserveStatus(fixture), clock);
+    const approval = fixture.event("publish", `/typechat publish 500:${fixture.bundle.bodyHash}`, "approval", 200);
+    const checked = await checkPublication(fixture.github, approval.context, approval.env, fixture.bundle, clock);
+    assert.equal(checked.shouldPost, true, "999 ordinary comments, a receipt, and an approval remain supported");
+    fixture.state.thread.comments.push(fixture.state.comment("too-much-evidence", "One more requirement.", "contributor"));
+    await assert.rejects(() => readThread(fixture.github, fixture.state.target), /1,000-comment limit/);
+});
+
+test("receipt collection remains bounded even when all bot messages are canonical", async () => {
+    const fixture = await statusFixture();
+    fixture.state.thread.comments.push(...Array.from({ length: 2000 }, (_, i) => fixture.state.comment(`status-${i}`,
+        renderStatusReceipt({
+            version: 1, kind: "issue", number: 75, commentId: i + 1, runId: 100, attempt: 1,
+            started: Date.parse("2026-10-30T00:01:00Z"), action: "draft", outcome: "input", result: "",
+        }), "github-actions", "Bot")));
+    await assert.rejects(() => readThread(fixture.github, fixture.state.target), /2,000-comment receipt collection/);
+});
+
+test("receipts do not consume the existing evidence byte budget", async () => {
+    const fixture = setup();
+    fixture.state.thread.comments.push(...Array.from({ length: 5 }, (_, i) =>
+        fixture.state.comment(`large-evidence-${i}`, "x".repeat(200000), "contributor")));
+    const baseline = snapshotHash(await readThread(fixture.github, fixture.state.target));
+    fixture.state.thread.comments.push(...Array.from({ length: 200 }, (_, i) => fixture.state.comment(`receipt-${i}`,
+        renderStatusReceipt({
+            version: 1, kind: "issue", number: 75, commentId: i + 1, runId: 100, attempt: 1,
+            started: Date.parse("2026-10-30T00:01:00Z"), action: "draft", outcome: "input", result: "",
+        }), "github-actions", "Bot")));
+    const thread = await readThread(fixture.github, fixture.state.target);
+    assert.ok(Buffer.byteLength(JSON.stringify(thread)) > 1048576);
+    assert.equal(snapshotHash(thread), baseline);
+    fixture.state.thread.comments.push(fixture.state.comment("excess-evidence", "x".repeat(200000), "contributor"));
+    await assert.rejects(() => readThread(fixture.github, fixture.state.target), /bounded context|1 MiB/);
+});
+
+test("expired artifacts and old commands cannot become new ready receipts", async () => {
+    const expired = await statusFixture();
+    expired.state.artifacts.get(500).expired = true;
+    const result = await publishStatus(expired.github, expired.status.context, expired.status.env, undefined,
+        await reserveStatus(expired), clock);
+    assert.equal(result.outcome, "unavailable");
+
+    const old = await statusFixture();
+    old.state.producerRun.run_attempt = 2;
+    old.state.producerRun.run_started_at = "2026-11-07T00:00:00Z";
+    old.state.producerRun.conclusion = "failure";
+    old.status.context.payload.workflow_run.run_attempt = 2;
+    await assert.rejects(() => checkStatus(old.github, old.status.context, old.status.env, undefined,
+        () => new Date("2026-11-07T01:00:00Z")), /old command/);
+    assert.equal(old.state.posts.length, 0);
+
+    const managed = await statusFixture();
+    await publishStatus(managed.github, managed.status.context, managed.status.env, managed.bundle, await reserveStatus(managed), clock);
+    managed.state.producerRun.run_attempt = 2;
+    managed.state.producerRun.run_started_at = "2026-11-07T00:00:00Z";
+    managed.state.producerRun.conclusion = "failure";
+    managed.status.context.payload.workflow_run.run_attempt = 2;
+    await assert.rejects(() => checkStatus(managed.github, managed.status.context, managed.status.env, undefined,
+        () => new Date("2026-11-07T01:00:00Z")), /old command/);
+    assert.equal(managed.state.updates.length, 0);
+});
+
+for (const kind of ["issue", "discussion"]) {
+    test(`${kind}: completion workflow scripts authenticate, reserve, and report a result once`, async t => {
+        const workflow = parse(fs.readFileSync(new URL("../../.github/workflows/discussion-status.yml", import.meta.url), "utf8"));
+        const fixture = await statusFixture(kind);
+        const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-status-workflow-"));
+        const savedEnvironment = { ...process.env };
+        const summaries = [];
+        const require = createRequire(import.meta.url);
+        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+        t.mock.timers.enable({ apis: ["Date"], now: NOW.getTime() });
+        try {
+            Object.assign(process.env, {
+                ...fixture.status.env,
+                GITHUB_WORKSPACE: fileURLToPath(new URL("../../", import.meta.url)),
+                RUNNER_TEMP: temporary,
+            });
+            const steps = workflow.jobs[`${kind}_status`].steps;
+            async function execute(id, environment = {}) {
+                Object.assign(process.env, environment);
+                const outputs = {};
+                const summary = {
+                    text: "",
+                    addHeading(text) { this.text += text; return this; },
+                    addRaw(text) { this.text += text; return this; },
+                    addLink(text, url) { this.text += `${text}: ${url}`; return this; },
+                    async write() { summaries.push(this.text); },
+                };
+                const core = {
+                    summary, notice() {}, setOutput(name, value) { outputs[name] = value; },
+                    setFailed(message) { assert.fail(message); },
+                };
+                await new AsyncFunction("require", "github", "context", "core", steps.find(step => step.id === id).with.script)(
+                    require, fixture.github, fixture.status.context, core);
+                return outputs;
+            }
+            const identified = await execute("identify");
+            assert.deepEqual(identified, { eligible: "true", source_run_id: "100", artifact_id: "500" });
+            writeJson(path.join(temporary, "typechat-status-draft"), "sealed-draft.json", fixture.bundle);
+            const checked = await execute("check", { TYPECHAT_HAS_STATUS_DRAFT: "true" });
+            assert.equal(checked.should_write, "true");
+            const intent = readJson(path.dirname(checked.intent_path), "intent.json", MAX_BUNDLE_BYTES);
+            assert.equal(intent.operation, "create");
+            fixture.state.artifacts.set(601, {
+                id: 601, name: checked.intent_name, expired: false, expires_at: "2026-11-29T00:00:00Z",
+                workflow_run: { id: 300, repository_id: REPOSITORY.id, head_sha: SHA },
+            });
+            const posted = await execute("publish", { TYPECHAT_STATUS_INTENT_ID: "601" });
+            const result = readJson(path.dirname(posted.result_path), "result.json", MAX_BUNDLE_BYTES);
+            assert.equal(result.posted, true);
+            assert.equal(result.sourceRunId, 100);
+            assert.equal(result.sourceAttempt, 1);
+            assert.equal(result.outcome, "input");
+            assert.ok(summaries.at(-1).includes("Completion receipt recorded"));
+            const repeated = await execute("check");
+            assert.equal(repeated.should_write, "false");
+            assert.equal(fixture.state.posts.length, 1);
+            assert.equal(fixture.state.updates.length, 0);
+        } finally {
+            for (const key of Object.keys(process.env)) {
+                if (!Object.hasOwn(savedEnvironment, key)) delete process.env[key];
+            }
+            Object.assign(process.env, savedEnvironment);
+            fs.rmSync(temporary, { recursive: true });
+        }
+    });
 }
 
 test("commands require exact approval references and never authorize implementation", () => {

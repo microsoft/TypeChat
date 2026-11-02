@@ -1,6 +1,6 @@
 # TypeChat owner cheat sheet
 
-**For @robgruen. Last checked: 2026-10-31 (UTC).**
+**For @robgruen. Last checked: 2026-11-01 (UTC).**
 
 [Issues](https://github.com/microsoft/TypeChat/issues) |
 [Discussions](https://github.com/microsoft/TypeChat/discussions) |
@@ -10,8 +10,9 @@
 [Full automation guide](./AUTOMATION.md)
 
 **Verified:** backlog assessment, automatic Copilot PR reviews, Issue draft generation,
-and Issue `/typechat reply` delivery with a duplicate-free rerun.
-**Awaiting review and live verification:** exact-proposal `/typechat accept`.
+Issue `/typechat reply` delivery, and exact Issue `/typechat accept`, including
+duplicate-free reruns.
+**Awaiting review and live verification:** completion receipts for draft/reply requests.
 Manual publication and the Discussion path still need live verification.
 **Still human decisions:** work acceptance, implementation handoff, merging, and releases.
 
@@ -23,7 +24,7 @@ Manual publication and the Discussion path still need live verification.
 | Have the agent answer an issue or Discussion | [Request one direct reply](#reply-directly); the Issue path is live-verified. | One checked conversational response, without accepting work. |
 | Review wording before responding | [Request a draft](#draft-and-publish). | The actual reply as a preview; assessment metadata stays in Actions. |
 | Post the proposed response | Review the exact draft, then copy its publish command into the same thread. | One Actions-bot comment, not approval to build. |
-| Accept an agent-prepared proposal | After acceptance rollout, [review and approve its exact terms](#accept-an-exact-proposal). Until then, [record a human decision manually](#accept-work-manually). | A visible scope agreement; no coding agent starts automatically. |
+| Accept an agent-prepared proposal | [Review and approve its exact terms](#accept-an-exact-proposal), or [record a human decision manually](#accept-work-manually). The Issue path is live-verified. | A visible scope agreement; no coding agent starts automatically. |
 | Move an existing PR forward | [Review the latest revision](#review-and-merge-manually); support the existing contributor rather than duplicate their PR. | A human decision to request changes or merge. |
 | Prepare one bounded coding run | After review/rollout, [prepare its exact build command](#prepare-an-implementation-run-disabled-by-default). | A copyable command, not spending or merge approval. |
 | Resolve unclear or out-of-scope work | Pause dependent work. If changing direction, approve and merge a [policy PR](./GOALS.md#who-decides) first. | An explicit scope decision; popularity or a label is not approval. |
@@ -83,6 +84,11 @@ The Actions bot acknowledges the command comment with an `eyes` reaction when
 the workflow starts processing it. This is not a success or acceptance signal;
 check Actions for progress and errors.
 
+After completion-receipt rollout, a short status comment will link the run and
+say whether the draft is prepared, needs input, is outdated, or failed. The
+receipt is not the drafted response and is not acceptance. It is safe to review
+the original frozen preview after a canonical receipt appears.
+
 **2. Review:** Open **Actions > TypeChat discussion response**, wait for the run
 to succeed, and open the **Seal discussion draft** job summary. It contains the
 exact public reply, the approval command, and a separate assessment that is not
@@ -107,8 +113,8 @@ operation to finish before sending another command on that thread.
 
 ## Accept an exact proposal
 
-**Prepared for review; do not use until merged and ready for owner-commanded
-live verification.** This is a real scope decision, not a test acknowledgment.
+**The Issue path and no-op retry are live-verified; Discussions still need a
+separate check.** This is a real scope decision, not a test acknowledgment.
 
 1. Resolve open questions, check the approved policy and existing contributions,
    then request a new `/typechat draft` on the same thread.
@@ -150,8 +156,8 @@ This is not approval to merge. Material scope changes return to discussion.
 ```
 
 This remains an ordinary human comment, not an automation command. It does not
-assign a coding agent. The separate exact-proposal acceptance command is pending
-rollout; **no `/typechat build` command or implementation workflow is enabled**.
+assign a coding agent. Exact-proposal acceptance is also available on Issues;
+**no `/typechat build` command or implementation workflow is enabled**.
 
 ## Review and merge manually
 
@@ -207,6 +213,9 @@ the activation variable. No activation or live coding run was performed here.
 | Acceptance says "already accepted" | Follow the existing record. No second acceptance comment is needed. |
 | No acceptance preview or wrong acceptance hash | Resolve the questions or scope, then request and review a new draft. Do not substitute the response hash or edit artifacts. |
 | A reply command says "already answered" | Follow the existing reply link. No new model execution or comment is needed. |
+| Eyes are present but no completion message appears | Receipt rollout must be merged and live-verified first. After rollout, check **Report TypeChat discussion outcome**. Existing public replies count as completion; removed/edited commands and closed/locked targets do not receive another comment. |
+| A completion receipt reports an unconfirmed reply or uncertain write | Inspect the run and thread before retrying. A newer attempt cannot bypass an unresolved update to the same receipt. Do not delete the intent. Receipt mutations stop seven days after the original command; use a fresh request after inspection. |
+| A receipt was edited or removed | Automation will not overwrite edited text or blindly recreate a missing receipt. Use the existing run evidence and inspect any retained intent before recovery. |
 | Workflow code changed | After merge and CI, use a new command. Old runs retain their original code, and older sealed artifacts may be stale. |
 | Publishing times out or reports an uncertain outcome | Inspect the thread and original run first. Do not retry blindly or delete the publication-intent artifact; resolve the uncertainty before approving a new draft. |
 | Assessment/drafting stops on a budget or evidence limit | Read the failure and coverage notes. Narrow the task or seek an owner-reviewed configuration change; do not bypass restrictions. |
