@@ -639,6 +639,19 @@ the original draft command, approval, completed successful producer, unchanged
 policy and discussion, referenced PR revisions, and exact acceptance hash
 before posting one top-level **Accepted work** comment.
 
+After confirming that exact record, the publisher adds a thumbs-up reaction to
+the owner's `/typechat accept` comment, on either an Issue or a Discussion.
+The reaction confirms recorded acceptance, not merely receipt of the command.
+Rejected approvals and unconfirmed publication outcomes do not receive it.
+An unchanged, already-published record can also confirm a subsequent valid
+approval command without creating another acceptance comment.
+
+Reaction failures are reported separately from the already-recorded decision.
+A valid publisher retry can restore the reaction without editing or reposting
+accepted work. Reaction requests are idempotent, and reactions do not change
+the frozen discussion evidence. The existing target-scoped publisher credentials
+are reused; the acceptance record, not the reaction alone, remains authoritative.
+
 The conversational response and acceptance record have different hashes and
 publication markers. A response publish command cannot accept work; an accept
 command cannot use the response hash. A direct-reply artifact cannot be accepted.
@@ -880,7 +893,7 @@ decisions should be clear and visible.
 
 ## Third pilot: owner-triggered Issue implementation
 
-**Prepared for review; disabled and not live-verified.** The
+**Default-off; successful automated PR publication is not yet live-verified.** The
 [accepted agreement for #504](https://github.com/microsoft/TypeChat/issues/504#issuecomment-6562465109)
 authorizes development of this workflow, not an automated coding run. The new
 [workflow](./.github/workflows/issue-implementation.md) requires
@@ -898,6 +911,24 @@ unchanged Actions-bot record, backed by an unchanged prior owner acceptance
 command with the same hash, is supported. Ordinary manual acceptance remains
 valid human governance but is not machine-readable authority for this pilot.
 Discussion builds and inline notes remain unsupported; #502 is still deferred.
+
+The native rocket reaction acknowledges startup for an eligible owner build
+command. It does not mean that agreement validation, App preflight, generation,
+or tests have passed. Manual command preparation does not add a reaction or
+authorize execution. Only trusted activation receives reaction-write permissions;
+the pinned compiler also grants `pull-requests: write` for the shared
+`issue_comment` event, while the owner guard continues to reject PR comments.
+The coding agent, detector, and generated checks retain read-only repository access.
+No start comment is posted.
+
+The owner-authorized [live run](https://github.com/microsoft/TypeChat/actions/runs/41493733655)
+exercised App preflight, generation, full-patch threat detection, and isolated
+checks. The Python suite passed 107 runtime tests with 3 skipped, but failed
+strict Pyright checks on three partially unknown types. Publication was correctly
+blocked, and the temporary activation flag was removed. Native usage was
+50.71891 coding credits plus 10.53936 detection credits. This verifies rejection
+of a failing candidate, not successful automated PR creation. Manual recovery
+of that candidate does not change the failed run's outcome.
 
 ### Frozen authorization and bounded spending
 
