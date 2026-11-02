@@ -902,8 +902,11 @@ Discussion builds and inline notes remain unsupported; #502 is still deferred.
 ### Frozen authorization and bounded spending
 
 Preflight verifies owner identity, default-branch workflow code, the current
-scope policy and its ancestry, acceptance, and existing contributions. Open
-linked or possibly competing PRs stop the run, including ambiguous references.
+scope policy and its ancestry, acceptance, and existing contributions. Open PRs
+linked to the target Issue or naming it in their title/body stop the run for
+owner review. Citing an open PR as related work does not by itself reserve the
+Issue or block an independently accepted task. References and contributor credit
+remain in the agreement, and their approved revisions are still checked.
 The agreement, discussion, exact source revision, control fingerprints, and
 short-lived App-access proof are frozen. An immutable spending reservation
 precedes inference. The model-start guard repeats authorization and rejects App
