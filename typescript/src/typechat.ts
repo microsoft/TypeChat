@@ -78,12 +78,6 @@ export interface TypeChatJsonValidator<T extends object> {
      */
     getTypeName(): string;
     /**
-     * Optionally validates schema configuration without a JSON instance. Translators call this before
-     * the first model request. Validators whose schemas are checked during instance validation may omit it.
-     * @returns A success result when the schema is valid, or an error describing the schema problem.
-     */
-    validateSchema?(): Result<void>;
-    /**
      * Validates the given JSON object according to the associated TypeScript schema. Returns a
      * `Success<T>` object containing the JSON object if validation was successful. Otherwise, returns
      * an `Error` object with a `message` describing the error and, when available, rejected `data`.
@@ -91,6 +85,15 @@ export interface TypeChatJsonValidator<T extends object> {
      * @returns The JSON object or an error message.
      */
     validate(jsonObject: object): Result<T>;
+}
+
+/**
+ * Optional capability for validators that can check schema configuration without an instance.
+ */
+export const typeChatSchemaValidation: unique symbol = Symbol("TypeChat schema validation");
+
+export interface TypeChatJsonValidatorWithSchemaValidation<T extends object> extends TypeChatJsonValidator<T> {
+    [typeChatSchemaValidation](): Result<void>;
 }
 
 /**
@@ -130,7 +133,9 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
     }
 
     async function translate(request: string, promptPreamble?: string | PromptSection[]): Promise<Result<T>> {
-        const preflight = validator.validateSchema?.();
+        const schemaValidator = validator as TypeChatJsonValidator<T> &
+            Partial<Pick<TypeChatJsonValidatorWithSchemaValidation<T>, typeof typeChatSchemaValidation>>;
+        const preflight = schemaValidator[typeChatSchemaValidation]?.();
         if (preflight && !preflight.success) {
             return error(`Schema validation failed before model request: ${preflight.message}`);
         }

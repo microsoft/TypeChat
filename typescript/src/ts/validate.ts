@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { Result, success, error } from '../result';
-import { TypeChatJsonValidator } from "../typechat";
+import { typeChatSchemaValidation, type TypeChatJsonValidator } from "../typechat";
 
 // TypeScript 7 ships as an ES module, while this package is emitted as CommonJS. Node's
 // `require(esm)` support (Node >=22.12) lets us load it synchronously, and `resolution-mode`
@@ -40,10 +40,6 @@ const schemaValidationFileName = "/schema-validation.ts";
  */
 export interface TypeScriptJsonValidator<T extends object> extends TypeChatJsonValidator<T> {
     /**
-     * Validate the TypeScript schema without requiring a JSON instance.
-     */
-    validateSchema(): Result<void>;
-    /**
      * Transform JSON into TypeScript code for validation. Returns a `Success<string>` object if the conversion is
      * successful, or an `Error` object if the JSON can't be transformed. The returned TypeScript source code is
      * expected to be an ECMAScript module that imports one or more types from `"./schema"` and combines those
@@ -57,14 +53,23 @@ export interface TypeScriptJsonValidator<T extends object> extends TypeChatJsonV
     close(): void;
 }
 
+export interface TypeScriptJsonValidatorWithSchemaValidation<T extends object> extends TypeScriptJsonValidator<T> {
+    [typeChatSchemaValidation](): Result<void>;
+}
+
 /**
  * Returns a JSON validator for a given TypeScript schema. Validation is performed by an in-memory instance of
  * the TypeScript compiler. The specified type argument `T` must be the same type as `typeName` in the given `schema`.
  * @param schema A string containing the TypeScript source code for the JSON schema.
  * @param typeName The name of the JSON target type in the schema.
- * @returns A `TypeScriptJsonValidator<T>` instance.
+ * @param schemaValidationTypeName The exported schema type to check before translation. Defaults to `typeName`.
+ * @returns A `TypeScriptJsonValidatorWithSchemaValidation<T>` instance.
  */
-export function createTypeScriptJsonValidator<T extends object = object>(schema: string, typeName: string): TypeScriptJsonValidator<T> {
+export function createTypeScriptJsonValidator<T extends object = object>(
+    schema: string,
+    typeName: string,
+    schemaValidationTypeName: string = typeName
+): TypeScriptJsonValidatorWithSchemaValidation<T> {
     const fileSystem = createVirtualFileSystem({
         [configFileName]: JSON.stringify({
             compilerOptions: {
@@ -87,10 +92,10 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
     }
     const writeFile = fileSystem.writeFile;
     let schemaValidationResult: Result<void> | undefined;
-    const validator: TypeScriptJsonValidator<T> = {
+    const validator: TypeScriptJsonValidatorWithSchemaValidation<T> = {
         getSchemaText: () => schema,
         getTypeName: () => typeName,
-        validateSchema,
+        [typeChatSchemaValidation]: validateSchema,
         createModuleTextFromJson,
         validate,
         close: () => api.close()
@@ -104,7 +109,7 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
 
         writeFile(
             schemaValidationFileName,
-            `type __TypeChatSchemaTarget = import('./schema').${typeName};\n`
+            `type __TypeChatSchemaTarget = import('./schema').${schemaValidationTypeName};\n`
         );
         const snapshot = api.updateSnapshot({
             fileChanges: { changed: [schemaValidationFileName] }
@@ -118,10 +123,17 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
         }
 
         const program = project.program;
-        const syntacticDiagnostics = program.getSyntacticDiagnostics();
-        const diagnostics = syntacticDiagnostics.length
-            ? syntacticDiagnostics
-            : program.getSemanticDiagnostics();
+        const schemaFiles = [schemaFileName, schemaValidationFileName]
+            .map(fileName => program.getSourceFile(fileName))
+            .filter((sourceFile): sourceFile is SourceFile => sourceFile !== undefined);
+        if (schemaFiles.length !== 2) {
+            schemaValidationResult = error("The TypeScript schema preflight files couldn't be loaded.");
+            return schemaValidationResult;
+        }
+        const diagnostics = schemaFiles.flatMap(sourceFile => [
+            ...program.getSyntacticDiagnostics(sourceFile.fileName),
+            ...program.getSemanticDiagnostics(sourceFile.fileName)
+        ]);
         schemaValidationResult = diagnostics.length
             ? error(
                 diagnostics

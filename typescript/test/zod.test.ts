@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { createJsonTranslator } from "../dist/index.js";
+import { createJsonTranslator, typeChatSchemaValidation } from "../dist/index.js";
 import { createZodJsonValidator, getZodSchemaAsTypeScript } from "../dist/zod/index.js";
 
 // ---------------------------------------------------------------------------
@@ -530,7 +530,7 @@ describe("createZodJsonValidator", () => {
         it("keeps instance validation for validators without schema preflight", async () => {
             const validator = createZodJsonValidator(SentimentSchema, "SentimentResponse");
             generatedSchemas.push(validator.getSchemaText());
-            assert.equal(validator.validateSchema, undefined);
+            assert.equal(typeChatSchemaValidation in validator, false);
 
             let modelCalls = 0;
             const translator = createJsonTranslator({

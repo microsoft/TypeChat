@@ -42,7 +42,9 @@ without asking the model to repair them. This preflight uses the same minimal
 TypeScript library as response validation and is cached for the validator's lifetime.
 Once a schema passes preflight, invalid model responses continue through the normal
 validation and repair flow. Zod and custom validators without schema-only checks keep
-their existing instance-validation behavior.
+their existing instance-validation behavior. The `TypeChatJsonValidator` contract is
+unchanged; custom validators can opt in through the exported `typeChatSchemaValidation`
+symbol, so existing string-named `validateSchema` methods are not invoked as preflight.
 
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 

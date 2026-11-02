@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateJsonProgram, createModuleTextFromProgram, Program, FunctionCall } from "../dist/ts/index.js";
+import {
+    createModuleTextFromProgram,
+    createProgramTranslator,
+    evaluateJsonProgram,
+    type FunctionCall,
+    type Program,
+    type TypeScriptJsonValidator
+} from "../dist/ts/index.js";
 
 // ---------------------------------------------------------------------------
 // evaluateJsonProgram result-reference bounds checking
@@ -102,6 +109,55 @@ describe("createModuleTextFromProgram result references", () => {
             ],
         });
         assert.equal(result.success, false);
+    });
+});
+
+describe("createProgramTranslator", () => {
+    const apiSchema = "export interface API { add(a: number, b: number): number; }";
+
+    it("preflights an API-only schema and translates a valid program", async () => {
+        let modelCalls = 0;
+        const translator = createProgramTranslator({
+            async complete() {
+                modelCalls++;
+                return {
+                    success: true as const,
+                    data: '{"@steps":[{"@func":"add","@args":[1,2]}]}'
+                };
+            }
+        }, apiSchema);
+
+        try {
+            const result = await translator.translate("add one and two");
+            assert.ok(result.success);
+            assert.deepEqual(result.data, { "@steps": [{ "@func": "add", "@args": [1, 2] }] });
+            assert.equal(modelCalls, 1);
+        } finally {
+            (translator.validator as TypeScriptJsonValidator<Program>).close();
+        }
+    });
+
+    it("repairs a program response that does not match the API", async () => {
+        const responses = [
+            '{"@steps":[{"@func":"add","@args":["one",2]}]}',
+            '{"@steps":[{"@func":"add","@args":[1,2]}]}'
+        ];
+        let modelCalls = 0;
+        const translator = createProgramTranslator({
+            async complete() {
+                const data = responses[modelCalls++];
+                return { success: true as const, data };
+            }
+        }, apiSchema);
+
+        try {
+            const result = await translator.translate("add one and two");
+            assert.ok(result.success);
+            assert.deepEqual(result.data, { "@steps": [{ "@func": "add", "@args": [1, 2] }] });
+            assert.equal(modelCalls, 2);
+        } finally {
+            (translator.validator as TypeScriptJsonValidator<Program>).close();
+        }
     });
 });
 

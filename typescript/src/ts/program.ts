@@ -213,7 +213,11 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
  * @returns A `TypeChatJsonTranslator<Program>` instance.
  */
 export function createProgramTranslator(model: TypeChatLanguageModel, schema: string): TypeChatJsonTranslator<Program> {
-    const validator = createTypeScriptJsonValidator<Program>(schema, "Program");
+    const validator = createTypeScriptJsonValidator<Program>(
+        schema,
+        "Program",
+        "API"
+    );
     validator.createModuleTextFromJson = createModuleTextFromProgram;
     const translator = createJsonTranslator<Program>(model, validator);
     translator.createRequestPrompt = createRequestPrompt;

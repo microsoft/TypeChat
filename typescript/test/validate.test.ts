@@ -1,7 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createJsonTranslator } from "../dist/index.js";
-import { createTypeScriptJsonValidator } from "../dist/ts/index.js";
+import {
+    createJsonTranslator,
+    typeChatSchemaValidation,
+    type TypeChatJsonValidator
+} from "../dist/index.js";
+import {
+    createTypeScriptJsonValidator,
+    type TypeScriptJsonValidator
+} from "../dist/ts/index.js";
 
 // ---------------------------------------------------------------------------
 // Shared schemas
@@ -120,9 +127,9 @@ describe("createTypeScriptJsonValidator", () => {
                 "Event"
             );
             try {
-                const firstResult = validator.validateSchema();
+                const firstResult = validator[typeChatSchemaValidation]();
                 assert.ok(firstResult.success, "schema validation must not require a JSON instance");
-                assert.strictEqual(validator.validateSchema(), firstResult);
+                assert.strictEqual(validator[typeChatSchemaValidation](), firstResult);
             } finally {
                 validator.close();
             }
@@ -150,6 +157,68 @@ describe("createTypeScriptJsonValidator", () => {
                 assert.equal(modelCalls, 2);
             } finally {
                 validator.close();
+            }
+        });
+
+        it("does not let a previous invalid instance poison schema preflight", async () => {
+            const validator = validatorFor(smallSchema, "Point");
+            let modelCalls = 0;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return { success: true as const, data: '{"x":1,"y":2}' };
+                }
+            }, validator);
+
+            try {
+                assert.equal(validator.validate({ x: 1, y: "invalid" }).success, false);
+                const result = await translator.translate("point");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { x: 1, y: 2 });
+                assert.equal(modelCalls, 1);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("preserves legacy validator contracts and ignores validateSchema name collisions", async () => {
+            type Point = { x: number };
+            const backing = validatorFor<Point>("export interface Point { x: number; }", "Point");
+            let schemaValidationCalls = 0;
+            let modelCalls = 0;
+
+            const legacyTypeScriptValidator: TypeScriptJsonValidator<Point> = {
+                getSchemaText: backing.getSchemaText,
+                getTypeName: backing.getTypeName,
+                createModuleTextFromJson: backing.createModuleTextFromJson,
+                validate: backing.validate,
+                close: backing.close
+            };
+            const legacyCustomValidator = {
+                getSchemaText: legacyTypeScriptValidator.getSchemaText,
+                getTypeName: legacyTypeScriptValidator.getTypeName,
+                validate: legacyTypeScriptValidator.validate,
+                validateSchema: () => {
+                    schemaValidationCalls++;
+                    return true;
+                }
+            };
+            const validator: TypeChatJsonValidator<Point> = legacyCustomValidator;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return { success: true as const, data: '{"x":1}' };
+                }
+            }, validator);
+
+            try {
+                const result = await translator.translate("point");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { x: 1 });
+                assert.equal(modelCalls, 1);
+                assert.equal(schemaValidationCalls, 0);
+            } finally {
+                legacyTypeScriptValidator.close();
             }
         });
     });
