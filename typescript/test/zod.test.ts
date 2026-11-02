@@ -431,11 +431,25 @@ describe("getZodSchemaAsTypeScript", () => {
 
             assert.equal(values, "type Values = (string | number)[];\n");
             assert.equal(row, "type Row = [(string | number)?];\n");
+            assertSchemasCompile([values, row]);
         });
 
         it("preserves input precedence through nested pipelines", () => {
             const Nested = z.union([z.string(), z.number()]).pipe(z.string()).pipe(z.string());
             assert.equal(schemaOf("Nested", Nested), "type Nested = string | number;\n");
+        });
+
+        it("preserves precedence for optional and multi-value literal pipeline inputs", () => {
+            const OptionalElement = z.string().optional().transform(String);
+            const MultiValueElement = z.literal(["active", "inactive"]).transform(String);
+            const values = schemaOf("Values", z.array(OptionalElement));
+            const statuses = schemaOf("Statuses", z.array(MultiValueElement));
+            const row = schemaOf("Row", z.tuple([z.literal(["active", "inactive"]).transform(String).optional()]));
+
+            assert.equal(values, "type Values = (string | undefined)[];\n");
+            assert.equal(statuses, "type Statuses = (\"active\" | \"inactive\")[];\n");
+            assert.equal(row, "type Row = [(\"active\" | \"inactive\")?];\n");
+            assertSchemasCompile([values, statuses, row]);
         });
 
         it("preserves transformed runtime values during validation", () => {

@@ -64,6 +64,12 @@ function getTypePrecedence(type: z.ZodType): TypePrecedence {
             return TypePrecedence.Union;
         case "intersection":
             return TypePrecedence.Intersection;
+        case "literal": {
+            const values = (type._zod.def as z.core.$ZodLiteralDef<z.core.util.Literal>).values;
+            return values.length > 1 ? TypePrecedence.Union : TypePrecedence.Object;
+        }
+        case "optional":
+            return TypePrecedence.Union;
         case "pipe":
             return getTypePrecedence((type._zod.def as z.core.$ZodPipeDef).in as z.ZodType);
     }
