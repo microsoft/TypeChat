@@ -11,8 +11,10 @@ export const REPOSITORY = Object.freeze({ owner: "microsoft", repo: "TypeChat", 
 export const ACTIONS_BOT_ID = "MDM6Qm90NDE4OTgyODI=";
 export const DRAFT_WORKFLOW = ".github/workflows/discussion-draft.lock.yml";
 export const PUBLISH_WORKFLOW = ".github/workflows/publish-discussion-draft.yml";
+export const STATUS_WORKFLOW = ".github/workflows/discussion-status.yml";
 export const DRAFT_ARTIFACT_PREFIX = "typechat-discussion-draft-";
 export const INTENT_PREFIX = "typechat-publish-intent-";
+export const STATUS_INTENT_PREFIX = "typechat-status-intent-";
 export const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_CONTEXT_BYTES = 1048576;
 export const MAX_DRAFT_BYTES = 65536;
@@ -25,6 +27,7 @@ export const CONTROL_PATHS = Object.freeze([
     ".github/workflows/discussion-draft.md",
     DRAFT_WORKFLOW,
     PUBLISH_WORKFLOW,
+    STATUS_WORKFLOW,
     ".github/workflows/shared/read-only-analysis.md",
     "tools/discussion-draft.mjs",
 ]);
@@ -36,6 +39,7 @@ const SHA1 = /^[a-f0-9]{40}$/;
 const SHA256 = /^[a-f0-9]{64}$/;
 const SCOPES = ["in_scope", "needs_owner_decision", "conflicts_with_direction"];
 const READINESS = ["needs_clarification", "ready_for_owner_decision", "existing_pr_review", "blocked_by_evidence", "needs_owner_scope_decision"];
+const STATUS_OUTCOMES = ["ready", "input", "outdated", "unavailable", "failed", "cancelled", "invalid", "unconfirmed", "replied"];
 
 function requireValue(condition, message) {
     if (!condition) {
@@ -126,9 +130,10 @@ export function parseCommand(body) {
 }
 
 function isControlComment(comment) {
-    return comment.author?.type === "User" && comment.author.login === OWNER.login &&
+    return (comment.author?.type === "User" && comment.author.login === OWNER.login &&
         (/^\/typechat (draft|reply)\s*$/.test(comment.body) ||
-            /^\/typechat (publish|accept) [1-9][0-9]*:[a-fA-F0-9]{64}\s*$/.test(comment.body));
+            /^\/typechat (publish|accept) [1-9][0-9]*:[a-fA-F0-9]{64}\s*$/.test(comment.body))) ||
+        statusReceiptData(comment) !== null;
 }
 
 export function authorize(context, env, action) {
@@ -255,10 +260,20 @@ export async function readThread(github, target) {
     const comments = [];
     const cursors = new Set();
     let commentBytes = 0;
+    let evidenceBytes = 0;
+    let evidenceCount = 0;
     function appendComment(value, parentId) {
         const comment = normalizeComment(value, parentId);
-        commentBytes += Buffer.byteLength(JSON.stringify(comment));
-        requireValue(comments.length < 1000 && commentBytes <= MAX_CONTEXT_BYTES,
+        const bytes = Buffer.byteLength(JSON.stringify(comment));
+        commentBytes += bytes;
+        requireValue(comments.length < 2000 && commentBytes <= MAX_CONTEXT_BYTES * 2,
+            "This thread exceeds the bounded 2,000-comment receipt collection limit.");
+        if (!statusReceiptData(comment)) {
+            evidenceBytes += bytes;
+            evidenceCount++;
+        }
+        requireValue(evidenceCount <= 1000, "This thread exceeds the pilot's 1,000-comment limit.");
+        requireValue(evidenceBytes <= MAX_CONTEXT_BYTES,
             "This thread exceeds the pilot's bounded context limit.");
         comments.push(comment);
     }
@@ -271,7 +286,7 @@ export async function readThread(github, target) {
         const page = connection(item.comments);
         requireValue(total === undefined || total === page.totalCount, "The discussion changed during pagination. Request a new draft.");
         total = page.totalCount;
-        requireValue(total <= 1000, "This thread exceeds the pilot's 1,000-comment limit.");
+        requireValue(total <= 2000, "This thread exceeds the bounded 2,000-comment receipt collection limit.");
         for (const node of page.nodes) {
             appendComment(node, null);
             topCount++;
@@ -286,7 +301,7 @@ export async function readThread(github, target) {
                         appendComment(reply, node.id);
                         replyCount++;
                     }
-                    requireValue(comments.length <= 1000, "This thread exceeds the pilot's 1,000-comment limit.");
+                    requireValue(comments.length <= 2000, "This thread exceeds the bounded 2,000-comment receipt collection limit.");
                     if (!replyPage.pageInfo.hasNextPage) {
                         break;
                     }
@@ -303,7 +318,7 @@ export async function readThread(github, target) {
                 requireValue(replyCount === replyTotal, "Reply coverage is incomplete.");
             }
         }
-        requireValue(comments.length <= 1000, "This thread exceeds the pilot's 1,000-comment limit.");
+        requireValue(comments.length <= 2000, "This thread exceeds the bounded 2,000-comment receipt collection limit.");
         after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
         if (after) {
             requireValue(!cursors.has(after), "Repeated comment cursor; context coverage is incomplete.");
@@ -314,7 +329,9 @@ export async function readThread(github, target) {
         "Comment coverage is incomplete or duplicated.");
     comments.sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
     const thread = { target: core, comments };
-    requireValue(Buffer.byteLength(JSON.stringify(thread)) <= MAX_CONTEXT_BYTES, "This context exceeds the pilot's 1 MiB limit.");
+    requireValue(Buffer.byteLength(JSON.stringify(thread)) <= MAX_CONTEXT_BYTES * 2, "This receipt collection exceeds its 2 MiB limit.");
+    requireValue(Buffer.byteLength(JSON.stringify({ target: core, comments: comments.filter(comment => !statusReceiptData(comment)) })) <=
+        MAX_CONTEXT_BYTES, "This context exceeds the pilot's 1 MiB limit.");
     return thread;
 }
 
@@ -322,7 +339,7 @@ export function snapshotHash(thread) {
     return digest({ target: thread.target, comments: thread.comments.filter(comment => !isControlComment(comment)) });
 }
 
-export async function verifyCommand(github, request) {
+async function verifyOwnerCommand(github, request) {
     const result = await github.graphql(`query DiscussionPilotCommand($id:ID!) {
       node(id:$id) {
         __typename
@@ -351,6 +368,11 @@ export async function verifyCommand(github, request) {
     requireValue(lf(comment.body) === request.commandBody && Date.parse(comment.createdAt) === Date.parse(request.commandCreatedAt) &&
         comment.lastEditedAt === null,
     "Edited or withdrawn commands cannot authorize work. Post a new command.");
+    return comment;
+}
+
+export async function verifyCommand(github, request) {
+    const comment = await verifyOwnerCommand(github, request);
     requireValue(equal(parseCommand(comment.body), request.command), "The command changed after the event.");
     return comment;
 }
@@ -639,13 +661,20 @@ function markerFor(bundle) {
     });
 }
 
-async function verifyReferences(github, references) {
+async function changedReference(github, references) {
     for (const reference of references) {
         const pr = (await github.rest.pulls.get({ ...API_REPO, pull_number: reference.number })).data;
-        requireValue(pr.number === reference.number && pr.base?.repo?.id === REPOSITORY.id &&
-            pr.head?.sha === reference.headSha && pr.updated_at === reference.updatedAt,
-        `PR #${reference.number} changed or its inspected revision is unverified. Request a new draft.`);
+        if (pr.number !== reference.number || pr.base?.repo?.id !== REPOSITORY.id ||
+            pr.head?.sha !== reference.headSha || pr.updated_at !== reference.updatedAt) {
+            return reference.number;
+        }
     }
+    return null;
+}
+
+async function verifyReferences(github, references) {
+    const changed = await changedReference(github, references);
+    requireValue(changed === null, `PR #${changed} changed or its inspected revision is unverified. Request a new draft.`);
 }
 
 export async function sealDraft(github, context, env, prepared, candidate, clock = () => new Date()) {
@@ -808,19 +837,36 @@ export async function identifyPublication(github, context, env, clock = () => ne
     return { request, artifact, run, controls, validUntil, bodyHash };
 }
 
-function validateBundle(bundle, publication) {
+function validateSealedDraft(bundle, evidence) {
     exactKeys(bundle, ["version", "target", "request", "producer", "fingerprints", "snapshotHash", "createdAt", "draft",
         "marker", "body", "bodyHash", "acceptance"], "Unexpected review-bundle fields.");
-    requireValue(bundle.version === 3 && equal(bundle.target, publication.request.target), "The draft belongs to another target or protocol version.");
+    requireValue(bundle.version === 3 && equal(bundle.target, evidence.request.target), "The draft belongs to another target or protocol version.");
     requireValue(equal(bundle.producer, {
-        runId: publication.run.id, attempt: publication.run.run_attempt,
-        commit: publication.run.head_sha, workflow: DRAFT_WORKFLOW,
+        runId: evidence.run.id, attempt: evidence.run.run_attempt,
+        commit: evidence.run.head_sha, workflow: DRAFT_WORKFLOW,
     }), "Producer provenance does not match the artifact.");
     requireValue(SHA256.test(bundle.snapshotHash) && SHA256.test(bundle.marker) && SHA256.test(bundle.bodyHash),
         "Missing draft integrity values.");
     timestamp(bundle.createdAt, "Missing draft creation time.");
     exactKeys(bundle.request, ["commentId", "commandBody", "commandCreatedAt"], "Missing original draft request.");
     identifier(bundle.request.commentId, "Missing original request ID.");
+    requireValue(["draft", "reply"].includes(parseCommand(bundle.request.commandBody).action),
+        "The source request is not a draft or reply command.");
+    timestamp(bundle.request.commandCreatedAt, "Missing original request time.");
+    const createdAt = Date.parse(bundle.createdAt);
+    // GitHub artifact creation timestamps have only whole-second precision.
+    requireValue(createdAt >= Date.parse(bundle.request.commandCreatedAt) &&
+        Math.floor(createdAt / 1000) <= Math.floor(Date.parse(evidence.artifact.created_at) / 1000),
+    "The draft's creation time does not match its recorded provenance.");
+    requireValue(equal(validateDraft(bundle.draft), bundle.draft), "The draft does not match the supported schema.");
+    requireValue(equal(bundle.fingerprints, evidence.controls.fingerprints), "Policy or workflow code changed. Request a new draft.");
+    requireValue(markerFor(bundle) === bundle.marker && renderDraft(bundle) === bundle.body &&
+        digest(bundle.body) === bundle.bodyHash && equal(acceptanceFor(bundle), bundle.acceptance),
+    "The sealed response or acceptance preview changed.");
+}
+
+function validateBundle(bundle, publication) {
+    validateSealedDraft(bundle, publication);
     const directReply = publication.request.command.action === "reply";
     requireValue(parseCommand(bundle.request.commandBody).action === (directReply ? "reply" : "draft"),
         "The source request does not authorize this publication mode.");
@@ -828,17 +874,6 @@ function validateBundle(bundle, publication) {
         requireValue(equal(bundle.request, originalRequest(publication.request)),
             "The sealed reply belongs to a different owner command.");
     }
-    timestamp(bundle.request.commandCreatedAt, "Missing original request time.");
-    const createdAt = Date.parse(bundle.createdAt);
-    // GitHub artifact creation timestamps have only whole-second precision.
-    requireValue(createdAt >= Date.parse(bundle.request.commandCreatedAt) &&
-        Math.floor(createdAt / 1000) <= Math.floor(Date.parse(publication.artifact.created_at) / 1000),
-    "The draft's creation time does not match its recorded provenance.");
-    requireValue(equal(validateDraft(bundle.draft), bundle.draft), "The draft does not match the supported schema.");
-    requireValue(equal(bundle.fingerprints, publication.controls.fingerprints), "Policy or workflow code changed. Request a new draft.");
-    requireValue(markerFor(bundle) === bundle.marker && renderDraft(bundle) === bundle.body &&
-        digest(bundle.body) === bundle.bodyHash && equal(acceptanceFor(bundle), bundle.acceptance),
-    "The sealed response or acceptance preview changed.");
     requireValue(publicationContent(bundle, publication.request.command.action).bodyHash === publication.bodyHash,
     "The approval does not match the exact rendered draft.");
 }
@@ -954,27 +989,341 @@ export async function publishDraft(github, context, env, bundle, intentId, clock
     }
     await verifyCommand(github, latest.request);
     const content = publicationContent(bundle, latest.request.command.action);
+    const comment = await writeDiscussionComment(github, bundle.target, content.body);
+    return { posted: true, id: comment.id, url: comment.url, bodyHash: content.bodyHash };
+}
+
+async function writeDiscussionComment(github, target, body, existing = null) {
+    const commentId = existing && target.kind === "issue" ?
+        integer(Number(existing.url.split("#issuecomment-")[1]), "Invalid receipt comment URL.") : null;
     let comment;
     try {
-        if (bundle.target.kind === "issue") {
-            const result = await github.rest.issues.createComment({
-                ...API_REPO, issue_number: bundle.target.number, body: content.body,
-            });
+        if (target.kind === "issue") {
+            const result = existing ?
+                await github.rest.issues.updateComment({
+                    ...API_REPO, comment_id: commentId, body,
+                }) :
+                await github.rest.issues.createComment({ ...API_REPO, issue_number: target.number, body });
             comment = { id: result.data.node_id, url: result.data.html_url, body: result.data.body };
+        } else if (existing) {
+            const result = await github.graphql(`mutation DiscussionPilotUpdate($id:ID!,$body:String!) {
+              updateDiscussionComment(input:{commentId:$id,body:$body}) { comment { id url body } }
+            }`, { id: existing.id, body });
+            comment = result.updateDiscussionComment?.comment;
         } else {
             const result = await github.graphql(`mutation DiscussionPilotPost($id:ID!,$body:String!) {
               addDiscussionComment(input:{discussionId:$id,body:$body}) { comment { id url body } }
-            }`, { id: bundle.target.id, body: content.body });
+            }`, { id: target.id, body });
             comment = result.addDiscussionComment?.comment;
         }
     } catch (error) {
         throw new Error("Publication outcome is uncertain. The intent is retained; inspect GitHub before any manual recovery.", { cause: error });
     }
     requireValue(comment && typeof comment.id === "string" && typeof comment.url === "string" &&
-        comment.url.startsWith(bundle.target.url + "#") &&
-        typeof comment.body === "string" && lf(comment.body) === content.body,
+        comment.url.startsWith(target.url + "#") && typeof comment.body === "string" && lf(comment.body) === body &&
+        (!existing || (comment.id === existing.id && comment.url === existing.url)),
     "GitHub did not confirm the exact comment. The intent is retained; inspect before retrying.");
-    return { posted: true, id: comment.id, url: comment.url, bodyHash: content.bodyHash };
+    return comment;
+}
+
+function statusKey(data) {
+    return digest({ kind: data.kind, number: data.number, commentId: data.commentId });
+}
+
+function validStatusData(data) {
+    return data !== null && typeof data === "object" && !Array.isArray(data) &&
+        equal(Object.keys(data).sort(), ["version", "kind", "number", "commentId", "runId", "attempt", "started",
+            "action", "outcome", "result"].sort()) &&
+        data.version === 1 && ["issue", "discussion"].includes(data.kind) &&
+        ["number", "commentId", "runId", "attempt", "started"].every(key => Number.isSafeInteger(data[key]) && data[key] > 0) &&
+        ["draft", "reply"].includes(data.action) && STATUS_OUTCOMES.includes(data.outcome) &&
+        (["ready", "input", "outdated", "unavailable"].includes(data.outcome) ? data.action === "draft" : true) &&
+        (["unconfirmed", "replied"].includes(data.outcome) ? data.action === "reply" : true) &&
+        (data.outcome === "replied" ? typeof data.result === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(data.result) : data.result === "");
+}
+
+export function renderStatusReceipt(data) {
+    requireValue(validStatusData(data), "Invalid completion-receipt metadata.");
+    const targetUrl = `${REPO_URL}/${data.kind === "issue" ? "issues" : "discussions"}/${data.number}`;
+    const fragment = data.kind === "issue" ? "issuecomment" : "discussioncomment";
+    const messages = {
+        ready: "Draft and work-acceptance preview prepared for owner review.",
+        input: "Draft prepared; owner or maintainer input is still needed before work acceptance.",
+        outdated: "The draft is no longer current. Review the thread and request a fresh draft.",
+        unavailable: "The run finished without an available, verified review artifact. Maintainer inspection is needed.",
+        failed: "The request failed. Check the run and thread before retrying.",
+        cancelled: "The request was cancelled or timed out. Check the run and thread before retrying.",
+        invalid: "The request was rejected. Post only /typechat draft or /typechat reply in a new comment.",
+        unconfirmed: "A reply was not confirmed. Inspect the run and thread before retrying; do not assume nothing was posted.",
+        replied: "The requested reply is available.",
+    };
+    const sections = [
+        `**TypeChat: ${messages[data.outcome]}**`,
+        `[Owner request](${targetUrl}#${fragment}-${data.commentId}) | ` +
+            `[Run${data.action === "draft" ? " and preview" : ""}](${REPO_URL}/actions/runs/${data.runId}/attempts/${data.attempt})`,
+    ];
+    if (data.result) {
+        sections.push(`[Existing reply](${targetUrl}#${fragment}-${data.result})`);
+    }
+    sections.push("*Operational receipt only. This comment does not publish draft text, accept work, " +
+        "authorize implementation, or approve merging.*");
+    sections.push(`<!-- typechat-status:v1:${statusKey(data)}:${data.kind}:${data.number}:${data.commentId}:` +
+        `${data.runId}:${data.attempt}:${data.started}:${data.action}:${data.outcome}:${data.result} -->`);
+    return sections.join("\n\n") + "\n";
+}
+
+function statusReceiptData(comment) {
+    // A marker alone must never hide arbitrary discussion text from the snapshot.
+    if (comment.author?.type !== "Bot" || comment.author.id !== ACTIONS_BOT_ID || comment.parentId !== null ||
+        typeof comment.body !== "string" || comment.body.length > MAX_COMMENT_BYTES) {
+        return null;
+    }
+    const match = /<!-- typechat-status:v1:([a-f0-9]{64}):(issue|discussion):([0-9]+):([0-9]+):([0-9]+):([0-9]+):([0-9]+):(draft|reply):([a-z]+):([A-Za-z0-9_-]*) -->\n?$/.exec(lf(comment.body));
+    if (!match) {
+        return null;
+    }
+    const data = {
+        version: 1, kind: match[2], number: Number(match[3]), commentId: Number(match[4]),
+        runId: Number(match[5]), attempt: Number(match[6]), started: Number(match[7]),
+        action: match[8], outcome: match[9], result: match[10],
+    };
+    const targetUrl = `${REPO_URL}/${data.kind === "issue" ? "issues" : "discussions"}/${data.number}`;
+    return validStatusData(data) && match[1] === statusKey(data) &&
+        comment.url?.startsWith(targetUrl + "#") && lf(comment.body) === renderStatusReceipt(data) ? data : null;
+}
+
+export function parseStatusRunTitle(title) {
+    const match = /^TypeChat response: (issue_comment|discussion_comment) #([1-9][0-9]*) \/ comment ([1-9][0-9]*)$/.exec(
+        string(title, "Missing source run title.", 256));
+    if (!match) {
+        requireValue(!title.startsWith("TypeChat response:"), "Malformed source owner-request binding.");
+        return null;
+    }
+    return {
+        kind: match[1] === "issue_comment" ? "issue" : "discussion",
+        number: integer(Number(match[2]), "Invalid receipt target number."),
+        commentId: integer(Number(match[3]), "Invalid receipt request ID."),
+    };
+}
+
+export async function identifyStatus(github, context, env, clock = () => new Date()) {
+    const event = object(context.payload, "Missing completion event.");
+    requireValue(context.eventName === "workflow_run" && event.action === "completed" &&
+        event.repository?.id === REPOSITORY.id && event.repository.full_name === REPO_NAME &&
+        event.repository.private === false, "Only completion events in the public target repository can authorize a receipt.");
+    const branch = identifier(event.repository.default_branch, "Missing default branch.");
+    requireValue(env.GITHUB_WORKFLOW_REF === `${REPO_NAME}/${STATUS_WORKFLOW}@refs/heads/${branch}` &&
+        env.GITHUB_REF === `refs/heads/${branch}` && SHA1.test(context.sha),
+    "Completion receipts require trusted default-branch code.");
+    const attempt = integer(Number(env.GITHUB_RUN_ATTEMPT), "Invalid receipt workflow attempt.");
+    requireValue(attempt === 1 || env.GITHUB_TRIGGERING_ACTOR === OWNER.login,
+        "Only the owner can rerun a completion-receipt job.");
+    const runId = integer(event.workflow_run?.id, "Missing source workflow run.");
+    const sourceAttempt = integer(event.workflow_run?.run_attempt, "Missing source completion attempt.");
+    const run = (await github.rest.actions.getWorkflowRun({ ...API_REPO, run_id: runId })).data;
+    const workflow = (await github.rest.actions.getWorkflow({ ...API_REPO, workflow_id: path.posix.basename(DRAFT_WORKFLOW) })).data;
+    requireValue(run?.id === runId && run.workflow_id === workflow.id &&
+        [DRAFT_WORKFLOW, `${DRAFT_WORKFLOW}@refs/heads/${branch}`].includes(run.path) &&
+        run.repository?.id === REPOSITORY.id && run.head_repository?.id === REPOSITORY.id &&
+        run.head_branch === branch && SHA1.test(run.head_sha) &&
+        run.actor?.type === "User" && run.actor.id === OWNER.id &&
+        run.triggering_actor?.type === "User" && run.triggering_actor.id === OWNER.id &&
+        ["issue_comment", "discussion_comment"].includes(run.event),
+    "The source run is not an authorized owner request on the default branch.");
+    integer(run.run_attempt, "Missing source attempt.");
+    if (run.status !== "completed" || run.run_attempt !== sourceAttempt) {
+        return { eligible: false, reason: "A newer source attempt is pending or this completion event is stale." };
+    }
+    const started = Date.parse(timestamp(run.run_started_at, "Missing source start time."));
+    const created = Date.parse(timestamp(run.created_at, "Missing source creation time."));
+    const now = clock().getTime();
+    requireValue(created <= started && now >= started && now < started + MAX_AGE_MS, "The completion event is stale or has invalid timing.");
+    requireValue(["success", "failure", "cancelled", "timed_out", "action_required", "neutral", "skipped", "stale", "startup_failure"]
+        .includes(run.conclusion), "Missing or unsupported source conclusion.");
+    const locator = parseStatusRunTitle(run.display_title);
+    if (!locator || run.conclusion === "skipped") {
+        return { eligible: false, reason: "This ignored or older run has no supported owner-request binding." };
+    }
+    requireValue(run.event === `${locator.kind}_comment` && env.TYPECHAT_STATUS_KIND === locator.kind,
+        "The receipt job does not have authority for this target kind.");
+    const controls = await currentControls(github);
+    const executing = await readControls(github, context.sha);
+    requireValue(equal(executing.fingerprints, controls.fingerprints), "Receipt code or policy changed while queued.");
+    const targetResult = await github.graphql(`query DiscussionStatusTarget($owner:String!,$repo:String!,$number:Int!) {
+      repository(owner:$owner,name:$repo) {
+        nameWithOwner isPrivate
+        target:${locator.kind === "issue" ? "issue" : "discussion"}(number:$number) { id number url }
+      }
+    }`, { ...API_REPO, number: locator.number });
+    validateRepository(targetResult.repository);
+    const item = object(targetResult.repository.target, "The receipt target is unavailable.");
+    const target = {
+        kind: locator.kind, number: locator.number, id: identifier(item.id, "Missing receipt target ID."),
+        url: `${REPO_URL}/${locator.kind === "issue" ? "issues" : "discussions"}/${locator.number}`,
+    };
+    requireValue(item.number === target.number && item.url === target.url, "Unexpected receipt target.");
+    const thread = await readThread(github, target);
+    const commandUrl = `${target.url}#${target.kind === "issue" ? "issuecomment" : "discussioncomment"}-${locator.commentId}`;
+    const matches = thread.comments.filter(comment => comment.url === commandUrl);
+    requireValue(matches.length <= 1, "Duplicate owner-request metadata.");
+    const comment = matches[0];
+    if (!comment || comment.author?.type !== "User" || comment.author.login !== OWNER.login ||
+        comment.minimized || comment.lastEditedAt !== null || thread.target.state !== "OPEN" || thread.target.locked) {
+        return { eligible: false, reason: "The owner request is unavailable, edited, withdrawn, closed, or locked; no receipt was posted." };
+    }
+    requireValue(Date.parse(comment.createdAt) <= created, "The source run predates this owner command.");
+    const prefix = /^\/typechat (draft|reply)/.exec(comment.body);
+    if (!prefix) {
+        return { eligible: false, reason: "The source comment is not a discussion draft/reply request." };
+    }
+    const valid = comment.body.length <= 2000 && /^\/typechat (draft|reply)\s*$/.test(comment.body);
+    const request = {
+        target, commentId: comment.id, commandBody: comment.body, commandCreatedAt: comment.createdAt,
+        command: valid ? parseCommand(comment.body) : null,
+    };
+    await verifyOwnerCommand(github, request);
+    const data = {
+        version: 1, ...locator, runId: run.id, attempt: run.run_attempt, started,
+        action: prefix[1], outcome: "failed", result: "",
+    };
+    let artifact = null;
+    let existing = null;
+    if (!valid) {
+        data.outcome = "invalid";
+    } else if (request.command.action === "reply" && (existing = existingReply(thread, request))) {
+        data.outcome = "replied";
+        const result = new RegExp(`^${target.url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}#(?:issuecomment|discussioncomment)-([A-Za-z0-9_-]{1,128})$`).exec(existing.url);
+        requireValue(result, "The existing reply has an invalid target URL.");
+        data.result = result[1];
+    } else if (["cancelled", "timed_out"].includes(run.conclusion)) {
+        data.outcome = "cancelled";
+    } else if (request.command.action === "reply") {
+        data.outcome = "unconfirmed";
+    } else if (run.conclusion === "success") {
+        const produced = await readControls(github, run.head_sha);
+        if (!equal(produced.fingerprints, controls.fingerprints)) {
+            data.outcome = "outdated";
+        } else {
+            const name = `${DRAFT_ARTIFACT_PREFIX}${run.run_attempt}`;
+            const response = (await github.rest.actions.listWorkflowRunArtifacts({
+                ...API_REPO, run_id: run.id, name, per_page: 2, page: 1,
+            })).data;
+            requireValue(response && Array.isArray(response.artifacts) &&
+                Number.isSafeInteger(response.total_count) && response.total_count >= 0 &&
+                response.total_count <= 1 && response.artifacts.length === response.total_count,
+            "The sealed-output listing is incomplete or ambiguous.");
+            artifact = response.artifacts[0] ?? null;
+            data.outcome = "unavailable";
+            if (artifact) {
+                integer(artifact.id, "Missing sealed artifact ID.");
+                requireValue(artifact.name === name && artifact.workflow_run?.id === run.id &&
+                    artifact.workflow_run.repository_id === REPOSITORY.id &&
+                    artifact.workflow_run.head_repository_id === REPOSITORY.id &&
+                    artifact.workflow_run.head_sha === run.head_sha &&
+                    Number.isSafeInteger(artifact.size_in_bytes) && artifact.size_in_bytes > 0 &&
+                    artifact.size_in_bytes <= MAX_BUNDLE_BYTES * 2,
+                "The receipt artifact does not belong to the successful source run.");
+                timestamp(artifact.created_at, "Missing sealed artifact creation time.");
+                timestamp(artifact.expires_at, "Missing sealed artifact expiry.");
+                requireValue(typeof artifact.expired === "boolean" &&
+                    Date.parse(artifact.created_at) >= created && Date.parse(artifact.created_at) <= now,
+                "The sealed artifact has invalid availability or timing metadata.");
+                if (artifact.expired !== false || now >= Math.min(Date.parse(artifact.expires_at), Date.parse(artifact.created_at) + MAX_AGE_MS)) {
+                    artifact = null;
+                }
+            }
+        }
+    }
+    return { eligible: true, request, thread, data, run, artifact, controls, existing, validUntil: started + MAX_AGE_MS };
+}
+
+async function statusPlan(github, context, env, bundle, clock) {
+    const status = await identifyStatus(github, context, env, clock);
+    if (!status.eligible) {
+        return { shouldWrite: false, reason: status.reason };
+    }
+    if (status.artifact) {
+        validateSealedDraft(bundle, status);
+        requireValue(equal(bundle.request, originalRequest(status.request)), "The sealed output belongs to another owner command.");
+        status.data.outcome = snapshotHash(status.thread) !== bundle.snapshotHash ||
+            await changedReference(github, bundle.draft.pullRequests) !== null ? "outdated" :
+            bundle.acceptance ? "ready" : "input";
+    }
+    const key = statusKey(status.data);
+    const prefix = `<!-- typechat-status:v1:${key}:`;
+    const matches = status.thread.comments.filter(comment => comment.parentId === null &&
+        comment.author?.type === "Bot" && comment.author.id === ACTIONS_BOT_ID && comment.body.includes(prefix));
+    requireValue(matches.length <= 1, "More than one completion receipt exists; maintainer inspection is required.");
+    const existing = matches[0] ?? null;
+    if (existing) {
+        const prior = statusReceiptData(existing);
+        requireValue(prior, "The completion receipt was edited or is invalid; it will not be overwritten.");
+        if (prior.started > status.data.started ||
+            (prior.runId === status.data.runId && prior.attempt > status.data.attempt)) {
+            return { shouldWrite: false, reason: "A newer completion receipt already exists.", url: existing.url };
+        }
+    } else if (status.existing) {
+        return { shouldWrite: false, reason: "The existing public reply is already the completion message.", url: status.existing.url };
+    }
+    const body = renderStatusReceipt(status.data);
+    if (existing && existing.body === body) {
+        return { shouldWrite: false, reason: "This completion outcome is already recorded.", url: existing.url };
+    }
+    const age = clock().getTime() - Date.parse(status.request.commandCreatedAt);
+    requireValue(age >= 0 && age < MAX_AGE_MS, "An old command needs a new request; its receipt will not be created or updated.");
+    const previousHash = existing ? digest(existing.body) : null;
+    // Lock the observed receipt, not the source attempt, until that mutation is visible.
+    const intentName = `${STATUS_INTENT_PREFIX}${key}${existing ? `-${previousHash}` : ""}`;
+    return {
+        shouldWrite: true, ...status, existing, body, bodyHash: digest(body), intentName,
+        previousHash,
+    };
+}
+
+export async function checkStatus(github, context, env, bundle, clock = () => new Date()) {
+    const plan = await statusPlan(github, context, env, bundle, clock);
+    if (!plan.shouldWrite) {
+        return plan;
+    }
+    requireValue(!await priorIntent(github, plan.intentName),
+        "A previous status-write intent exists without a confirmed result. Inspect the run before retrying.");
+    return {
+        shouldWrite: true, intentName: plan.intentName, outcome: plan.data.outcome,
+        intent: {
+            version: 1, target: plan.request.target, commandId: plan.request.commentId,
+            sourceRunId: plan.run.id, sourceAttempt: plan.run.run_attempt,
+            runId: integer(Number(context.runId), "Invalid receipt run ID."),
+            attempt: integer(Number(env.GITHUB_RUN_ATTEMPT), "Invalid receipt attempt."),
+            operation: plan.existing ? "update" : "create",
+            commentId: plan.existing?.id ?? null, previousHash: plan.previousHash, bodyHash: plan.bodyHash,
+        },
+    };
+}
+
+export async function publishStatus(github, context, env, bundle, intentId, clock = () => new Date()) {
+    const plan = await statusPlan(github, context, env, bundle, clock);
+    if (!plan.shouldWrite) {
+        return { posted: false, ...plan };
+    }
+    const intent = (await github.rest.actions.getArtifact({ ...API_REPO, artifact_id: integer(Number(intentId), "Missing durable status intent.") })).data;
+    requireValue(intent.id === Number(intentId) && intent.name === plan.intentName &&
+        intent.workflow_run?.id === Number(context.runId) && intent.workflow_run.repository_id === REPOSITORY.id &&
+        intent.workflow_run.head_sha === context.sha && intent.expired === false &&
+        Date.parse(intent.expires_at) >= plan.validUntil, "The status-write intent is missing, stale, or insufficiently retained.");
+    requireValue(!await priorIntent(github, plan.intentName, intent.id), "A previous status-write attempt exists; no blind retry is allowed.");
+    const latest = await statusPlan(github, context, env, bundle, clock);
+    if (!latest.shouldWrite) {
+        return { posted: false, ...latest };
+    }
+    requireValue(latest.intentName === plan.intentName && latest.bodyHash === plan.bodyHash &&
+        latest.existing?.id === plan.existing?.id && latest.previousHash === plan.previousHash,
+    "The completion outcome changed during the write handoff; inspect the run before recovery.");
+    await verifyOwnerCommand(github, latest.request);
+    const comment = await writeDiscussionComment(github, latest.request.target, latest.body, latest.existing);
+    return {
+        posted: true, updated: latest.existing !== null, id: comment.id, url: comment.url,
+        bodyHash: latest.bodyHash, outcome: latest.data.outcome,
+    };
 }
 
 export async function draftSummary(core, bundle, artifactId, artifactUrl) {

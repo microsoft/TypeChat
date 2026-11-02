@@ -1,7 +1,7 @@
 ---
 name: TypeChat discussion response
 description: Prepare checked discussion responses and work proposals for separate owner approval.
-run-name: "TypeChat discussion response"
+run-name: "TypeChat response: ${{ github.event_name }} #${{ github.event.issue.number || github.event.discussion.number }} / comment ${{ github.event.comment.id }}"
 on:
   issue_comment:
     types: [created]
