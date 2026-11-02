@@ -169,8 +169,40 @@ We defined `Sentiment` as a `@dataclass` so we could have all of the convenience
 If we declared `Sentiment` as a `TypedDict`, TypeChat would provide us with a `dict`.
 That would mean that to access the value of `sentiment`, we would have to write `value["sentiment"]`.
 
-Note that while we used [the built-in `typing` module](https://docs.python.org/3/library/typing.html), [`typing_extensions`](https://pypi.org/project/typing-extensions/) is supported as well.
-TypeChat also understands constructs like `Annotated` and `Doc` to add comments to individual attributes.
+Both [the built-in `typing` module](https://docs.python.org/3/library/typing.html) and [`typing_extensions`](https://pypi.org/project/typing-extensions/) are supported.
+On Python 3.11, however, import `TypedDict` from `typing_extensions`: Pydantic requires it instead of `typing.TypedDict` on Python versions earlier than 3.12.
+`Annotated` and `Literal` can still be imported from `typing`.
+
+Here is a complete `TypedDict` version of `schema.py`, with a `Doc` description for the field:
+
+```py
+from typing import Annotated, Literal
+from typing_extensions import Doc, TypedDict
+
+class Sentiment(TypedDict):
+    sentiment: Annotated[
+        Literal["negative", "neutral", "positive"],
+        Doc("The sentiment of the user input."),
+    ]
+```
+
+Or use a plain string for the same field description:
+
+```py
+from typing import Annotated, Literal
+from typing_extensions import TypedDict
+
+class Sentiment(TypedDict):
+    sentiment: Annotated[
+        Literal["negative", "neutral", "positive"],
+        "The sentiment of the user input.",
+    ]
+```
+
+Either `Doc` or a plain string in `Annotated` supplies documentation to the generated TypeScript schema.
+Trailing inline comments on directly declared `TypedDict` and dataclass fields also supply schema documentation when their Python source is available.
+Explicit `Annotated` documentation takes precedence over inline comments, even when that explicit documentation is empty.
+If source is unavailable, conversion still uses the type annotations and explicit documentation, but cannot include inline comments.
 
 [`typing.NewType`](https://docs.python.org/3/library/typing.html#typing.NewType) (and `typing_extensions.NewType`) is also supported.
 TypeChat converts a NewType through its `__supertype__`, so the TypeScript schema uses the underlying JSON type: `NewType("UserId", str)` becomes `string`, and a NewType built on another NewType follows the chain.
