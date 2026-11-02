@@ -8,7 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { ACTIONS_BOT_ID, OWNER, REPOSITORY, digest, renderAcceptance } from "../discussion-draft.mjs";
+import { ACTIONS_BOT_ID, OWNER, REPOSITORY, digest, readJson, renderAcceptance } from "../discussion-draft.mjs";
 import {
     BUILD_CONTROL_PATHS, BUILD_LIMITS, BUILD_WORKFLOW, applyCandidateFiles, authorizeBuild, blobHash, buildBranch,
     buildCommand, checkBuildPublication, collectCandidate, findBuildArtifact, freezeBuild, parseAcceptedWork,
@@ -16,7 +16,7 @@ import {
     validateCompletion, verifyBuildArtifact, verifyBuildAuthorization, verifyBuildStart,
 } from "../issue-implementation.mjs";
 import { IMPLEMENTATION_APP, IMPLEMENTATION_PERMISSIONS, validateAppGrant, withImplementationApp } from "../implementation-app.mjs";
-import { TEST_IMAGE, sandboxArguments, sandboxDockerfile } from "../implementation-sandbox.mjs";
+import { TEST_IMAGE, sandboxArguments, sandboxDockerfile, writeSandboxInputs } from "../implementation-sandbox.mjs";
 
 const SHA = "a".repeat(40);
 const POLICY = "b".repeat(40);
@@ -452,6 +452,27 @@ test("test containers expose only read-only input data, no network, host workspa
     assert.ok(dockerfile.includes("hatch env create"));
     assert.ok(!dockerfile.includes("TOKEN"));
     assert.deepEqual(requiredChecks({ files: [{ path: "README.md" }] }), ["git diff --check"]);
+});
+
+test("sandbox inputs retain the strict single-file artifact layout", t => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-sandbox-inputs-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const prepared = { source: { commit: SHA } }, candidate = { baseSha: SHA, files: [] };
+    writeSandboxInputs(directory, prepared, candidate);
+    assert.deepEqual(readJson(path.join(directory, "context"), "context.json", 1048576), prepared);
+    assert.deepEqual(readJson(path.join(directory, "candidate"), "candidate.json", 65536), candidate);
+    fs.writeFileSync(path.join(directory, "candidate", "unexpected.json"), "{}");
+    assert.throws(() => readJson(path.join(directory, "candidate"), "candidate.json", 65536), /Unexpected files/);
+});
+
+test("candidate byte bounds cover the actual formatted artifact, not just compact JSON", async () => {
+    const f = await preparedFixture();
+    f.candidate.files[0].content = "";
+    const overhead = Buffer.byteLength(JSON.stringify(f.candidate));
+    f.candidate.files[0].content = "x".repeat(BUILD_LIMITS.candidateBytes - overhead - 1);
+    assert.ok(Buffer.byteLength(JSON.stringify(f.candidate)) < BUILD_LIMITS.candidateBytes);
+    assert.ok(Buffer.byteLength(JSON.stringify(f.candidate, null, 2) + "\n") > BUILD_LIMITS.candidateBytes);
+    assert.throws(() => validateCandidate(f.candidate, f.prepared, { truncated: false, tree: f.state.baseline }), /patch bounds/);
 });
 
 const keyPair = generateKeyPairSync("rsa", { modulusLength: 2048 });

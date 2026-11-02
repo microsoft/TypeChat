@@ -42,6 +42,11 @@ export function sandboxArguments(image, container, inputDirectory) {
         "--mount", `type=bind,source=${inputDirectory},target=/input,readonly`, image];
 }
 
+export function writeSandboxInputs(directory, prepared, candidate) {
+    writeJson(path.join(directory, "context"), "context.json", prepared);
+    writeJson(path.join(directory, "candidate"), "candidate.json", candidate);
+}
+
 export function runIsolatedChecks(prepared, candidate, binding, repository, directory) {
     requireValue(fs.readFileSync(path.join(repository, ".nvmrc"), "utf8").trim() === "24.22.1",
         "The pinned test image must match the reviewed Node runtime.");
@@ -50,8 +55,7 @@ export function runIsolatedChecks(prepared, candidate, binding, repository, dire
     const inputs = path.join(root, "input");
     fs.mkdirSync(checkout);
     fs.mkdirSync(inputs);
-    writeJson(inputs, "candidate.json", candidate);
-    writeJson(inputs, "context.json", prepared);
+    writeSandboxInputs(inputs, prepared, candidate);
     const archive = execFileSync("git", ["-C", repository, "archive", "--format=tar", prepared.source.commit,
         "README.md", ".nvmrc", "typescript", "python", "site", "tools/discussion-draft.mjs",
         "tools/issue-implementation.mjs", "tools/implementation-app.mjs", "tools/implementation-sandbox.mjs"],
@@ -99,8 +103,8 @@ export function runIsolatedChecks(prepared, candidate, binding, repository, dire
 function inside() {
     requireValue(!Object.keys(process.env).some(key => /^(?:GITHUB_TOKEN|GH_TOKEN|DEPENDABOT_APP_PRIVATE_KEY|DEPENDABOT_APP_ID|TYPECHAT_APP_PRIVATE_KEY|TYPECHAT_APP_ID|ACTIONS_RUNTIME_TOKEN|COPILOT_GITHUB_TOKEN)$/.test(key)),
         "Repository, artifact, or App credentials must not enter the test container.");
-    const candidate = readJson("/input", "candidate.json", BUILD_LIMITS.candidateBytes);
-    const prepared = readJson("/input", "context.json", MAX_CONTEXT_BYTES);
+    const candidate = readJson("/input/candidate", "candidate.json", BUILD_LIMITS.candidateBytes);
+    const prepared = readJson("/input/context", "context.json", MAX_CONTEXT_BYTES);
     requireValue(candidate.baseSha === prepared.source.commit, "The sandbox received the wrong patch origin.");
     applyCandidateFiles(candidate, "/work");
     for (const command of requiredChecks(candidate)) {

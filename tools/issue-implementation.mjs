@@ -370,7 +370,7 @@ export function freezeBuild(plan, app, clock = () => new Date()) {
         app, limits: { ...BUILD_LIMITS }, createdAt: plan.createdAt,
         expiresAt: new Date(Date.parse(plan.request.createdAt) + BUILD_LIMITS.commandHours * 3600000).toISOString(),
     };
-    requireValue(Buffer.byteLength(JSON.stringify(prepared)) <= MAX_CONTEXT_BYTES, "The frozen implementation context exceeds 1 MiB.");
+    requireValue(Buffer.byteLength(JSON.stringify(prepared, null, 2) + "\n") <= MAX_CONTEXT_BYTES, "The frozen implementation context exceeds 1 MiB.");
     return prepared;
 }
 
@@ -439,7 +439,7 @@ export function validateCandidate(candidate, prepared, tree) {
     requireValue(Array.isArray(candidate.limitations) && candidate.limitations.length <= 8, "Invalid patch limitations.");
     candidate.limitations.forEach(value => text(value, 800, "Invalid patch limitation."));
     requireValue(Array.isArray(candidate.files) && candidate.files.length > 0 && candidate.files.length <= BUILD_LIMITS.maxFiles &&
-        Buffer.byteLength(JSON.stringify(candidate)) <= BUILD_LIMITS.candidateBytes, "The candidate exceeds the pilot's patch bounds.");
+        Buffer.byteLength(JSON.stringify(candidate, null, 2) + "\n") <= BUILD_LIMITS.candidateBytes, "The candidate exceeds the pilot's patch bounds.");
     requireValue(tree?.truncated === false && Array.isArray(tree.tree), "The fixed source tree is incomplete.");
     const baseline = new Map(tree.tree.filter(entry => entry.type !== "tree").map(entry => [entry.path, entry]));
     const folded = new Map([...baseline.keys()].map(file => [file.toLowerCase(), file]));
