@@ -16,7 +16,7 @@ const ci = parse(fs.readFileSync(new URL("agent-workflow-check.yml", workflows),
 
 test("coding is inactive by default and only an owner Issue comment can activate inference", () => {
     assert.deepEqual(Object.keys(source.on.workflow_dispatch.inputs), ["issue", "acceptance"]);
-    assert.equal(source.on.reaction, "none");
+    assert.equal(source.on.reaction, "rocket");
     assert.equal(source.on["status-comment"], false);
     assert.match(source.if, /TYPECHAT_IMPLEMENTATION_ENABLED == 'true'/);
     assert.match(source.if, /!github\.event\.issue\.pull_request/);
@@ -91,15 +91,23 @@ test("failed prerequisites cannot authorize detector inference", () => {
     assert.equal(job.env.COPILOT_GITHUB_TOKEN, undefined);
 });
 
-test("App secrets exist only in trusted preflight and publication steps, never coding, detection, or generated checks", () => {
+test("only trusted activation can acknowledge commands; App secrets remain confined to preflight and publication", () => {
     assert.deepEqual(compiled.permissions, {});
     for (const [id, job] of Object.entries(compiled.jobs)) {
         const serialized = JSON.stringify(job);
         if (!["prepare", "publish"].includes(id)) assert.ok(!serialized.includes("DEPENDABOT_APP_PRIVATE_KEY"), id);
         for (const [permission, value] of Object.entries(job.permissions ?? {})) {
-            assert.ok(value === "read" || permission === "copilot-requests" && ["agent", "detection"].includes(id) && value === "write",
+            const reactionPermission = id === "activation" && ["issues", "pull-requests"].includes(permission);
+            assert.ok(value === "read" || value === "write" &&
+                (reactionPermission || permission === "copilot-requests" && ["agent", "detection"].includes(id)),
                 `${id} must not receive repository-write authority: ${permission}:${value}`);
         }
+        assert.deepEqual(Object.entries(compiled.jobs.activation.permissions).filter(([, value]) => value === "write"),
+            [["issues", "write"], ["pull-requests", "write"]]);
+        const reaction = compiled.jobs.activation.steps.find(step => step.id === "react");
+        assert.equal(reaction.name, "Add rocket reaction for immediate feedback");
+        assert.ok(!reaction.if.includes("workflow_dispatch"));
+        assert.equal(reaction.env.GH_AW_REACTION, "rocket");
         for (const step of job.steps ?? []) {
             if (step.uses?.startsWith("actions/checkout@")) {
                 assert.equal(step.with["persist-credentials"], false, `${id} must not retain Git credentials`);

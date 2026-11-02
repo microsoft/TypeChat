@@ -109,6 +109,7 @@ function setup(kind = "issue") {
         },
         historyRequests: [], posts: [], references: new Map(), comment,
         postError: null, persistBeforeError: false, onHistory: null,
+        reactions: new Set(), reactionError: null, reactionResponse: null,
     };
     function event(action = "draft", body = "/typechat draft", commentId = "request", runId = 100, attempt = 1) {
         const currentComment = comment(commentId, body);
@@ -198,6 +199,21 @@ function setup(kind = "issue") {
                 assert.equal(variables.id, target.id);
                 assert.ok(!query.includes("replyToId"), "Discussion publication is top-level");
                 return { addDiscussionComment: { comment: await post(variables.body) } };
+            }
+            if (query.includes("DiscussionPilotAcceptReaction")) {
+                const command = comments.get(variables.id);
+                assert.equal(command?.author.login, OWNER.login);
+                assert.match(command.body, /^\/typechat accept /);
+                assert.match(query, /content:THUMBS_UP/);
+                assert.ok(thread.comments.some(item => item.author.id === ACTIONS_BOT_ID &&
+                    item.body.startsWith("## Accepted work\n")), "A reaction must follow a confirmed acceptance");
+                if (state.reactionError) {
+                    throw state.reactionError;
+                }
+                state.reactions.add(variables.id);
+                return state.reactionResponse ?? {
+                    addReaction: { subject: { id: variables.id }, reaction: { content: "THUMBS_UP" } },
+                };
             }
             throw new Error("Unexpected GraphQL operation in the test.");
         },
@@ -965,18 +981,22 @@ for (const kind of ["issue", "discussion"]) {
         assert.ok(bundle.acceptance.body.includes(`${REPO_URL}/blob/${SHA}/GOALS.md`));
         assert.equal(fixture.state.posts.length, 0, "A sealed proposal is not acceptance");
         const id = await reserve(fixture);
+        assert.equal(fixture.state.reactions.size, 0, "Approval and reservation alone are not confirmed acceptance");
         assert.equal(fixture.state.artifacts.get(id).name, `${INTENT_PREFIX}accept-500`);
         const result = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, bundle, id, clock);
         assert.equal(result.posted, true);
         assert.equal(result.bodyHash, bundle.acceptance.bodyHash);
         assert.deepEqual(fixture.state.posts, [bundle.acceptance.body]);
+        assert.deepEqual([...fixture.state.reactions], ["approval"]);
         const repeated = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, bundle, id, clock);
         assert.equal(repeated.posted, false);
         assert.equal(repeated.bodyHash, bundle.acceptance.bodyHash);
+        assert.deepEqual([...fixture.state.reactions], ["approval"]);
         const anotherApproval = fixture.event("accept", `/typechat accept 500:${bundle.acceptance.bodyHash}`, "another-approval", 201);
         const checked = await checkPublication(fixture.github, anotherApproval.context, anotherApproval.env, bundle, clock);
         assert.deepEqual(checked, { shouldPost: false, url: result.url });
         assert.equal(fixture.state.posts.length, 1);
+        assert.deepEqual([...fixture.state.reactions], ["approval", "another-approval"]);
     });
 
     test(`${kind}: publishing a draft with a proposal still does not accept work`, async () => {
@@ -984,6 +1004,7 @@ for (const kind of ["issue", "discussion"]) {
         const id = await reserve(fixture);
         await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock);
         assert.deepEqual(fixture.state.posts, [fixture.bundle.body]);
+        assert.equal(fixture.state.reactions.size, 0);
         assert.ok(!fixture.state.posts[0].includes("typechat-work-acceptance:"));
         const acceptance = fixture.event("accept", `/typechat accept 500:${fixture.bundle.acceptance.bodyHash}`, "acceptance", 201);
         await assert.rejects(() => checkPublication(fixture.github, acceptance.context, acceptance.env, fixture.bundle, clock),
@@ -991,6 +1012,67 @@ for (const kind of ["issue", "discussion"]) {
         assert.equal(fixture.state.posts.length, 1, "A posted response changes the evidence; accepting work needs a fresh draft");
     });
 }
+
+test("acceptance reaction failures recover without duplicating or editing accepted work", async () => {
+    for (const kind of ["issue", "discussion"]) {
+        const fixture = await readyAcceptance(kind);
+        const id = await reserve(fixture);
+        fixture.state.reactionError = new Error("Reaction service unavailable");
+        await assert.rejects(() => publishDraft(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, id, clock), /Acceptance is recorded, but its confirmation reaction failed/);
+        assert.deepEqual(fixture.state.posts, [fixture.bundle.acceptance.body]);
+        assert.equal(fixture.state.reactions.size, 0);
+        const accepted = fixture.state.thread.comments.find(comment => comment.author.id === ACTIONS_BOT_ID);
+        const before = structuredClone(accepted);
+        fixture.state.reactionError = null;
+        const checked = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, clock);
+        assert.deepEqual(checked, { shouldPost: false, url: accepted.url });
+        assert.deepEqual(accepted, before);
+        assert.deepEqual([...fixture.state.reactions], ["approval"]);
+        const repeated = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, id, clock);
+        assert.equal(repeated.posted, false);
+        assert.equal(fixture.state.posts.length, 1);
+        assert.equal(fixture.state.reactions.size, 1);
+    }
+});
+
+test("acceptance confirmation verifies the reaction target and content", async () => {
+    for (const response of [
+        {},
+        { addReaction: { subject: { id: "another-comment" }, reaction: { content: "THUMBS_UP" } } },
+        { addReaction: { subject: { id: "approval" }, reaction: { content: "ROCKET" } } },
+    ]) {
+        const fixture = await readyAcceptance();
+        const id = await reserve(fixture);
+        fixture.state.reactionResponse = response;
+        await assert.rejects(() => publishDraft(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, id, clock), /Acceptance is recorded, but its confirmation reaction failed/);
+        assert.equal(fixture.state.posts.length, 1);
+        fixture.state.reactionResponse = null;
+        assert.equal((await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, clock)).shouldPost, false);
+        assert.equal(fixture.state.posts.length, 1);
+    }
+});
+
+test("an acceptance confirmed during the final write recheck acknowledges without another post", async () => {
+    const fixture = await readyAcceptance();
+    const id = await reserve(fixture);
+    fixture.state.onHistory = () => {
+        fixture.state.onHistory = null;
+        const existing = fixture.state.comment("concurrent-record", fixture.bundle.acceptance.body, "github-actions", "Bot");
+        existing.url = `${fixture.state.target.url}#issuecomment-10001`;
+        fixture.state.thread.comments.push(existing);
+        fixture.state.comments.set(existing.id, existing);
+    };
+    const result = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env,
+        fixture.bundle, id, clock);
+    assert.equal(result.posted, false);
+    assert.equal(fixture.state.posts.length, 0);
+    assert.deepEqual([...fixture.state.reactions], ["approval"]);
+});
 
 test("response and acceptance approval hashes cannot be exchanged", async () => {
     for (const action of ["publish", "accept"]) {
@@ -1000,6 +1082,7 @@ test("response and acceptance approval hashes cannot be exchanged", async () => 
         await assert.rejects(() => checkPublication(fixture.github, approval.context, approval.env, fixture.bundle, clock),
             /exact rendered draft/);
         assert.equal(fixture.state.posts.length, 0);
+        assert.equal(fixture.state.reactions.size, 0);
     }
 });
 
@@ -1035,6 +1118,7 @@ test("acceptance requires the owner and the target-scoped default-branch manual 
         await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env,
             fixture.bundle, clock));
         assert.equal(fixture.state.posts.length, 0);
+        assert.equal(fixture.state.reactions.size, 0);
     }
 });
 
@@ -1067,9 +1151,11 @@ test("acceptance retries retain uncertain-write protection and never recreate ed
         fixture.state.persistBeforeError = persisted;
         await assert.rejects(() => publishDraft(fixture.github, fixture.publication.context, fixture.publication.env,
             fixture.bundle, id, clock), /outcome is uncertain/);
+        assert.equal(fixture.state.reactions.size, 0);
         if (persisted) {
             const existing = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock);
             assert.equal(existing.shouldPost, false);
+            assert.deepEqual([...fixture.state.reactions], ["approval"]);
             fixture.state.thread.comments.find(comment => comment.author.__typename === "Bot").body += "Edited terms";
             await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env,
                 fixture.bundle, clock), /different content/);

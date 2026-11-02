@@ -957,6 +957,7 @@ export async function checkPublication(github, context, env, bundle, clock = () 
     const publication = await identifyPublication(github, context, env, clock);
     const { existing } = await verifyBundleContext(github, publication, bundle);
     if (existing) {
+        await acknowledgeAcceptance(github, publication.request);
         return { shouldPost: false, url: existing.url };
     }
     const prior = await priorIntent(github, publicationIntentName(publication));
@@ -977,6 +978,7 @@ export async function publishDraft(github, context, env, bundle, intentId, clock
     const publication = await identifyPublication(github, context, env, clock);
     const { existing } = await verifyBundleContext(github, publication, bundle);
     if (existing) {
+        await acknowledgeAcceptance(github, publication.request);
         return { posted: false, url: existing.url, bodyHash: digest(existing.body) };
     }
     const intent = (await github.rest.actions.getArtifact({ ...API_REPO, artifact_id: integer(Number(intentId), "Missing durable publication intent.") })).data;
@@ -991,12 +993,34 @@ export async function publishDraft(github, context, env, bundle, intentId, clock
     const latest = await identifyPublication(github, context, env, clock);
     const rechecked = await verifyBundleContext(github, latest, bundle);
     if (rechecked.existing) {
+        await acknowledgeAcceptance(github, latest.request);
         return { posted: false, url: rechecked.existing.url, bodyHash: digest(rechecked.existing.body) };
     }
     await verifyCommand(github, latest.request);
     const content = publicationContent(bundle, latest.request.command.action);
     const comment = await writeDiscussionComment(github, bundle.target, content.body);
+    await acknowledgeAcceptance(github, latest.request);
     return { posted: true, id: comment.id, url: comment.url, bodyHash: content.bodyHash };
+}
+
+async function acknowledgeAcceptance(github, request) {
+    if (request.command.action !== "accept") {
+        return;
+    }
+    await verifyCommand(github, request);
+    try {
+        const result = await github.graphql(`mutation DiscussionPilotAcceptReaction($id:ID!) {
+          addReaction(input:{subjectId:$id,content:THUMBS_UP}) {
+            subject { ... on Node { id } }
+            reaction { content }
+          }
+        }`, { id: request.commentId });
+        requireValue(result.addReaction?.subject?.id === request.commentId &&
+            result.addReaction?.reaction?.content === "THUMBS_UP", "The reaction response does not confirm the target and content.");
+    } catch (error) {
+        throw new Error("Acceptance is recorded, but its confirmation reaction failed. Inspect the command before retrying; do not recreate accepted work.",
+            { cause: error });
+    }
 }
 
 async function writeDiscussionComment(github, target, body, existing = null) {

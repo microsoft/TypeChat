@@ -17,7 +17,7 @@ on:
         type: string
   roles: [admin, maintain, write]
   github-token: ${{ secrets.GITHUB_TOKEN }}
-  reaction: none
+  reaction: rocket
   status-comment: false
 if: &owner_request >-
   github.repository == 'microsoft/TypeChat' &&

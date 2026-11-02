@@ -130,6 +130,12 @@ separate check.** This is a real scope decision, not a test acknowledgment.
 4. Follow **Publish approved response or work acceptance** to the **Accepted
    work** comment. Confirm it records the terms you approved.
 
+After acknowledgment rollout, a thumbs-up on your command confirms that the
+exact acceptance was recorded; it is not an acknowledgment of merely receiving
+the command. This works for both Issues and Discussions. If the reaction fails
+after recording acceptance, inspect the publisher's error before retrying the
+still-valid command. An unchanged confirmed record is not posted twice.
+
 Use the acceptance hash, not the conversational reply's publish hash. A
 `/typechat reply` artifact cannot be accepted. Publishing a response first changes
 the context; request a fresh draft before accepting rather than reusing it.
@@ -187,8 +193,10 @@ yet. After review and merge, and a separate decision to activate:
    variable `TYPECHAT_IMPLEMENTATION_ENABLED=true`, then post the generated
    `/typechat build <acceptance-comment-id>:<sha256>` as a fresh Issue comment.
    This authorizes one run with **1,000 main credits plus 400 detection credits**.
-4. Follow Actions, then the resulting PR. Build commands do not add an eyes/start
-   comment. The PR links the agreement, exact patch origin, checks, usage, and
+4. Follow Actions, then the resulting PR. After acknowledgment rollout, a rocket
+   reaction on the build command acknowledges startup, not successful validation
+   or completion. No start comment is posted. The PR links the agreement,
+   exact patch origin, checks, usage, and
    limitations. Verify normal PR CI and Copilot review actually ran before review
    and any separate merge decision.
 
