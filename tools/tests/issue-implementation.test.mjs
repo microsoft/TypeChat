@@ -233,7 +233,7 @@ test("a related citation is preserved through preflight and verified publication
     assert.deepEqual(f.prepared.acceptance.references, references);
     const result = await f.publish();
     assert.equal(result.mode, "published");
-    assert.ok(f.state.pr.body.includes("https://github.com/microsoft/TypeChat/pull/466"));
+    assert.ok(f.state.pr.body.includes(f.prepared.acceptance.body));
     assert.equal(f.state.writes.filter(operation => operation === "branch").length, 1);
     assert.equal(f.state.writes.filter(operation => operation === "pr").length, 1);
 });
