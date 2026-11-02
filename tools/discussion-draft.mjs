@@ -355,12 +355,12 @@ export async function verifyCommand(github, request) {
     return comment;
 }
 
-export async function readControls(github, ref) {
+export async function readControls(github, ref, paths = CONTROL_PATHS) {
     const result = await github.rest.git.getTree({ ...API_REPO, tree_sha: ref, recursive: "1" });
     const tree = result.data;
     requireValue(tree?.truncated === false && Array.isArray(tree.tree), "The control-file tree is incomplete.");
     const fingerprints = {};
-    for (const file of CONTROL_PATHS) {
+    for (const file of paths) {
         const entry = tree.tree.find(item => item.path === file);
         requireValue(entry?.type === "blob" && entry.mode === "100644" && SHA1.test(entry.sha),
             `Missing or invalid trusted control file: ${file}`);
@@ -707,13 +707,19 @@ export function readJson(directory, filename, maximum) {
 export function stageCandidateForDetection(directory, detectionDirectory) {
     const text = readArtifact(directory, "discussion-draft.json", MAX_DRAFT_BYTES);
     validateDraft(parseJson(text));
+    stageDetectionContent(detectionDirectory, "discussion-draft", text);
+    return digest(text);
+}
+
+export function stageDetectionContent(detectionDirectory, type, content) {
+    identifier(type, "Missing detection content type.");
+    string(content, "Missing bounded detection content.", MAX_CONTEXT_BYTES);
     const outputPath = path.join(detectionDirectory, "agent_output.json");
     const output = fs.existsSync(outputPath) ? parseJson(fs.readFileSync(outputPath, "utf8")) : { items: [] };
     requireValue(output && Array.isArray(output.items), "The detector's agent output is malformed.");
-    output.items.push({ type: "discussion-draft", content: text });
+    output.items.push({ type, content });
     fs.mkdirSync(detectionDirectory, { recursive: true });
     fs.writeFileSync(outputPath, JSON.stringify(output) + "\n");
-    return digest(text);
 }
 
 export function createCandidateScan(hash, outcome, runId, attempt) {
@@ -870,7 +876,7 @@ function publicationIntentName(publication) {
         `${INTENT_PREFIX}${publication.request.command.action === "accept" ? "accept-" : ""}${publication.artifact.id}`;
 }
 
-async function priorIntent(github, name, excludeId) {
+export async function priorIntent(github, name, excludeId) {
     // At most one result can be this run's new intent; any other match blocks publication.
     const data = (await github.rest.actions.listArtifactsForRepo({ ...API_REPO, name, per_page: 2, page: 1 })).data;
     requireValue(data && Array.isArray(data.artifacts) && Number.isSafeInteger(data.total_count) &&

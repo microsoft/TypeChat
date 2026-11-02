@@ -66,8 +66,8 @@ not activated or live-verified.
 | Not enabled | Stricter human-review enforcement | Existing branch-review protections are retained at the owner's request. The written owner-approval requirement still applies. |
 | 2026-10-30 | [Owner-approved issue and Discussion drafts](#second-pilot-owner-approved-discussion-drafts) | Merged through [#493](https://github.com/microsoft/TypeChat/pull/493), [#494](https://github.com/microsoft/TypeChat/pull/494), and [#495](https://github.com/microsoft/TypeChat/pull/495). The Issue draft-only path passed in [run 41147057482](https://github.com/microsoft/TypeChat/actions/runs/41147057482) on 2026-10-31 (UTC); this does not verify publication or the Discussion path. |
 | 2026-10-31 | Conversational responses and `/typechat reply` | Merged through [#498](https://github.com/microsoft/TypeChat/pull/498). [Run 41226698016, attempt 1](https://github.com/microsoft/TypeChat/actions/runs/41226698016/attempts/1) posted one checked Issue response. [Attempt 2](https://github.com/microsoft/TypeChat/actions/runs/41226698016/attempts/2) skipped inference and posting, preserving the original reply. Discussion and manual publication remain unverified live. |
-| 2026-10-31 | [Exact owner work acceptance](#exact-work-acceptance) | Prepared for review. `/typechat accept` approves an exact proposal, not an implementation run or merge. Activation and live verification are pending. |
-| Not yet | Human-approved agent implementation | Planned with a future 1,000-credit implementation allowance; no build command, implementation workflow, or implementation spending is enabled. |
+| 2026-11-01 | [Exact owner work acceptance](#exact-work-acceptance) | Merged through #503. Issue acceptance and its no-op retry were verified on #504; Discussion verification remains pending. Acceptance is not an implementation-run or merge approval. |
+| Prepared for review | [Owner-triggered Issue implementation](#third-pilot-owner-triggered-issue-implementation) | Implements the workflow proposed and accepted in #504. Disabled by default; 1,000 main-agent credits plus 400 separate detection credits require later activation and a fresh owner build command. No live coding run has been authorized. |
 | Not yet | Selective automatic adoption | Future work, after public criteria and maintainer approval. |
 
 These are implementation dates, not activation dates. Update this history,
@@ -455,14 +455,15 @@ its model setting does not configure GitHub Copilot PR reviews.
 ### Validation and rollout
 
 Changes to the workflow are checked by compiling its Markdown source with
-gh-aw **v0.93.5**. Maintainers should regenerate and commit both the
+gh-aw **v0.93.5**. Maintainers should regenerate and commit the
 [compiled assessment](./.github/workflows/backlog-assessment.lock.yml) and
-[compiled discussion drafter](./.github/workflows/discussion-draft.lock.yml), with
+[compiled discussion drafter](./.github/workflows/discussion-draft.lock.yml), plus
+the [compiled implementation pilot](./.github/workflows/issue-implementation.lock.yml), with
 [compiler action pins](./.github/aw/actions-lock.json) together, rather than
 edit the generated workflow directly:
 
 ```shell
-gh aw compile backlog-assessment discussion-draft --strict --no-check-update --no-logo --action-tag 32ecafbc061c9af57e9361942099e381102ae304
+gh aw compile backlog-assessment discussion-draft issue-implementation --strict --no-check-update --no-logo --action-tag 32ecafbc061c9af57e9361942099e381102ae304
 ```
 
 The action reference above pins the v0.93.5 runtime. Keep the compiler pin file
@@ -488,8 +489,8 @@ human-review enforcement remain a separate owner decision.
 **Issue direct replies and no-op retries verified on 2026-10-31 (UTC).**
 This pilot provides GitHub-native previews and owner-requested replies for Issues
 and Discussions; the Discussion and manual-publication paths still need live
-verification. The exact work-acceptance extension is prepared for review and
-must be merged and separately verified before rollout. No command changes labels,
+verification. Exact work acceptance and its no-op retry were verified on an Issue
+after #503 merged. No discussion-pilot command changes labels,
 closes threads, starts an implementation run, creates PRs, or merges changes.
 Existing Copilot PR review remains a separate capability.
 
@@ -503,7 +504,7 @@ command in a **new comment**, with no additional text:
 | `/typechat draft` | Prepare a conversational reply for review and, when ready, a separate work-acceptance preview; do not post either. |
 | `/typechat publish <artifact-id>:<body-sha256>` | Approve and post that exact reviewed draft. |
 | `/typechat reply` | Authorize one checked advisory reply to be posted without a second approval command. |
-| `/typechat accept <artifact-id>:<acceptance-sha256>` | After the acceptance extension is merged, approve and record the exact proposed scope and criteria. No implementation run or merge is authorized. |
+| `/typechat accept <artifact-id>:<acceptance-sha256>` | Approve and record the exact proposed scope and criteria. The Issue path is live-verified; no implementation run or merge is authorized. |
 
 Use `/typechat draft` when you want to review the wording first. Use
 `/typechat reply` only when you want the agent to respond publicly after the
@@ -556,7 +557,8 @@ Unclear scope or an item under consideration requires an owner decision.
 
 ### Exact work acceptance
 
-**Prepared for review; activation and live verification are pending.** Ordinary
+**Issue acceptance and its no-op retry were verified on 2026-11-01 (UTC);
+Discussion verification remains pending.** Ordinary
 human maintainer acceptance remains available. The automated pilot accepts only
 an explicit command from the project owner; it does not replace the normal
 maintainer process or grant the model acceptance authority.
@@ -650,7 +652,10 @@ matched the sealed body and receipt hashes.
 detected that reply before inference and skipped the model, detector, seal, and
 writers. The comment count, body hash, and update timestamp were unchanged.
 These results verify that revision's Issue direct-reply and retry paths, not
-manual publication, Discussions, or the acceptance extension.
+manual publication or Discussions. Issue acceptance was subsequently verified
+on [#504](https://github.com/microsoft/TypeChat/issues/504#issuecomment-6562465109)
+by [run 41339605658](https://github.com/microsoft/TypeChat/actions/runs/41339605658);
+its second attempt preserved the single unchanged acceptance record.
 
 The detector downloads the attempt-specific, immutable candidate artifact.
 Trusted code adds its complete JSON text to the detector's agent-output input,
@@ -708,9 +713,11 @@ assessment's GPT-6.1-sol/max configuration, restricted tools, 1,000-call limit,
 60-minute execution limit, and 100-minute enclosing job. The backlog assessment
 keeps its **400-credit** main budget. Detection retains its **separate
 400-credit default**, so 50 credits is not a combined workflow cap.
-Publishing a response or acceptance invokes no model. A **1,000-credit implementation budget** is a
-future owner-approved implementation-stage setting only; this pilot enables
-neither that spending nor a build command.
+Publishing a response or acceptance invokes no model. The separate
+[implementation pilot](#third-pilot-owner-triggered-issue-implementation)
+configures a **1,000-credit main budget** and **400-credit detection budget**,
+but remains disabled until later owner activation. Discussion commands do not
+activate either allowance.
 
 Context, candidate, scan-binding, and sealed draft artifacts are retained for seven days.
 Approval validity ends at the earlier of artifact expiry or seven days after
@@ -768,7 +775,7 @@ and verify a no-op publication retry.
 Exercise the Discussion path separately rather than inferring its permissions
 from an Issue run.
 
-After review and merge of acceptance support, choose genuinely agreed, in-scope
+For remaining acceptance-path verification, choose genuinely agreed, in-scope
 work for a fresh draft. An accept command is a real human acceptance decision,
 not a harmless test: do not approve unresolved work merely to exercise the
 workflow. Review the exact acceptance preview, approve it, verify one unchanged
@@ -776,6 +783,125 @@ record on retry, and check both Issue and Discussion writers separately.
 Use new commands to test new code, not reruns of older workflow revisions.
 Record the confirming runs before marking this capability active. Local tests
 and compilation do not prove live Actions-token permissions or model access.
+
+## Third pilot: owner-triggered Issue implementation
+
+**Prepared for review; disabled and not live-verified.** The
+[accepted agreement for #504](https://github.com/microsoft/TypeChat/issues/504#issuecomment-6562465109)
+authorizes development of this workflow, not an automated coding run. The new
+[workflow](./.github/workflows/issue-implementation.md) requires
+`TYPECHAT_IMPLEMENTATION_ENABLED` to equal `true` and a fresh owner Issue comment:
+
+```text
+/typechat build <acceptance-comment-id>:<acceptance-sha256>
+```
+
+The identifier names the durable public acceptance comment, not an expiring
+draft artifact. A manual dispatch of **TypeChat accepted Issue implementation**
+with `issue` and `acceptance` inputs verifies the record and prints a copyable
+command without model execution or App-token creation. Only the exact canonical,
+unchanged Actions-bot record, backed by an unchanged prior owner acceptance
+command with the same hash, is supported. Ordinary manual acceptance remains
+valid human governance but is not machine-readable authority for this pilot.
+Discussion builds and inline notes remain unsupported; #502 is still deferred.
+
+### Frozen authorization and bounded spending
+
+Preflight verifies owner identity, default-branch workflow code, the current
+scope policy and its ancestry, acceptance, and existing contributions. Open
+linked or possibly competing PRs stop the run, including ambiguous references.
+The agreement, discussion, exact source revision, control fingerprints, and
+short-lived App-access proof are frozen. An immutable spending reservation
+precedes inference. The model-start guard repeats authorization and rejects App
+preflight older than 15 minutes. A build command expires after 24 hours.
+
+One execution permits at most **1,000 main-agent AI credits** and **400 separate
+detection credits**, not a combined 1,000-credit allowance. The main agent uses
+the established GPT-6.1-sol/max configuration, at most 1,000 calls, 60 minutes
+of execution, and a 100-minute enclosing job. Detection has a 30-minute enclosing
+job; deterministic validation and publication are also time-bounded. Native
+usage outputs must be present, positive, and within their independent limits.
+Incomplete, capped, failed, missing, or mixed native completion signals cannot
+publish. Runtime budget overrides are not enabled.
+
+Re-running a command cannot spend again. A confirmed PR is returned without
+coding or writes; otherwise a reserved or partial run stops for inspection.
+A genuinely new attempt after a failed coding run needs a fresh owner command.
+An unresolved publication intent or branch still blocks it. Source commits,
+policy, acceptance, or substantive discussion changes stop publication rather
+than silently rebasing or expanding scope.
+
+### Isolation, exact patch checks, and publication
+
+The existing `typeagent-bot` App and its existing
+`DEPENDABOT_APP_ID`/`DEPENDABOT_APP_PRIVATE_KEY` bindings are reused. No new App,
+PAT, credential rotation, App setting change, or repository permission change
+is needed. The [trusted App helper](./tools/implementation-app.mjs) verifies App
+and installation identity, explicitly requests only TypeChat's `contents: write`
+and `pull_requests: write`, checks returned permissions and repository selection,
+masks credentials, and revokes each token. Unrelated vulnerability-alert rights
+are rejected, not inherited. Missing/excessive permissions or revocation failures
+are errors. The preflight token is revoked before coding; publication mints a
+new one and verifies the installation again.
+
+App credentials exist only in trusted preflight/publisher steps, never in the
+coding agent, detector, generated tests, or artifacts. The coding agent has
+read-only repository permissions inside the pinned runtime's firewall.
+Generated tests run in a separate non-root container with no network, host
+workspace, Docker socket, or credential environment. Its Node image is digest
+pinned to the repository's Node version. Dependencies are installed from the
+unchanged base before the patch is applied; install scripts are disabled for
+npm. TypeScript validation explicitly builds the root before the workspaces,
+then runs the existing tests. Python uses Hatch tests and the existing Pyright
+check; site changes use the existing site build. Documentation-only changes do
+not require unrelated language builds.
+
+The first pilot supports at most 20 ordinary UTF-8/LF text-file changes under
+`typescript/`, `python/`, or `site/`, plus the root `README.md`. Candidate JSON
+is bounded at 64 KiB and the entire patch at 128 KiB. Dependencies, configuration,
+automation, policy, permissions, credentials, agent instructions, symlinks,
+binary or executable-mode changes, generated trees, and case collisions are
+rejected. Unsupported work remains maintainer work; nothing is silently omitted.
+
+The [protocol](./tools/issue-implementation.mjs) validates the candidate against
+the fixed source tree and stages the complete patch, candidate, and accepted
+agreement for strict detection. Scan and check evidence bind that exact content
+and run. The publisher independently verifies evidence, usage, freshness, App
+access, and contribution history, then creates Git blobs/trees via the API.
+It never checks out or executes the generated patch while holding a write token.
+The complete resulting tree must preserve every unmodified file. No force-push,
+existing-branch takeover, automatic approval, merge, issue closure, or release
+is implemented.
+
+A stable acceptance-owned branch and PR marker provide durable deduplication.
+A publication intent precedes all writes; branch/PR uncertainty blocks blind
+retries and preserves evidence. Context, reservations, candidate, scan, checks,
+and results are retained for 30 days, longer than the 24-hour authorization
+window. Do not delete intents to force a retry. GitHub does not provide an atomic
+transaction across all these resources; late authorization changes can leave
+an unpublished or partially published branch requiring human inspection.
+
+### Activation and first live verification
+
+Review and merge the workflow through the ordinary owner process first.
+The existing default token permissions, PR-creation/approval setting, Dependabot
+workflow, library behavior, and discussion commands stay unchanged. Compiler
+safe-update approval of the existing App binding is a code-review step, not
+deployment or budget activation.
+
+After a separate owner decision, set the repository variable
+`TYPECHAT_IMPLEMENTATION_ENABLED=true`. Choose genuinely agreed, supported
+library/documentation work with no competing contribution, generate its command,
+and explicitly authorize that one run. Do not use #504 to make the future agent
+rewrite its own automation. Disabling the variable prevents new builds; also
+cancel an active run or withdraw its command when stopping work in progress.
+
+Record whether the resulting App-created PR actually starts normal CI and
+receives Copilot review. Neither is claimed successful in advance; both remain
+separate from human approval and merging. The CI sandbox smoke test uses a
+synthetic TypeScript/Python patch and no inference or App credentials. It verifies
+container behavior, not a live coding run. Discussion-path verification and
+receipt rollout remain their separate milestones.
 
 ## From discussion to a reviewed change
 

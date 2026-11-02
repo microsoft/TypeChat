@@ -1,6 +1,6 @@
 # TypeChat owner cheat sheet
 
-**For @robgruen. Last checked: 2026-10-31 (UTC).**
+**For @robgruen. Last checked: 2026-11-02 (UTC).**
 
 [Issues](https://github.com/microsoft/TypeChat/issues) |
 [Discussions](https://github.com/microsoft/TypeChat/discussions) |
@@ -10,8 +10,8 @@
 [Full automation guide](./AUTOMATION.md)
 
 **Verified:** backlog assessment, automatic Copilot PR reviews, Issue draft generation,
-and Issue `/typechat reply` delivery with a duplicate-free rerun.
-**Awaiting review and live verification:** exact-proposal `/typechat accept`.
+Issue `/typechat reply` delivery, and exact Issue acceptance with duplicate-free reruns.
+**Awaiting review and live verification:** completion receipts and the disabled coding pilot.
 Manual publication and the Discussion path still need live verification.
 **Still human decisions:** work acceptance, implementation handoff, merging, and releases.
 
@@ -23,8 +23,9 @@ Manual publication and the Discussion path still need live verification.
 | Have the agent answer an issue or Discussion | [Request one direct reply](#reply-directly); the Issue path is live-verified. | One checked conversational response, without accepting work. |
 | Review wording before responding | [Request a draft](#draft-and-publish). | The actual reply as a preview; assessment metadata stays in Actions. |
 | Post the proposed response | Review the exact draft, then copy its publish command into the same thread. | One Actions-bot comment, not approval to build. |
-| Accept an agent-prepared proposal | After acceptance rollout, [review and approve its exact terms](#accept-an-exact-proposal). Until then, [record a human decision manually](#accept-work-manually). | A visible scope agreement; no coding agent starts automatically. |
+| Accept an agent-prepared proposal | [Review and approve its exact terms](#accept-an-exact-proposal); the Issue path is live-verified. Ordinary [human acceptance](#accept-work-manually) also remains available. | A visible scope agreement; no coding agent starts automatically. |
 | Move an existing PR forward | [Review the latest revision](#review-and-merge-manually); support the existing contributor rather than duplicate their PR. | A human decision to request changes or merge. |
+| Prepare one bounded coding run | After review/rollout, [prepare its exact build command](#prepare-an-implementation-run-disabled-by-default). | A copyable command, not spending or merge approval. |
 | Resolve unclear or out-of-scope work | Pause dependent work. If changing direction, approve and merge a [policy PR](./GOALS.md#who-decides) first. | An explicit scope decision; popularity or a label is not approval. |
 
 ## Refresh the backlog (live)
@@ -106,8 +107,8 @@ operation to finish before sending another command on that thread.
 
 ## Accept an exact proposal
 
-**Prepared for review; do not use until merged and ready for owner-commanded
-live verification.** This is a real scope decision, not a test acknowledgment.
+**Issue acceptance and its no-op retry were verified on 2026-11-01 (UTC);
+Discussion verification is pending.** This is a real scope decision, not a test acknowledgment.
 
 1. Resolve open questions, check the approved policy and existing contributions,
    then request a new `/typechat draft` on the same thread.
@@ -149,8 +150,40 @@ This is not approval to merge. Material scope changes return to discussion.
 ```
 
 This remains an ordinary human comment, not an automation command. It does not
-assign a coding agent. The separate exact-proposal acceptance command is pending
-rollout; **no `/typechat build` command or implementation workflow is enabled**.
+assign a coding agent. Exact-proposal Issue acceptance is live-verified, but
+**the separate implementation workflow remains disabled**.
+
+## Prepare an implementation run (disabled by default)
+
+The [#504 implementation pilot](./AUTOMATION.md#third-pilot-owner-triggered-issue-implementation)
+is prepared for review, not activated or live-verified. Do not post build commands
+yet. After review and merge, and a separate decision to activate:
+
+1. Choose supported, explicitly accepted Issue work with no competing PR.
+   The workflow requires the exact public `/typechat accept` record and hash,
+   not an ordinary free-form acceptance comment or expired draft artifact.
+2. Run **TypeChat accepted Issue implementation** manually in Actions. Enter the
+   Issue number and the numeric acceptance-comment ID. This only prints a
+   copyable command; it uses no model or App token.
+3. Review that exact agreement. The owner must separately enable the repository
+   variable `TYPECHAT_IMPLEMENTATION_ENABLED=true`, then post the generated
+   `/typechat build <acceptance-comment-id>:<sha256>` as a fresh Issue comment.
+   This authorizes one run with **1,000 main credits plus 400 detection credits**.
+4. Follow Actions, then the resulting PR. Build commands do not add an eyes/start
+   comment. The PR links the agreement, exact patch origin, checks, usage, and
+   limitations. Verify normal PR CI and Copilot review actually ran before review
+   and any separate merge decision.
+
+Do not use #504 itself as the first coding target: generated changes to the
+agent's own automation are forbidden. Dependency/configuration changes, binary
+files, Discussions, and inline notes are outside this first pilot.
+
+Commands expire after 24 hours; delayed preflight, changed source/discussion,
+budget exhaustion, failed checks, or an incomplete scan stop the run. Reruns do
+not spend again. Inspect failures before posting new authorization, and never
+delete retained intents or overwrite a partial branch to force recovery.
+To stop an active run, cancel it or withdraw the command as well as disabling
+the activation variable. No activation or live coding run was performed here.
 
 ## Review and merge manually
 
@@ -181,8 +214,9 @@ rollout; **no `/typechat build` command or implementation workflow is enabled**.
 **Spending reminder:** main assessment **400 AI credits/run**; main
 drafting/reply generation **50/run**. Each has a **separate detection budget, default 400**,
 so those main-agent limits are not whole-workflow caps. Publishing and acceptance use no
-model. Copilot PR reviews are billed separately. The future **1,000-credit
-implementation allowance** and per-run budget overrides are **not enabled**.
+model. Copilot PR reviews are billed separately. The prepared implementation
+configuration proposes **1,000 main credits plus 400 detection credits**; the
+activation gate remains **off**. Per-run budget overrides are **not enabled**.
 
 Keep this sheet's date and availability notes aligned with the
 [verified rollout history](./AUTOMATION.md#status-and-implementation-history).
