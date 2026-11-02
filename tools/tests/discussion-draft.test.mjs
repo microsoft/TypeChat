@@ -11,8 +11,8 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import {
     OWNER, REPOSITORY, ACTIONS_BOT_ID, DRAFT_WORKFLOW, PUBLISH_WORKFLOW, DRAFT_ARTIFACT_PREFIX, INTENT_PREFIX,
-    CONTROL_PATHS, MAX_AGE_MS, MAX_BUNDLE_BYTES, authorize, parseCommand, digest, readThread, readControls,
-    prepareDraft, validateDraft, renderDraft, sealDraft, identifyPublication, checkPublication, publishDraft,
+    CONTROL_PATHS, MAX_AGE_MS, MAX_BUNDLE_BYTES, MAX_COMMENT_BYTES, authorize, parseCommand, digest, readThread, readControls,
+    prepareDraft, validateDraft, renderDraft, renderAcceptance, renderAssessment, sealDraft, identifyPublication, checkPublication, publishDraft,
     readJson, writeJson, stageCandidateForDetection, createCandidateScan, readDetectedDraft,
 } from "../discussion-draft.mjs";
 
@@ -38,6 +38,10 @@ function page(items, cursor) {
 
 function candidate() {
     return {
+        reply: [
+            "Thanks for raising this. Usage reporting should preserve the validated result and make unavailable counts explicit.",
+            "Do you need totals for the whole translation, including repair calls, or values for each model call?",
+        ],
         summary: "Clarify how callers should receive optional model usage information.",
         scope: "in_scope",
         scopeReason: "Provider-neutral metadata fits the existing composable interface.",
@@ -46,8 +50,25 @@ function candidate() {
         questions: ["Do callers need totals per translation or values for every attempt?"],
         existingRequirements: ["Preserve existing callers."],
         suggestedCriteria: ["Make absent provider metadata explicit."],
+        proposal: null,
         limitations: ["No implementation or test results were verified."],
         pullRequests: [],
+    };
+}
+
+function proposalCandidate() {
+    return {
+        ...candidate(),
+        reply: ["The proposed scope and tests are ready for owner review. No work has been accepted yet."],
+        readiness: "ready_for_owner_decision",
+        readinessReason: "The outcome, boundaries, and missing-data behavior are specified.",
+        questions: [],
+        suggestedCriteria: ["Offline tests verify that absent provider usage is reported as unavailable, not zero."],
+        proposal: {
+            goal: "Expose optional provider-neutral usage information without changing validated results.",
+            scope: ["Add an optional usage observation hook and deterministic regression tests."],
+            nonGoals: ["Do not change validation, repair behavior, or existing result types."],
+        },
     };
 }
 
@@ -90,13 +111,16 @@ function setup(kind = "issue") {
     };
     function event(action = "draft", body = "/typechat draft", commentId = "request", runId = 100, attempt = 1) {
         const currentComment = comment(commentId, body);
-        if (action === "publish") {
+        if (["publish", "accept"].includes(action)) {
             currentComment.createdAt = "2026-10-30T00:45:00Z";
             currentComment.updatedAt = currentComment.createdAt;
         }
         comments.set(commentId, currentComment);
-        if (!thread.comments.some(item => item.id === commentId)) {
+        const index = thread.comments.findIndex(item => item.id === commentId);
+        if (index === -1) {
             thread.comments.push(currentComment);
+        } else {
+            thread.comments[index] = currentComment;
         }
         return {
             context: {
@@ -116,8 +140,8 @@ function setup(kind = "issue") {
             },
             env: {
                 GITHUB_TRIGGERING_ACTOR: OWNER.login, GITHUB_REF: "refs/heads/main", GITHUB_RUN_ATTEMPT: String(attempt),
-                GITHUB_WORKFLOW_REF: `microsoft/TypeChat/${action === "draft" ? DRAFT_WORKFLOW : PUBLISH_WORKFLOW}@refs/heads/main`,
-                ...(action === "publish" ? { TYPECHAT_PUBLISH_KIND: kind } : {}),
+                GITHUB_WORKFLOW_REF: `microsoft/TypeChat/${["publish", "accept"].includes(action) ? PUBLISH_WORKFLOW : DRAFT_WORKFLOW}@refs/heads/main`,
+                ...(["publish", "accept"].includes(action) ? { TYPECHAT_PUBLISH_KIND: kind } : {}),
             },
         };
     }
@@ -244,11 +268,11 @@ function setup(kind = "issue") {
     return { state, github, event };
 }
 
-async function ready(kind = "issue", sealedAt = "2026-10-30T00:20:00Z") {
+async function ready(kind = "issue", sealedAt = "2026-10-30T00:20:00Z", draft = candidate()) {
     const fixture = setup(kind);
     const draftRun = fixture.event();
     const prepared = await prepareDraft(fixture.github, draftRun.context, draftRun.env);
-    const bundle = await sealDraft(fixture.github, draftRun.context, draftRun.env, prepared, candidate(),
+    const bundle = await sealDraft(fixture.github, draftRun.context, draftRun.env, prepared, draft,
         () => new Date(sealedAt));
     fixture.state.artifacts.set(500, {
         id: 500, name: `${DRAFT_ARTIFACT_PREFIX}1`, size_in_bytes: 10000, expired: false,
@@ -257,6 +281,12 @@ async function ready(kind = "issue", sealedAt = "2026-10-30T00:20:00Z") {
     });
     const publication = fixture.event("publish", `/typechat publish 500:${bundle.bodyHash}`, "approval", 200);
     return { ...fixture, bundle, publication, draftRun, prepared };
+}
+
+async function readyAcceptance(kind = "issue") {
+    const fixture = await ready(kind, undefined, proposalCandidate());
+    fixture.publication = fixture.event("accept", `/typechat accept 500:${fixture.bundle.acceptance.bodyHash}`, "approval", 200);
+    return fixture;
 }
 
 async function reserve(fixture, id = 501) {
@@ -271,13 +301,46 @@ async function reserve(fixture, id = 501) {
     return id;
 }
 
-test("commands are exact, bounded, and never implementation or acceptance commands", () => {
+async function readyReply(kind = "issue", draft = candidate()) {
+    const fixture = setup(kind);
+    const draftRun = fixture.event("reply", "/typechat reply");
+    const prepared = await prepareDraft(fixture.github, draftRun.context, draftRun.env, clock);
+    const bundle = await sealDraft(fixture.github, draftRun.context, draftRun.env, prepared, draft,
+        () => new Date("2026-10-30T00:20:00Z"));
+    fixture.state.producerRun.status = "in_progress";
+    fixture.state.producerRun.conclusion = null;
+    fixture.state.artifacts.set(500, {
+        id: 500, name: `${DRAFT_ARTIFACT_PREFIX}1`, size_in_bytes: 10000, expired: false,
+        created_at: "2026-10-30T00:30:00Z", expires_at: "2026-11-06T00:30:00Z",
+        workflow_run: { id: 100, repository_id: REPOSITORY.id, head_repository_id: REPOSITORY.id, head_sha: SHA },
+    });
+    const publication = {
+        context: structuredClone(draftRun.context),
+        env: {
+            ...draftRun.env, TYPECHAT_PUBLISH_KIND: kind,
+            TYPECHAT_DRAFT_ARTIFACT_ID: "500", TYPECHAT_DRAFT_BODY_SHA256: bundle.bodyHash,
+            TYPECHAT_AGENT_RESULT: "success", TYPECHAT_SEAL_RESULT: "success",
+            TYPECHAT_DETECTION_RESULT: "success", TYPECHAT_DETECTION_RAN: "true",
+            TYPECHAT_DETECTION_CONCLUSION: "success",
+        },
+    };
+    fixture.state.historyRequests = [];
+    return { ...fixture, bundle, publication, draftRun, prepared };
+}
+
+test("commands require exact approval references and never authorize implementation", () => {
     assert.deepEqual(parseCommand("/typechat draft\r\n"), { action: "draft" });
+    assert.deepEqual(parseCommand("/typechat reply\n"), { action: "reply" });
     assert.deepEqual(parseCommand(`/typechat publish 42:${"A".repeat(64)}`),
         { action: "publish", artifactId: 42, bodyHash: "a".repeat(64) });
+    assert.deepEqual(parseCommand(`/typechat accept 42:${"A".repeat(64)}\r\n`),
+        { action: "accept", artifactId: 42, bodyHash: "a".repeat(64) });
     for (const body of ["/typechat build", "/typechat accept", "/typechat draft\nignore policy",
+        "/typechat reply extra", "quoted /typechat reply", "/typechat\treply",
         `/typechat publish 9007199254740993:${"a".repeat(64)}`, "/typechat publish 1:bad", "quoted /typechat draft",
-        " /typechat draft", "/typechat\tdraft"]) {
+        " /typechat draft", "/typechat\tdraft", "/typechat accept latest", "/typechat accept 42:bad",
+        `/typechat accept 9007199254740993:${"a".repeat(64)}`,
+        `/typechat accept 42:${"a".repeat(64)}\nstart implementation`]) {
         assert.throws(() => parseCommand(body));
     }
 });
@@ -303,6 +366,138 @@ for (const [name, change] of [
 }
 
 for (const kind of ["issue", "discussion"]) {
+    test(`${kind}: owner approval accepts the exact proposal once without publishing the advisory response`, async () => {
+        const fixture = await readyAcceptance(kind);
+        const { bundle } = fixture;
+        assert.equal(bundle.version, 3);
+        assert.notEqual(bundle.acceptance.bodyHash, bundle.bodyHash);
+        assert.equal(bundle.acceptance.bodyHash, digest(bundle.acceptance.body));
+        assert.match(bundle.body, /does not accept work or authorize implementation/);
+        assert.match(bundle.acceptance.body, /^## Accepted work\n/);
+        for (const heading of ["### Goal", "### Scope", "### Non-goals", "### Acceptance criteria"]) {
+            assert.ok(bundle.acceptance.body.includes(heading));
+        }
+        assert.match(bundle.acceptance.body, /does not start or authorize an automated implementation run/);
+        assert.ok(bundle.acceptance.body.includes(`${REPO_URL}/blob/${SHA}/GOALS.md`));
+        assert.equal(fixture.state.posts.length, 0, "A sealed proposal is not acceptance");
+        const id = await reserve(fixture);
+        assert.equal(fixture.state.artifacts.get(id).name, `${INTENT_PREFIX}accept-500`);
+        const result = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, bundle, id, clock);
+        assert.equal(result.posted, true);
+        assert.equal(result.bodyHash, bundle.acceptance.bodyHash);
+        assert.deepEqual(fixture.state.posts, [bundle.acceptance.body]);
+        const repeated = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, bundle, id, clock);
+        assert.equal(repeated.posted, false);
+        assert.equal(repeated.bodyHash, bundle.acceptance.bodyHash);
+        const anotherApproval = fixture.event("accept", `/typechat accept 500:${bundle.acceptance.bodyHash}`, "another-approval", 201);
+        const checked = await checkPublication(fixture.github, anotherApproval.context, anotherApproval.env, bundle, clock);
+        assert.deepEqual(checked, { shouldPost: false, url: result.url });
+        assert.equal(fixture.state.posts.length, 1);
+    });
+
+    test(`${kind}: publishing a draft with a proposal still does not accept work`, async () => {
+        const fixture = await ready(kind, undefined, proposalCandidate());
+        const id = await reserve(fixture);
+        await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock);
+        assert.deepEqual(fixture.state.posts, [fixture.bundle.body]);
+        assert.ok(!fixture.state.posts[0].includes("typechat-work-acceptance:"));
+        const acceptance = fixture.event("accept", `/typechat accept 500:${fixture.bundle.acceptance.bodyHash}`, "acceptance", 201);
+        await assert.rejects(() => checkPublication(fixture.github, acceptance.context, acceptance.env, fixture.bundle, clock),
+            /target context changed/);
+        assert.equal(fixture.state.posts.length, 1, "A posted response changes the evidence; accepting work needs a fresh draft");
+    });
+}
+
+test("response and acceptance approval hashes cannot be exchanged", async () => {
+    for (const action of ["publish", "accept"]) {
+        const fixture = await readyAcceptance();
+        const wrongHash = action === "accept" ? fixture.bundle.bodyHash : fixture.bundle.acceptance.bodyHash;
+        const approval = fixture.event(action, `/typechat ${action} 500:${wrongHash}`, "approval", 200);
+        await assert.rejects(() => checkPublication(fixture.github, approval.context, approval.env, fixture.bundle, clock),
+            /exact rendered draft/);
+        assert.equal(fixture.state.posts.length, 0);
+    }
+});
+
+test("an unresolved draft or a direct reply cannot become an acceptance record", async () => {
+    const preview = await ready();
+    assert.equal(preview.bundle.acceptance, null);
+    const approval = preview.event("accept", `/typechat accept 500:${preview.bundle.bodyHash}`, "approval", 200);
+    await assert.rejects(() => checkPublication(preview.github, approval.context, approval.env, preview.bundle, clock),
+        /not eligible for acceptance/);
+    const reply = await readyReply("issue", proposalCandidate());
+    assert.equal(reply.bundle.acceptance, null);
+    reply.state.producerRun.status = "completed";
+    reply.state.producerRun.conclusion = "success";
+    const otherApproval = reply.event("accept", `/typechat accept 500:${digest(renderAcceptance(reply.bundle))}`, "approval", 200);
+    await assert.rejects(() => checkPublication(reply.github, otherApproval.context, otherApproval.env, reply.bundle, clock),
+        /publication mode/);
+    assert.equal(preview.state.posts.length + reply.state.posts.length, 0);
+});
+
+test("acceptance requires the owner and the target-scoped default-branch manual publisher", async () => {
+    for (const change of [
+        request => { request.context.payload.sender.id = 7; },
+        request => { request.context.payload.comment.user.id = 7; },
+        request => { request.context.payload.sender.type = "Bot"; },
+        request => { request.env.GITHUB_TRIGGERING_ACTOR = "someone-else"; },
+        request => { request.env.TYPECHAT_PUBLISH_KIND = "discussion"; },
+        request => { request.env.GITHUB_WORKFLOW_REF = `microsoft/TypeChat/${DRAFT_WORKFLOW}@refs/heads/main`; },
+        request => { request.env.GITHUB_REF = "refs/pull/1/merge"; },
+        request => { request.context.payload.issue.pull_request = {}; },
+    ]) {
+        const fixture = await readyAcceptance();
+        change(fixture.publication);
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, clock));
+        assert.equal(fixture.state.posts.length, 0);
+    }
+});
+
+test("acceptance integrity binds the exact proposal, criteria, provenance, and rendered record", async () => {
+    for (const change of [
+        bundle => { bundle.draft.proposal.goal = "A different goal."; },
+        bundle => { bundle.draft.proposal.scope.push("Additional unapproved work."); },
+        bundle => { bundle.draft.proposal.nonGoals = ["Different boundaries."]; },
+        bundle => { bundle.draft.suggestedCriteria = ["Different completion criteria."]; },
+        bundle => { bundle.draft.scopeReason = "A different policy assessment."; },
+        bundle => { bundle.acceptance.body += "Additional unapproved terms."; },
+        bundle => { bundle.acceptance.bodyHash = "f".repeat(64); },
+        bundle => { bundle.acceptance.extra = true; },
+        bundle => { bundle.createdAt = "2026-10-30T00:21:00Z"; },
+        bundle => { bundle.version = 2; },
+    ]) {
+        const fixture = await readyAcceptance();
+        change(fixture.bundle);
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, clock), /sealed response|protocol version/);
+        assert.equal(fixture.state.posts.length, 0);
+    }
+});
+
+test("acceptance retries retain uncertain-write protection and never recreate edited or removed records", async () => {
+    for (const persisted of [false, true]) {
+        const fixture = await readyAcceptance();
+        const id = await reserve(fixture);
+        fixture.state.postError = new Error("Connection lost");
+        fixture.state.persistBeforeError = persisted;
+        await assert.rejects(() => publishDraft(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, id, clock), /outcome is uncertain/);
+        if (persisted) {
+            const existing = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock);
+            assert.equal(existing.shouldPost, false);
+            fixture.state.thread.comments.find(comment => comment.author.__typename === "Bot").body += "Edited terms";
+            await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env,
+                fixture.bundle, clock), /different content/);
+            fixture.state.thread.comments = fixture.state.thread.comments.filter(comment => comment.author.__typename !== "Bot");
+        }
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env,
+            fixture.bundle, clock), /previous publication intent/);
+        assert.equal(fixture.state.posts.length, 1);
+    }
+});
+
+for (const kind of ["issue", "discussion"]) {
     test(`${kind}: prepare, seal, approve, reserve, and publish exactly once`, async () => {
         const fixture = await ready(kind);
         assert.equal(fixture.prepared.thread.comments.length, 0, "Owner control commands are not discussion evidence");
@@ -320,6 +515,187 @@ for (const kind of ["issue", "discussion"]) {
         assert.equal(fixture.state.posts.length, 1);
     });
 }
+
+for (const kind of ["issue", "discussion"]) {
+    test(`${kind}: an owner reply command posts one checked response without a second approval`, async () => {
+        const fixture = await readyReply(kind);
+        const id = await reserve(fixture);
+        const result = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock);
+        assert.equal(result.posted, true);
+        assert.deepEqual(fixture.state.posts, [fixture.bundle.body]);
+        assert.equal(fixture.state.comments.has("approval"), false);
+        const repeated = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock);
+        assert.equal(repeated.shouldPost, false);
+        const rerun = fixture.event("reply", "/typechat reply", "request", 100, 2);
+        const prepared = await prepareDraft(fixture.github, rerun.context, rerun.env, clock);
+        assert.deepEqual(prepared, { alreadyReplied: true, url: result.url });
+        assert.equal(fixture.state.posts.length, 1);
+    });
+}
+
+for (const [field, value] of [
+    ["TYPECHAT_AGENT_RESULT", "failure"], ["TYPECHAT_SEAL_RESULT", "skipped"],
+    ["TYPECHAT_DETECTION_RESULT", "failure"], ["TYPECHAT_DETECTION_RAN", "false"],
+    ["TYPECHAT_DETECTION_CONCLUSION", "warning"], ["TYPECHAT_DRAFT_ARTIFACT_ID", ""],
+    ["TYPECHAT_DRAFT_BODY_SHA256", ""], ["TYPECHAT_DRAFT_BODY_SHA256", "f".repeat(64)],
+    ["TYPECHAT_PUBLISH_KIND", "discussion"],
+]) {
+    test(`direct replies reject an invalid ${field} handoff`, async () => {
+        const fixture = await readyReply();
+        fixture.publication.env[field] = value;
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock));
+        assert.equal(fixture.state.posts.length, 0);
+    });
+}
+
+test("direct replies cannot borrow a sealed artifact from a different run", async () => {
+    const fixture = await readyReply();
+    fixture.state.artifacts.get(500).workflow_run.id = 99;
+    await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+        /this owner-commanded run/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("direct replies cannot borrow another owner command's sealed response", async () => {
+    const fixture = await readyReply();
+    const other = fixture.event("reply", "/typechat reply", "another-command", 100);
+    await assert.rejects(() => checkPublication(fixture.github, other.context,
+        { ...fixture.publication.env, ...other.env }, fixture.bundle, clock), /different owner command/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("direct-reply body integrity also binds non-public assessment and provenance", async () => {
+    for (const change of [
+        bundle => { bundle.createdAt = "2026-10-30T00:21:00Z"; },
+        bundle => { bundle.draft.summary = "A different internal assessment."; },
+        bundle => { bundle.draft.scopeReason = "A different direction rationale."; },
+        bundle => { bundle.snapshotHash = "b".repeat(64); },
+    ]) {
+        const fixture = await readyReply();
+        change(fixture.bundle);
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+            /sealed response or acceptance preview changed/);
+        assert.equal(fixture.state.posts.length, 0);
+    }
+});
+
+test("a writer-only reply rerun may use its inherited successful seal, but never duplicate a write", async () => {
+    const fixture = await readyReply();
+    fixture.state.producerRun.status = "completed";
+    fixture.state.producerRun.conclusion = "failure";
+    fixture.publication.env.GITHUB_RUN_ATTEMPT = "2";
+    const id = await reserve(fixture);
+    const result = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock);
+    assert.equal(result.posted, true);
+    assert.equal(fixture.state.posts.length, 1);
+});
+
+test("reply and preview authorization cannot be exchanged", async () => {
+    const direct = await readyReply();
+    direct.state.producerRun.status = "completed";
+    direct.state.producerRun.conclusion = "success";
+    const approval = direct.event("publish", `/typechat publish 500:${direct.bundle.bodyHash}`, "approval", 200);
+    await assert.rejects(() => checkPublication(direct.github, approval.context, approval.env, direct.bundle, clock),
+        /publication mode/);
+    const preview = await ready();
+    const request = preview.event("reply", "/typechat reply", "reply-request", 100);
+    const environment = { ...direct.publication.env, ...request.env, TYPECHAT_DRAFT_BODY_SHA256: preview.bundle.bodyHash };
+    await assert.rejects(() => checkPublication(preview.github, request.context, environment, preview.bundle, clock),
+        /publication mode/);
+    assert.equal(direct.state.posts.length + preview.state.posts.length, 0);
+});
+
+test("direct replies reject withdrawn commands, changed context, and stale controls", async () => {
+    for (const change of [
+        fixture => { fixture.state.comments.delete("request"); },
+        fixture => { fixture.state.comments.get("request").lastEditedAt = NOW.toISOString(); },
+        fixture => { fixture.state.thread.body = "Changed before posting"; },
+        fixture => { fixture.state.thread.locked = true; },
+        fixture => { fixture.state.thread.state = "CLOSED"; },
+        fixture => { fixture.state.fingerprints["AUTOMATION.md"] = "f".repeat(40); },
+        fixture => { fixture.publication.context.payload.sender.id = 7; },
+        fixture => { fixture.publication.context.payload.issue.pull_request = {}; },
+    ]) {
+        const fixture = await readyReply();
+        change(fixture);
+        await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock));
+        assert.equal(fixture.state.posts.length, 0);
+    }
+});
+
+test("expired reply commands cannot start fresh work or publish a newer artifact", async () => {
+    const fixture = await readyReply();
+    const deadline = Date.parse(fixture.draftRun.context.payload.comment.created_at) + MAX_AGE_MS;
+    const lastValid = () => new Date(deadline - 1);
+    assert.equal((await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, lastValid)).shouldPost, true);
+    const expired = () => new Date(deadline);
+    await assert.rejects(() => prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, expired), /reply command has expired/);
+    await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, expired),
+        /reply command has expired/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("a copied reply marker from another bot does not suppress the owner's request", async () => {
+    const fixture = await readyReply();
+    const copied = fixture.state.comment("copied-reply", fixture.bundle.body, "github-actions", "Bot");
+    copied.author.id = "different-bot-node";
+    fixture.state.thread.comments.push(copied);
+    const prepared = await prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, clock);
+    assert.equal(prepared.alreadyReplied, undefined);
+    await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+        /target context changed/);
+    assert.equal(fixture.state.posts.length, 0);
+});
+
+test("edited or removed direct replies are not automatically overwritten or recreated", async () => {
+    for (const keepMarker of [true, false]) {
+        const fixture = await readyReply();
+        const id = await reserve(fixture);
+        const posted = await publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock);
+        const comment = fixture.state.comments.get(posted.id);
+        comment.body = keepMarker ? comment.body + "Maintainer clarification." : "Replaced by the maintainer.";
+        if (keepMarker) {
+            assert.equal((await prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, clock)).alreadyReplied, true);
+        } else {
+            await assert.rejects(() => prepareDraft(fixture.github, fixture.draftRun.context, fixture.draftRun.env, clock), /previous reply intent/);
+        }
+        assert.equal(fixture.state.posts.length, 1);
+    }
+});
+
+for (const persisted of [false, true]) {
+    test(`uncertain direct replies keep per-command retry protection (server persisted: ${persisted})`, async () => {
+        const fixture = await readyReply();
+        const id = await reserve(fixture);
+        fixture.state.postError = new Error("Connection lost");
+        fixture.state.persistBeforeError = persisted;
+        await assert.rejects(() => publishDraft(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, id, clock),
+            /outcome is uncertain/);
+        const rerun = fixture.event("reply", "/typechat reply", "request", 101, 2);
+        if (persisted) {
+            assert.equal((await prepareDraft(fixture.github, rerun.context, rerun.env, clock)).alreadyReplied, true);
+        } else {
+            await assert.rejects(() => prepareDraft(fixture.github, rerun.context, rerun.env, clock), /previous reply intent/);
+        }
+        assert.equal(fixture.state.posts.length, 1);
+    });
+}
+
+test("reply intent names are stable across different generated artifacts for the same command", async () => {
+    const fixture = await readyReply();
+    const first = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock);
+    fixture.state.artifacts.set(502, { ...fixture.state.artifacts.get(500), id: 502 });
+    fixture.publication.env.TYPECHAT_DRAFT_ARTIFACT_ID = "502";
+    const second = await checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock);
+    assert.equal(first.intentName, second.intentName);
+    fixture.state.artifacts.set(501, {
+        id: 501, name: first.intentName, expired: false,
+        workflow_run: { id: 100, repository_id: REPOSITORY.id, head_sha: SHA },
+    });
+    await assert.rejects(() => checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock),
+        /previous publication intent/);
+    assert.equal(fixture.state.posts.length, 0);
+});
 
 test("discussion context includes all top-level comment and reply pages", async () => {
     const fixture = setup("discussion");
@@ -388,6 +764,8 @@ test("draft schema rejects arbitrary metadata, hidden markup, and premature acce
         { summary: "Read https://example.invalid" }, { summary: "<!-- hidden -->" },
         { summary: "Read ftp://example.invalid" }, { summary: "Read www.example.invalid" },
         { summary: "First line\nSecond line" }, { questions: [""] },
+        { reply: [] }, { reply: [""] }, { reply: ["First line\nSecond line"] },
+        { reply: Array(7).fill("Too many paragraphs.") }, { reply: ["x".repeat(2001)] },
         { scope: "conflicts_with_direction", readiness: "ready_for_owner_decision" },
         { readiness: "ready_for_owner_decision" },
     ]) {
@@ -399,7 +777,7 @@ test("draft schema rejects arbitrary metadata, hidden markup, and premature acce
 
 test("draft schema rejects HTML comment delimiters in every text field", () => {
     for (const delimiter of ["<!--", "-->", "--!>"]) {
-        for (const field of ["summary", "scopeReason", "readinessReason", "questions",
+        for (const field of ["reply", "summary", "scopeReason", "readinessReason", "questions",
             "existingRequirements", "suggestedCriteria", "limitations"]) {
             const draft = candidate();
             const text = `Unexpected ${delimiter} delimiter`;
@@ -410,12 +788,68 @@ test("draft schema rejects HTML comment delimiters in every text field", () => {
     }
 });
 
+test("acceptance proposals require bounded, explicit terms, testable criteria, and no unresolved decisions", () => {
+    assert.deepEqual(validateDraft(proposalCandidate()), proposalCandidate());
+    for (const change of [
+        draft => { draft.proposal = null; },
+        draft => { draft.proposal.goal = ""; },
+        draft => { draft.proposal.goal = "x".repeat(2001); },
+        draft => { draft.proposal.scope = []; },
+        draft => { draft.proposal.nonGoals = []; },
+        draft => { draft.proposal.scope = Array(11).fill("An extra scope item."); },
+        draft => { draft.proposal.nonGoals = ["x".repeat(801)]; },
+        draft => { draft.proposal.accepted = true; },
+        draft => { draft.proposal = { goal: "Incomplete terms." }; },
+        draft => { draft.suggestedCriteria = []; },
+        draft => { draft.questions = ["An unresolved question."]; },
+        draft => { draft.readiness = "blocked_by_evidence"; },
+        draft => { draft.readiness = "existing_pr_review"; },
+        draft => { draft.scope = "conflicts_with_direction"; },
+    ]) {
+        const draft = proposalCandidate();
+        change(draft);
+        assert.throws(() => validateDraft(draft));
+    }
+    for (const field of ["goal", "scope", "nonGoals"]) {
+        for (const text of ["First line\nSecond line", "<!-- hidden -->", "Read https://example.invalid"]) {
+            const draft = proposalCandidate();
+            draft.proposal[field] = field === "goal" ? text : [text];
+            assert.throws(() => validateDraft(draft));
+        }
+    }
+});
+
+test("acceptance rendering escapes proposal text, preserves contribution references, and enforces the byte limit", async () => {
+    const fixture = await readyAcceptance();
+    const draft = proposalCandidate();
+    draft.proposal.goal = "@someone & <text> is not markup.";
+    draft.pullRequests = [{ number: 80, headSha: SHA, updatedAt: NOW.toISOString() }];
+    const rendered = renderAcceptance({ ...fixture.bundle, draft: validateDraft(draft) });
+    assert.ok(rendered.includes("\\@someone &amp; &lt;text&gt; is not markup\\."));
+    assert.ok(rendered.includes(`[#80](${REPO_URL}/pull/80)`));
+    assert.ok(rendered.includes(`${REPO_URL}/commit/${SHA}`));
+
+    draft.pullRequests = [];
+    draft.proposal.goal = "x";
+    draft.proposal.scope = Array(10).fill("x".repeat(800));
+    draft.proposal.nonGoals = Array(10).fill("x".repeat(800));
+    draft.suggestedCriteria = Array(8).fill("x".repeat(800));
+    const minimum = renderAcceptance({ ...fixture.bundle, draft: validateDraft(draft) });
+    const goalLength = MAX_COMMENT_BYTES - Buffer.byteLength(minimum) + 1;
+    assert.ok(goalLength > 0 && goalLength < 2000);
+    draft.proposal.goal = "x".repeat(goalLength);
+    assert.equal(Buffer.byteLength(renderAcceptance({ ...fixture.bundle, draft: validateDraft(draft) })), MAX_COMMENT_BYTES);
+    draft.proposal.goal += "x";
+    assert.throws(() => renderAcceptance({ ...fixture.bundle, draft: validateDraft(draft) }), /comment-size limit/);
+    draft.proposal.goal = "\u00e9".repeat(goalLength);
+    assert.throws(() => renderAcceptance({ ...fixture.bundle, draft: validateDraft(draft) }), /comment-size limit/);
+});
+
 test("rendering preserves plain text instead of interpreting model-supplied Markdown or entities", async () => {
     const fixture = await ready();
     const draft = validateDraft({
-        ...candidate(), summary: "# Not a trusted heading", questions: ["1. Not an ordered list"],
-        existingRequirements: ["Preserve Result<T> when count < 10."],
-        limitations: ["&lt;img&gt; is literal text."],
+        ...candidate(), reply: ["# Not a trusted heading", "1. Not an ordered list",
+            "Preserve Result<T> when count < 10.", "&lt;img&gt; is literal text.", "@someone is not a notification."],
     });
     const text = renderDraft({ ...fixture.bundle, draft });
     assert.ok(text.includes("\\# Not a trusted heading"));
@@ -423,6 +857,18 @@ test("rendering preserves plain text instead of interpreting model-supplied Mark
     assert.ok(text.includes("Preserve Result&lt;T&gt; when count &lt; 10\\."));
     assert.ok(text.includes("&amp;lt;img&amp;gt; is literal text\\."));
     assert.ok(!/^# Not a trusted heading$/m.test(text));
+    assert.ok(text.includes("\\@someone"));
+});
+
+test("the public response is conversational while assessment metadata stays out of the comment", async () => {
+    const fixture = await ready();
+    assert.ok(fixture.bundle.body.startsWith("Thanks for raising this\\."));
+    for (const heading of ["Project direction", "Readiness recommendation", "Recorded requirements",
+        "Suggested acceptance criteria", "Evidence limits"]) {
+        assert.ok(!fixture.bundle.body.includes(heading));
+        assert.ok(renderAssessment(fixture.bundle).includes(heading));
+    }
+    assert.ok(!fixture.bundle.body.includes(fixture.bundle.draft.summary));
 });
 
 test("sealing rejects changing discussion content, policy, and PR evidence", async () => {
@@ -442,7 +888,11 @@ test("sealing rejects changing discussion content, policy, and PR evidence", asy
 });
 
 for (const [name, change] of [
-    ["wrong digest", fixture => { fixture.publication.context.payload.comment.body = `/typechat publish 500:${"f".repeat(64)}`; fixture.state.comments.get("approval").body = fixture.publication.context.payload.comment.body; }],
+    ["wrong digest", fixture => {
+        const action = parseCommand(fixture.publication.context.payload.comment.body).action;
+        fixture.publication.context.payload.comment.body = `/typechat ${action} 500:${"f".repeat(64)}`;
+        fixture.state.comments.get("approval").body = fixture.publication.context.payload.comment.body;
+    }],
     ["the wrong publishing authority", fixture => { fixture.publication.env.TYPECHAT_PUBLISH_KIND = "discussion"; }],
     ["approval before the draft existed", fixture => {
         fixture.publication.context.payload.comment.created_at = "2026-10-30T00:25:00Z";
@@ -453,6 +903,9 @@ for (const [name, change] of [
     ["edited approval", fixture => { fixture.state.comments.get("approval").lastEditedAt = "2026-10-30T00:50:00Z"; }],
     ["a changed target", fixture => { fixture.state.thread.body = "New requirements"; }],
     ["a new non-control comment", fixture => { fixture.state.thread.comments.push(fixture.state.comment("new", "One more requirement", "contributor")); }],
+    ["another user's acceptance command", fixture => {
+        fixture.state.thread.comments.push(fixture.state.comment("foreign-approval", `/typechat accept 500:${"a".repeat(64)}`, "contributor"));
+    }],
     ["a closed target", fixture => { fixture.state.thread.state = "CLOSED"; }],
     ["a locked target", fixture => { fixture.state.thread.locked = true; }],
     ["tampered rendered text", fixture => { fixture.bundle.body += "Extra unapproved content"; }],
@@ -468,12 +921,14 @@ for (const [name, change] of [
     ["another rerunning producer actor", fixture => { fixture.state.producerRun.triggering_actor.id = 123; }],
     ["a different producer workflow", fixture => { fixture.state.producerRun.workflow_id = 123; }],
 ]) {
-    test(`publication rejects ${name} without posting`, async () => {
-        const fixture = await ready();
-        change(fixture);
-        await assert.rejects(checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock));
-        assert.equal(fixture.state.posts.length, 0);
-    });
+    for (const mode of ["publish", "accept"]) {
+        test(`${mode} rejects ${name} without posting`, async () => {
+            const fixture = mode === "accept" ? await readyAcceptance() : await ready();
+            change(fixture);
+            await assert.rejects(checkPublication(fixture.github, fixture.publication.context, fixture.publication.env, fixture.bundle, clock));
+            assert.equal(fixture.state.posts.length, 0);
+        });
+    }
 }
 
 test("same-second sealing and artifact times preserve exact approved publication", async () => {
@@ -738,14 +1193,18 @@ test("malformed artifact errors do not echo untrusted JSON contents", () => {
     }
 });
 
-for (const kind of ["issue", "discussion"]) {
-    test(`${kind}: the authored workflow scripts prepare, preview, and publish the same approved bytes`, async t => {
+for (const [kind, mode] of [
+    ["issue", "draft"], ["discussion", "draft"], ["issue", "reply"], ["discussion", "reply"],
+    ["issue", "accept"], ["discussion", "accept"],
+]) {
+    test(`${kind}/${mode}: the authored workflow scripts prepare, preview, and publish the exact checked bytes`, async t => {
         const workflowDirectory = new URL("../../.github/workflows/", import.meta.url);
         const markdown = fs.readFileSync(new URL("discussion-draft.md", workflowDirectory), "utf8");
         const draftWorkflow = parse(/^---\r?\n([\s\S]*?)\r?\n---/.exec(markdown)[1]);
         const publisher = parse(fs.readFileSync(new URL("publish-discussion-draft.yml", workflowDirectory), "utf8"));
         const fixture = setup(kind);
-        const draftRun = fixture.event();
+        const draftMode = mode === "accept" ? "draft" : mode;
+        const draftRun = fixture.event(draftMode, `/typechat ${draftMode}`);
         const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-draft-workflow-"));
         const savedEnvironment = { ...process.env };
         const summaries = [];
@@ -778,12 +1237,13 @@ for (const kind of ["issue", "discussion"]) {
             }
 
             const prepared = await execute(draftWorkflow.jobs.prepare.steps.find(step => step.id === "context"), draftRun);
+            assert.equal(prepared.should_draft, "true");
             const sealing = draftWorkflow.jobs.seal.steps;
             const contextDirectory = downloadDirectory(sealing.find(step => step.name === "Download original context"));
             fs.mkdirSync(contextDirectory);
             fs.copyFileSync(prepared.path, path.join(contextDirectory, "context.json"));
             const candidateDirectory = downloadDirectory(sealing.find(step => step.name === "Download candidate"));
-            writeJson(candidateDirectory, "discussion-draft.json", candidate());
+            writeJson(candidateDirectory, "discussion-draft.json", mode === "accept" ? proposalCandidate() : candidate());
             const detection = draftWorkflow["safe-outputs"]["threat-detection"];
             const scanCandidateDirectory = downloadDirectory(detection.steps.find(step => step.name === "Download candidate for detection"));
             fs.mkdirSync(scanCandidateDirectory);
@@ -797,7 +1257,18 @@ for (const kind of ["issue", "discussion"]) {
             const scanDirectory = downloadDirectory(sealing.find(step => step.name === "Download candidate scan binding"));
             fs.mkdirSync(scanDirectory);
             fs.copyFileSync(scanned.path, path.join(scanDirectory, "candidate-scan.json"));
-            const sealed = await execute(sealing.find(step => step.id === "seal"), draftRun);
+            const seal = sealing.find(step => step.id === "seal");
+            for (const outputTypes of [undefined, "", "report_missing_data", "noop,report_missing_data",
+                "report_incomplete", "noop,report_incomplete", "report_missing_tool", "unknown"]) {
+                delete process.env.TYPECHAT_AGENT_OUTPUT_TYPES;
+                await assert.rejects(execute(seal, draftRun, outputTypes === undefined ? {} : {
+                    TYPECHAT_AGENT_OUTPUT_TYPES: outputTypes,
+                }), /Only a successful native noop completion can be sealed/);
+                assert.equal(fs.existsSync(path.join(temporary, "typechat-sealed-draft")), false,
+                    `${outputTypes} must not produce a sealed artifact despite a valid candidate and successful scan`);
+                assert.equal(fixture.state.posts.length, 0);
+            }
+            const sealed = await execute(seal, draftRun, { TYPECHAT_AGENT_OUTPUT_TYPES: "noop" });
             const bundle = readJson(path.dirname(sealed.path), "sealed-draft.json", MAX_BUNDLE_BYTES);
             assert.equal(fixture.state.posts.length, 0);
 
@@ -810,38 +1281,74 @@ for (const kind of ["issue", "discussion"]) {
                 TYPECHAT_DRAFT_ARTIFACT_ID: "500",
                 TYPECHAT_DRAFT_ARTIFACT_URL: `${REPO_URL}/actions/runs/100/artifacts/500`,
             });
-            assert.ok(summaries.at(-1).includes(`/typechat publish 500:${bundle.bodyHash}`));
-            assert.ok(summaries.at(-1).endsWith(bundle.body));
+            assert.equal(summaries.at(-1).includes(`/typechat publish 500:${bundle.bodyHash}`), mode !== "reply");
+            assert.ok(summaries.at(-1).includes(bundle.body));
+            assert.ok(summaries.at(-1).includes("Assessment and evidence (not posted)"));
+            const approved = mode === "accept" ? bundle.acceptance : bundle;
+            if (mode === "accept") {
+                assert.ok(summaries.at(-1).includes(`/typechat accept 500:${approved.bodyHash}`));
+                assert.ok(summaries.at(-1).includes("Work acceptance preview (not yet accepted)"));
+                assert.ok(summaries.at(-1).includes(approved.body));
+            } else {
+                assert.ok(!summaries.at(-1).includes("/typechat accept "));
+            }
 
             t.mock.timers.setTime(NOW.getTime());
-            const publication = fixture.event("publish", `/typechat publish 500:${bundle.bodyHash}`, "approval", 200);
-            const publishJob = publisher.jobs[`publish_${kind}`];
+            const action = mode === "accept" ? "accept" : "publish";
+            const publication = mode === "reply" ?
+                { context: structuredClone(draftRun.context), env: { ...draftRun.env } } :
+                fixture.event(action, `/typechat ${action} 500:${approved.bodyHash}`, "approval", 200);
+            const publishJob = mode === "reply" ? draftWorkflow.jobs[`reply_${kind}`] : publisher.jobs[`publish_${kind}`];
             Object.assign(publication.env, publishJob.env);
+            if (mode === "reply") {
+                fixture.state.producerRun.status = "in_progress";
+                fixture.state.producerRun.conclusion = null;
+                Object.assign(publication.env, {
+                    TYPECHAT_DRAFT_ARTIFACT_ID: "500", TYPECHAT_DRAFT_BODY_SHA256: sealed.body_hash,
+                    TYPECHAT_AGENT_RESULT: "success", TYPECHAT_SEAL_RESULT: "success",
+                    TYPECHAT_DETECTION_RESULT: "success", TYPECHAT_DETECTION_RAN: "true",
+                    TYPECHAT_DETECTION_CONCLUSION: "success",
+                });
+            }
             const steps = publishJob.steps;
             const identified = await execute(steps.find(step => step.id === "identify"), publication);
             assert.deepEqual(identified, { artifact_id: "500", run_id: "100" });
-            const bundleDirectory = downloadDirectory(steps.find(step => step.name === "Download the approved sealed draft"));
+            const bundleDirectory = downloadDirectory(steps.find(step =>
+                step.name === (mode === "reply" ? "Download the checked reply" : "Download the approved sealed draft")));
             fs.mkdirSync(bundleDirectory);
             fs.copyFileSync(sealed.path, path.join(bundleDirectory, "sealed-draft.json"));
             const checked = await execute(steps.find(step => step.id === "check"), publication);
             assert.equal(checked.should_post, "true");
-            assert.equal(JSON.parse(fs.readFileSync(checked.intent_path, "utf8")).bodyHash, bundle.bodyHash);
+            assert.equal(JSON.parse(fs.readFileSync(checked.intent_path, "utf8")).bodyHash, approved.bodyHash);
             assert.equal(fixture.state.posts.length, 0, "Approval and intent preparation alone must not post");
             fixture.state.artifacts.set(501, {
                 id: 501, name: checked.intent_name, expired: false,
                 created_at: NOW.toISOString(), expires_at: "2026-11-29T00:00:00Z",
-                workflow_run: { id: 200, repository_id: REPOSITORY.id, head_sha: SHA },
+                workflow_run: { id: publication.context.runId, repository_id: REPOSITORY.id, head_sha: SHA },
             });
             const published = await execute(steps.find(step => step.id === "publish"), publication, {
                 TYPECHAT_INTENT_ARTIFACT_ID: "501",
             });
-            assert.deepEqual(fixture.state.posts, [bundle.body]);
+            assert.deepEqual(fixture.state.posts, [approved.body]);
             const receipt = JSON.parse(fs.readFileSync(published.receipt_path, "utf8"));
             assert.equal(receipt.posted, true);
-            assert.equal(receipt.bodyHash, bundle.bodyHash);
+            assert.equal(receipt.bodyHash, approved.bodyHash);
+            assert.equal(receipt.authorization, mode === "reply" ? "reply" : action);
+            assert.ok(summaries.at(-1).includes(mode === "accept" ? "Work accepted" :
+                mode === "reply" ? "Requested reply posted" : "Approved draft published"));
             const repeated = await execute(steps.find(step => step.id === "check"), publication);
             assert.equal(repeated.should_post, "false");
             assert.equal(fixture.state.posts.length, 1);
+            if (mode === "accept") {
+                assert.ok(summaries.at(-1).includes("Work already accepted"));
+            }
+            if (mode === "reply") {
+                const noOp = await execute(draftWorkflow.jobs.prepare.steps.find(step => step.id === "context"), draftRun);
+                assert.equal(noOp.should_draft, "false");
+                assert.equal(noOp.path, undefined);
+                assert.ok(summaries.at(-1).includes("Command already answered"));
+                assert.equal(fixture.state.posts.length, 1);
+            }
         }
         finally {
             for (const key of Object.keys(process.env)) {
@@ -853,12 +1360,13 @@ for (const kind of ["issue", "discussion"]) {
     });
 }
 
-test("a file-only candidate is included in detector input and bound to the exact scanned bytes", t => {
+test("a file-only candidate and its acceptance proposal are included in detection and bound to the exact scanned bytes", t => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-file-only-scan-"));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     const candidateDirectory = path.join(directory, "candidate");
     const detectionDirectory = path.join(directory, "detection");
-    writeJson(candidateDirectory, "discussion-draft.json", candidate());
+    const draft = proposalCandidate();
+    writeJson(candidateDirectory, "discussion-draft.json", draft);
     const file = path.join(candidateDirectory, "discussion-draft.json");
     const text = fs.readFileSync(file, "utf8");
     const hash = stageCandidateForDetection(candidateDirectory, detectionDirectory);
@@ -866,9 +1374,12 @@ test("a file-only candidate is included in detector input and bound to the exact
     assert.deepEqual(input.items, [{ type: "discussion-draft", content: text }]);
     assert.equal(hash, digest(text));
     const scan = createCandidateScan(hash, "success", 100, "1");
-    assert.deepEqual(readDetectedDraft(candidateDirectory, scan, 100, "1"), candidate());
+    assert.deepEqual(readDetectedDraft(candidateDirectory, scan, 100, "1"), draft);
     fs.appendFileSync(file, "\n");
-    assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), candidate());
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")), draft);
+    assert.throws(() => readDetectedDraft(candidateDirectory, scan, 100, "1"), /differs from the threat-scanned artifact/);
+    draft.proposal.scope.push("Unscanned scope.");
+    fs.writeFileSync(file, JSON.stringify(draft) + "\n");
     assert.throws(() => readDetectedDraft(candidateDirectory, scan, 100, "1"), /differs from the threat-scanned artifact/);
 });
 

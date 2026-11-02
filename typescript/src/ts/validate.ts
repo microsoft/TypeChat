@@ -27,7 +27,25 @@ interface NewableFunction extends Function {}
 interface String { readonly length: number }
 interface Boolean { valueOf(): boolean }
 interface Number { valueOf(): number }
-interface RegExp { test(string: string): boolean }`;
+interface RegExp { test(string: string): boolean }
+interface ReadonlyArray<T> { readonly length: number, readonly [n: number]: T }
+type Partial<T> = { [P in keyof T]?: T[P] };
+type Required<T> = { [P in keyof T]-?: T[P] };
+type Readonly<T> = { readonly [P in keyof T]: T[P] };
+type Pick<T, K extends keyof T> = { [P in K]: T[P] };
+type Record<K extends keyof any, T> = { [P in K]: T };
+type Exclude<T, U> = T extends U ? never : T;
+type Extract<T, U> = T extends U ? T : never;
+type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>>;
+type NonNullable<T> = T & {};
+interface PromiseLike<T> { then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): PromiseLike<TResult1 | TResult2> }
+interface Promise<T> { then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): Promise<TResult1 | TResult2>; catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): Promise<T | TResult> }
+type ReturnType<T extends (...args: any) => any> = T extends (...args: any) => infer R ? R : any;
+type Awaited<T> = T extends null | undefined ? T : T extends object & { then(onfulfilled: infer F, ...args: infer _): any } ? F extends ((value: infer V, ...args: infer _) => any) ? Awaited<V> : never : T;
+type Uppercase<S extends string> = intrinsic;
+type Lowercase<S extends string> = intrinsic;
+type Capitalize<S extends string> = intrinsic;
+type Uncapitalize<S extends string> = intrinsic;`;
 
 const configFileName = "/tsconfig.json";
 const libFileName = "/lib.d.ts";

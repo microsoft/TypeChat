@@ -27,6 +27,7 @@ const detectionCommand = compiled.jobs.detection.steps.find(step => step.name ==
 const sourceSeal = source.jobs.seal.steps;
 const scan = source["safe-outputs"]["threat-detection"];
 const publishSteps = publisher.jobs.publish_issue.steps;
+const replySteps = source.jobs.reply_issue.steps;
 
 test("discussion commands are created-comment events guarded by owner and trusted branch", () => {
     const triggers = { issue_comment: { types: ["created"] }, discussion_comment: { types: ["created"] } };
@@ -34,7 +35,8 @@ test("discussion commands are created-comment events guarded by owner and truste
     assert.deepEqual(publisher.on, triggers);
     assert.deepEqual(source.on.roles, ["admin", "maintain", "write"]);
     assert.equal(source.on["github-token"], "${{ secrets.GITHUB_TOKEN }}");
-    const conditions = [source.if, source.jobs.prepare.if, ...Object.values(publisher.jobs).map(job => job.if)];
+    const conditions = [source.if, source.jobs.prepare.if, source.jobs.reply_issue.if, source.jobs.reply_discussion.if,
+        ...Object.values(publisher.jobs).map(job => job.if)];
     for (const condition of conditions) {
         for (const guard of [
             "github.repository == 'microsoft/TypeChat'",
@@ -49,13 +51,65 @@ test("discussion commands are created-comment events guarded by owner and truste
     }
     assert.ok(source.if.includes("!github.event.issue.pull_request"));
     assert.ok(source.if.includes("startsWith(github.event.comment.body, '/typechat draft')"));
+    assert.ok(source.if.includes("startsWith(github.event.comment.body, '/typechat reply')"));
     assert.ok(compiled.jobs.activation.if.includes(source.if));
     assert.ok(publisher.jobs.publish_issue.if.includes("!github.event.issue.pull_request"));
     assert.ok(publisher.jobs.publish_issue.if.includes("github.event_name == 'issue_comment'"));
     assert.ok(publisher.jobs.publish_discussion.if.includes("github.event_name == 'discussion_comment'"));
     for (const job of Object.values(publisher.jobs)) {
         assert.ok(job.if.includes("startsWith(github.event.comment.body, '/typechat publish ')"));
+        assert.ok(job.if.includes("startsWith(github.event.comment.body, '/typechat accept ')"));
     }
+});
+
+test("exact owner acceptance uses only the target-scoped manual publisher", () => {
+    assert.deepEqual(Object.keys(publisher.jobs), ["publish_issue", "publish_discussion"]);
+    for (const kind of ["issue", "discussion"]) {
+        const job = publisher.jobs[`publish_${kind}`];
+        const github = {
+            repository: "microsoft/TypeChat", event_name: `${kind}_comment`,
+            triggering_actor: "robgruen", ref: "refs/heads/main",
+            event: { sender: { type: "User", id: 25374553 },
+                comment: { user: { id: 25374553 }, body: `/typechat accept 500:${"a".repeat(64)}` },
+                repository: { default_branch: "main" }, issue: {} },
+        };
+        const evaluate = new Function("github", "startsWith", "format", `return (${job.if});`);
+        const allowed = context => evaluate(context,
+            (value, prefix) => value.startsWith(prefix), (_, branch) => `refs/heads/${branch}`);
+        assert.equal(allowed(github), true);
+        for (const change of [
+            value => { value.event.sender.id = 7; },
+            value => { value.event.sender.type = "Bot"; },
+            value => { value.event.comment.user.id = 7; },
+            value => { value.triggering_actor = "someone-else"; },
+            value => { value.repository = "other/repository"; },
+            value => { value.ref = "refs/pull/1/merge"; },
+            value => { value.event_name = "workflow_dispatch"; },
+        ]) {
+            const altered = structuredClone(github);
+            change(altered);
+            assert.equal(allowed(altered), false);
+        }
+        for (const body of ["/typechat accept", "/typechat accept-latest", "/typechat reply", "/typechat draft", "/typechat build"]) {
+            const altered = structuredClone(github);
+            altered.event.comment.body = body;
+            assert.equal(allowed(altered), false);
+        }
+        if (kind === "issue") {
+            const pullRequest = structuredClone(github);
+            pullRequest.event.issue.pull_request = {};
+            assert.equal(allowed(pullRequest), false);
+        }
+        assert.deepEqual(job.permissions, {
+            contents: "read", actions: "read", "pull-requests": "read",
+            [kind === "issue" ? "issues" : "discussions"]: "write",
+        });
+        assert.equal(job.env.TYPECHAT_PUBLISH_KIND, kind);
+    }
+    assert.ok(publisher.concurrency.group.includes("startsWith(github.event.comment.body, '/typechat accept ')"));
+    const publish = publishSteps.find(step => step.id === "publish");
+    assert.ok(publish.with.script.includes("authorization"));
+    assert.ok(publish.with.script.includes("does not authorize an automated implementation run"));
 });
 
 test("draft requests use the native eyes acknowledgment without public status comments", () => {
@@ -118,11 +172,16 @@ test("drafting reuses the proven tools and model without enabling the future bui
     assert.ok(!agent.steps.some(step => step.uses?.startsWith("actions/checkout@")));
 });
 
-test("only the main agent and detector can infer, and reaction writes stay in trusted activation", () => {
+test("model access stays read-only and direct reply writes are target-scoped trusted jobs", () => {
     assert.deepEqual(compiled.permissions, {});
     for (const [name, job] of Object.entries(compiled.jobs)) {
         const permissions = job.permissions ?? compiled.permissions;
         assert.equal(typeof permissions, "object", `${name} must inherit no permissions or declare them explicitly`);
+        if (name === "reply_issue" || name === "reply_discussion") {
+            const scope = name === "reply_issue" ? "issues" : "discussions";
+            assert.deepEqual(permissions, { contents: "read", actions: "read", "pull-requests": "read", [scope]: "write" });
+            continue;
+        }
         for (const [scope, level] of Object.entries(permissions)) {
             if (name === "activation" && ["issues", "discussions", "pull-requests"].includes(scope)) {
                 assert.equal(level, "write");
@@ -148,6 +207,8 @@ test("only the main agent and detector can infer, and reaction writes stay in tr
 test("trusted preparation gates the model and successful detection gates sealing", () => {
     assert.ok([compiled.jobs.prepare.needs].flat().includes("activation"));
     assert.ok(agent.needs.includes("prepare"));
+    assert.ok(agent.if.includes("needs.prepare.outputs.should_draft == 'true'"));
+    assert.equal(source.jobs.prepare.outputs.should_draft, "${{ steps.context.outputs.should_draft }}");
     assert.ok(compiled.jobs.prepare.if.includes(source.if));
     for (const dependency of ["prepare", "agent", "detection"]) {
         assert.ok(compiled.jobs.seal.needs.includes(dependency));
@@ -210,6 +271,18 @@ test("draft preparation must not pre-complete the model with a native noop", () 
     assert.ok(Object.hasOwn(config, "report_incomplete"));
     const text = fs.readFileSync(new URL("discussion-draft.md", directory), "utf8");
     assert.ok(text.includes("After writing `discussion-draft.json`, call `safeoutputs-noop`"));
+});
+
+test("trusted sealing checks native completion before exposing an artifact to either writer", () => {
+    const seal = sourceSeal.find(step => step.id === "seal");
+    const generated = compiled.jobs.seal.steps.find(step => step.id === "seal");
+    assert.deepEqual(seal.env, { TYPECHAT_AGENT_OUTPUT_TYPES: "${{ needs.agent.outputs.output_types }}" });
+    assert.deepEqual(generated.env, seal.env);
+    assert.equal(generated.with.script, seal.with.script);
+    assert.equal(agent.outputs.output_types, "${{ steps.collect_output.outputs.output_types }}");
+    for (const kind of ["issue", "discussion"]) {
+        assert.ok(compiled.jobs[`reply_${kind}`].if.includes("needs.seal.result == 'success'"));
+    }
 });
 
 test("the compiled detection guard accepts collected outputs but never treats a missing signal as success", () => {
@@ -288,6 +361,68 @@ test("publication authenticates provenance before download and reserves intent b
     assert.equal(publishSteps.filter(step => step.with?.script?.includes("await helper.publishDraft(")).length, 1);
 });
 
+test("direct replies require the reply command and every mandatory successful stage", () => {
+    const needs = {
+        prepare: { outputs: { should_draft: "true" } },
+        agent: { result: "success" },
+        seal: { result: "success", outputs: { artifact_id: "500", body_hash: "a".repeat(64) } },
+        detection: { result: "success", outputs: { run_detection: "true", detection_conclusion: "success" } },
+    };
+    for (const kind of ["issue", "discussion"]) {
+        const job = source.jobs[`reply_${kind}`];
+        const generated = compiled.jobs[`reply_${kind}`];
+        for (const prerequisite of ["prepare", "agent", "detection", "seal"]) {
+            assert.ok(generated.needs.includes(prerequisite));
+        }
+        assert.ok(generated.if.includes("needs.detection.outputs.detection_success == 'true'"));
+        assert.equal(job.env.TYPECHAT_PUBLISH_KIND, kind);
+        assert.deepEqual(job.env, {
+            TYPECHAT_PUBLISH_KIND: kind,
+            TYPECHAT_DRAFT_ARTIFACT_ID: "${{ needs.seal.outputs.artifact_id }}",
+            TYPECHAT_DRAFT_BODY_SHA256: "${{ needs.seal.outputs.body_hash }}",
+            TYPECHAT_AGENT_RESULT: "${{ needs.agent.result }}",
+            TYPECHAT_SEAL_RESULT: "${{ needs.seal.result }}",
+            TYPECHAT_DETECTION_RESULT: "${{ needs.detection.result }}",
+            TYPECHAT_DETECTION_RAN: "${{ needs.detection.outputs.run_detection }}",
+            TYPECHAT_DETECTION_CONCLUSION: "${{ needs.detection.outputs.detection_conclusion }}",
+        });
+        const github = {
+            repository: "microsoft/TypeChat", event_name: `${kind}_comment`,
+            triggering_actor: "robgruen", ref: "refs/heads/main",
+            event: { sender: { type: "User", id: 25374553 }, comment: { user: { id: 25374553 }, body: "/typechat reply" },
+                repository: { default_branch: "main" }, issue: {} },
+        };
+        const evaluate = new Function("github", "needs", "startsWith", "format", `return (${job.if});`);
+        const allowed = (context, results) => evaluate(context, results,
+            (value, prefix) => value.startsWith(prefix), (_, branch) => `refs/heads/${branch}`);
+        assert.equal(allowed(github, needs), true);
+        for (const body of ["/typechat draft", `/typechat publish 500:${"a".repeat(64)}`, `/typechat accept 500:${"a".repeat(64)}`]) {
+            assert.equal(allowed({ ...github, event: { ...github.event, comment: { ...github.event.comment, body } } }, needs), false);
+        }
+        for (const dependency of ["agent", "seal", "detection"]) {
+            assert.equal(allowed(github, { ...needs, [dependency]: { ...needs[dependency], result: "failure" } }), false);
+        }
+        assert.equal(allowed(github, { ...needs, prepare: { outputs: { should_draft: "false" } } }), false);
+        for (const outputs of [{ run_detection: "false", detection_conclusion: "success" },
+            { run_detection: "true", detection_conclusion: "warning" }]) {
+            assert.equal(allowed(github, { ...needs, detection: { result: "success", outputs } }), false);
+        }
+    }
+    const identify = replySteps.findIndex(step => step.id === "identify");
+    const download = replySteps.findIndex(step => step.name === "Download the checked reply");
+    const check = replySteps.findIndex(step => step.id === "check");
+    const intent = replySteps.findIndex(step => step.id === "intent_artifact");
+    const post = replySteps.findIndex(step => step.id === "publish");
+    assert.ok(identify >= 0 && identify < download && download < check && check < intent && intent < post);
+    for (const index of [intent, post]) {
+        assert.equal(replySteps[index].if, "success() && steps.check.outputs.should_post == 'true'");
+    }
+    assert.equal(replySteps[intent].with["retention-days"], 30);
+    assert.equal(replySteps[post].with.retries, 0);
+    assert.equal(source.jobs.seal.outputs.artifact_id, "${{ steps.review_artifact.outputs.artifact-id }}");
+    assert.equal(source.jobs.seal.outputs.body_hash, "${{ steps.seal.outputs.body_hash }}");
+});
+
 test("only owner commands share the per-thread drafting and publishing queue", () => {
     const groups = [compiled, publisher].map(workflow => {
         assert.equal(workflow.concurrency["cancel-in-progress"], false);
@@ -305,6 +440,7 @@ test("only owner commands share the per-thread drafting and publishing queue", (
         return key[0];
     });
     assert.equal(groups[0], groups[1]);
+    assert.ok(compiled.concurrency.group.includes("startsWith(github.event.comment.body, '/typechat reply')"));
 });
 
 test("trusted scripts, actions, checkouts, and artifact uploads retain their safety settings", () => {
@@ -318,7 +454,7 @@ test("trusted scripts, actions, checkouts, and artifact uploads retain their saf
                     assert.equal(step.with.repository, undefined);
                     assert.equal(step.with["persist-credentials"], false);
                 }
-                for (const step of [...source.jobs.prepare.steps, ...sourceSeal, ...scan.steps, ...scan["post-steps"], ...publishSteps]) {
+                for (const step of [...source.jobs.prepare.steps, ...sourceSeal, ...scan.steps, ...scan["post-steps"], ...publishSteps, ...replySteps]) {
                     if (step.uses?.startsWith("actions/checkout@")) {
                         assert.equal(step.with.ref, "${{ github.sha }}");
                         assert.equal(step.with["persist-credentials"], false);
@@ -332,7 +468,7 @@ test("trusted scripts, actions, checkouts, and artifact uploads retain their saf
             }
         }
     }
-    const uploads = [...source.jobs.prepare.steps, ...sourceSeal, ...source["post-steps"], ...scan["post-steps"], ...publishSteps]
+    const uploads = [...source.jobs.prepare.steps, ...sourceSeal, ...source["post-steps"], ...scan["post-steps"], ...publishSteps, ...replySteps]
         .filter(step => step.uses?.startsWith("actions/upload-artifact@"));
     for (const step of uploads) {
         assert.equal(step.with["if-no-files-found"], "error");
