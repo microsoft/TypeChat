@@ -109,7 +109,7 @@ export function createTypeScriptJsonValidator<T extends object = object>(
 
         writeFile(
             schemaValidationFileName,
-            `type __TypeChatSchemaTarget = import('./schema').${schemaValidationTypeName};\n`
+            `export type __TypeChatSchemaTarget = import('./schema').${schemaValidationTypeName};\n`
         );
         const snapshot = api.updateSnapshot({
             fileChanges: { changed: [schemaValidationFileName] }

@@ -88,6 +88,12 @@ describe("createTypeScriptJsonValidator", () => {
                 diagnostic: /MissingType/
             },
             {
+                name: "references to the internal probe name",
+                schema: "export interface Event { next?: __TypeChatSchemaTarget; }",
+                typeName: "Event",
+                diagnostic: /__TypeChatSchemaTarget/
+            },
+            {
                 name: "missing target exports",
                 schema: "export interface Event { dateTime: string; }",
                 typeName: "MissingEvent",
@@ -120,6 +126,19 @@ describe("createTypeScriptJsonValidator", () => {
                 });
             }
         }
+
+        it("does not conflict with a global interface named like the probe", () => {
+            const validator = validatorFor(
+                "declare global { interface __TypeChatSchemaTarget { value: string; } }\nexport interface Event { value: string; }",
+                "Event"
+            );
+            try {
+                assert.ok(validator[typeChatSchemaValidation]().success);
+                assert.ok(validator.validate({ value: "ok" }).success);
+            } finally {
+                validator.close();
+            }
+        });
 
         it("accepts a valid schema with required properties and caches the result", () => {
             const validator = validatorFor(
