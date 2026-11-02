@@ -100,6 +100,11 @@ not publish draft content or accept work. Generation keeps its 50-credit main bu
 separately budgeted detection. Acceptance does not launch a coding agent or
 enable the future implementation budget.
 
+The [owner-triggered implementation pilot](./AUTOMATION.md#third-pilot-owner-triggered-issue-implementation)
+implements the workflow accepted in [#504](https://github.com/microsoft/TypeChat/issues/504)
+as a separate, disabled-by-default extension. Review, activation, and a fresh
+owner build command remain distinct; no coding run or merge happens automatically.
+
 | Milestone | Implemented | Current status |
 | --- | --- | --- |
 | Community-facing automation plan | 2026-10-26 | Documented in [AUTOMATION.md](./AUTOMATION.md). |

@@ -499,12 +499,12 @@ test("the candidate-file validator enforces the exact 64-KiB bound and safe JSON
     }
 });
 
-test("CI covers helper changes and compiles both workflows with the pinned runtime", () => {
+test("CI covers helper changes and compiles all three workflows with the pinned runtime", () => {
     for (const event of ["push", "pull_request"]) {
         assert.ok(checks.on[event].paths.includes("tools/**"));
         assert.ok(checks.on[event].paths.includes(".github/workflows/**"));
     }
     const compile = checks.jobs.compile.steps.find(step => step.name === "Validate and compile agent workflows");
-    assert.match(compile.run, /gh aw compile backlog-assessment discussion-draft --strict --no-check-update --no-logo/);
+    assert.match(compile.run, /gh aw compile backlog-assessment discussion-draft issue-implementation --strict --no-check-update --no-logo/);
     assert.match(compile.run, /--action-tag 32ecafbc061c9af57e9361942099e381102ae304/);
 });
