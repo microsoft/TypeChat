@@ -79,11 +79,13 @@ for (const api of ["chat", "responses", "azure"] as const) {
         const translator = createJsonTranslator(factory(), validator);
         const result = await translator.translate("request");
         assert.ok(!result.success);
-        assert.match(result.message, /unexpected response format/);
+        assert.match(result.message, /filtered or refused/);
+        assert.ok(!result.message.includes("raw-body-not-metadata"));
+        assert.ok(!result.message.includes("declined"));
         assert.deepEqual(result.metadata?.usage, first);
         assert.deepEqual(result.metadata?.responses[0].filtering, { reason: "content_filter", blocked: true, refusals: ["declined"] });
         assert.equal(result.responseText, api === "responses" ? undefined : valid);
-        assert.throws(() => getData(result), /unexpected response format/);
+        assert.throws(() => getData(result), /filtered or refused/);
         assert.equal(fetch.mock.callCount(), 1);
     });
 
@@ -91,6 +93,7 @@ for (const api of ["chat", "responses", "azure"] as const) {
         t.mock.method(globalThis, "fetch", async () => Response.json({ usage: wireUsage(13, 7, 20) }));
         const result = await factory().complete("request");
         assert.ok(!result.success);
+        assert.match(result.message, /unexpected response format/);
         assert.deepEqual(result.metadata?.usage, first);
     });
 }
@@ -149,6 +152,74 @@ test("partial reporting distinguishes missing counts, zero, and missing metadata
         assert.deepEqual(result.metadata?.usageReporting, { inputTokens: "usage" in tail ? "complete" : "partial", outputTokens: "partial" });
         assert.deepEqual(result.metadata?.responses[1], tail);
         assert.ok(!("totalTokens" in (result.metadata?.usage ?? {})));
+    }
+});
+
+test("checked usage totals preserve records and valid data when an aggregate overflows", () => {
+    const records = [
+        { usage: { inputTokens: Number.MAX_SAFE_INTEGER, outputTokens: 1 } },
+        { usage: { inputTokens: 2, outputTokens: 2 } }
+    ];
+    const original = success({ value: 42 });
+    const result = withResponseMetadata(original, records);
+    assert.deepEqual(getData(result), { value: 42 });
+    assert.deepEqual(original, success({ value: 42 }));
+    assert.deepEqual(result.metadata?.responses, records);
+    assert.deepEqual(result.metadata?.usage, { outputTokens: 3 });
+    assert.deepEqual(result.metadata?.usageReporting, { inputTokens: "overflow", outputTokens: "complete" });
+    for (const counts of [[Number.MAX_SAFE_INTEGER - 1, 1], [Number.MAX_SAFE_INTEGER, 0]]) {
+        const boundary = withResponseMetadata(success(valid), counts.map(inputTokens => ({ usage: { inputTokens } })));
+        assert.deepEqual(boundary.metadata?.usage, { inputTokens: Number.MAX_SAFE_INTEGER });
+        assert.deepEqual(boundary.metadata?.usageReporting, { inputTokens: "complete" });
+    }
+});
+
+test("HTTP retries mark overflow even when no aggregate can be represented", async t => {
+    let calls = 0;
+    t.mock.method(globalThis, "fetch", async () => {
+        calls++;
+        return Response.json({
+            usage: { prompt_tokens: calls === 1 ? Number.MAX_SAFE_INTEGER : 2 },
+            ...(calls === 1 ? {} : { choices: [{ message: { content: valid } }] })
+        }, { status: calls === 1 ? 503 : 200 });
+    });
+    const model = createOpenAILanguageModel("test", "test");
+    model.retryMaxAttempts = 1;
+    model.retryPauseMs = 0;
+    const result = await model.complete("request");
+    assert.ok(result.success);
+    assert.equal(result.data, valid);
+    assert.equal(calls, 2);
+    assert.deepEqual(result.metadata?.responses, [
+        { usage: { inputTokens: Number.MAX_SAFE_INTEGER } },
+        { usage: { inputTokens: 2 } }
+    ]);
+    assert.equal(result.metadata?.usage, undefined);
+    assert.deepEqual(result.metadata?.usageReporting, { inputTokens: "overflow" });
+});
+
+test("repair overflow is explicit on success and failure without discarding responses", async () => {
+    for (const tail of [success(valid), error("repair failed")]) {
+        const { translator, calls } = translatorFor([
+            tagged(success(invalid), { usage: { inputTokens: Number.MAX_SAFE_INTEGER } }),
+            tagged(tail, { usage: { inputTokens: 2 } })
+        ]);
+        const result = await translator.translate("request");
+        assert.equal(result.success, tail.success);
+        if (result.success) {
+            assert.deepEqual(result.data, { value: 42 });
+        } else {
+            assert.equal(result.message, "repair failed");
+            assert.deepEqual(result.data, { value: "bad" });
+            assert.equal(result.responseText, invalid);
+        }
+        assert.equal(calls(), 2);
+        assert.deepEqual(result.metadata?.responses, [
+            { usage: { inputTokens: Number.MAX_SAFE_INTEGER } },
+            { usage: { inputTokens: 2 } }
+        ]);
+        assert.equal(result.metadata?.usage, undefined);
+        assert.deepEqual(result.metadata?.usageReporting, { inputTokens: "overflow" });
     }
 });
 

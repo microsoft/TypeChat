@@ -27,8 +27,8 @@ export interface TypeChatResponseMetadata {
 export interface TypeChatMetadata {
     responses: TypeChatResponseMetadata[];
     usage?: TypeChatTokenUsage;
-    /** Coverage of each reported total; absent when no response reported that count. */
-    usageReporting?: { [K in keyof TypeChatTokenUsage]?: "complete" | "partial" };
+    /** Coverage of each total; overflow marks an unrepresentable total omitted from usage. */
+    usageReporting?: { [K in keyof TypeChatTokenUsage]?: "complete" | "partial" | "overflow" };
 }
 
 /**
@@ -104,20 +104,33 @@ export function withResponseMetadata<T>(result: Result<T>, responses: TypeChatRe
     for (const key of ["inputTokens", "outputTokens", "totalTokens"] as const) {
         let total = 0;
         let reported = 0;
+        let overflow = false;
         for (const response of responses) {
             const count = response.usage?.[key];
             if (count !== undefined) {
-                total += count;
                 reported++;
+                if (!overflow) {
+                    if (count > Number.MAX_SAFE_INTEGER - total) {
+                        overflow = true;
+                    } else {
+                        total += count;
+                    }
+                }
             }
         }
         if (reported) {
-            usage[key] = total;
-            reporting[key] = reported === responses.length ? "complete" : "partial";
+            if (overflow) {
+                reporting[key] = "overflow";
+            } else {
+                usage[key] = total;
+                reporting[key] = reported === responses.length ? "complete" : "partial";
+            }
         }
     }
     if (Object.keys(usage).length) {
         metadata.usage = usage;
+    }
+    if (Object.keys(reporting).length) {
         metadata.usageReporting = reporting;
     }
     if (result.success) {

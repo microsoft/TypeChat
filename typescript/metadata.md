@@ -8,7 +8,7 @@ the default limit of one repair are unchanged.
 ```ts
 const result = await translator.translate(request);
 const tokens = result.metadata?.usage?.inputTokens; // undefined: unknown; 0: reported zero
-const coverage = result.metadata?.usageReporting?.inputTokens; // "complete" or "partial"
+const coverage = result.metadata?.usageReporting?.inputTokens; // "complete", "partial", or "overflow"
 if (result.success) {
     const applicationData = result.data;
 } else {
@@ -23,7 +23,10 @@ has metadata; if all metadata is absent, the result stays unchanged. Built-in cl
 metadata from JSON HTTP errors and responses preceding HTTP retries, without extra service or
 moderation requests. An unreadable JSON HTTP error body adds a record's `error` diagnostic (the
 error class, not the body), preserving status messages and HTTP retry behavior. Filtered/refused
-output remains failure, even if it contains valid-looking JSON.
+output remains failure, even if it contains valid-looking JSON. An otherwise successful HTTP
+response that is filtered or refused returns a concise error rather than putting the complete
+provider body or refusal text in the error message. Filtering details remain in metadata, and
+available text remains in `responseText`.
 
 `metadata.usage` sums **reported counts only**, once per record: input/output/total 13/7/20 plus
 5/3/8 yields 18/10/28. Each corresponding `metadata.usageReporting` field is `"complete"` if every
@@ -32,6 +35,11 @@ coverage remain absent. Missing total tokens are never inferred from input/outpu
 clients accept nonnegative safe integers; missing/null counts are unknown, not zero. Even complete
 reporting excludes unreported requests, failed transports, and usage the service omits. These
 totals are not estimates of all billable usage; TypeChat does not calculate prices.
+
+If a reported aggregate would exceed JavaScript's safe-integer range, that count is omitted from
+`metadata.usage` and its `metadata.usageReporting` status is `"overflow"`. Individual response
+records, other representable totals, and the application validation result remain intact; the
+aggregate is never rounded, clamped, or represented as zero.
 
 | Existing API | `usage` fields mapped to `inputTokens` / `outputTokens` / `totalTokens` | Filtering sources |
 | --- | --- | --- |

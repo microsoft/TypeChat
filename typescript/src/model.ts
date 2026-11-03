@@ -307,11 +307,14 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
                     const choice = record(Array.isArray(choices) ? choices[0] : undefined);
                     content = record(choice?.message)?.content;
                 }
-                if (typeof content === "string" && !responses[responses.length - 1].filtering?.blocked) {
+                if (responses[responses.length - 1].filtering?.blocked) {
+                    return finish(error("REST API response was filtered or refused.",
+                        typeof content === "string" ? { responseText: content } : undefined));
+                }
+                if (typeof content === "string") {
                     return finish(success(content));
                 } else {
-                    return finish(error(`REST API unexpected response format: ${JSON.stringify(json)}`,
-                        typeof content === "string" ? { responseText: content } : undefined));
+                    return finish(error(`REST API unexpected response format: ${JSON.stringify(json)}`));
                 }
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
