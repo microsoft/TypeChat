@@ -108,6 +108,13 @@ containing whitespace, control characters, or non-ASCII characters return an err
 dispatch. Provider exceptions follow the HTTP model's existing
 retry/error policy.
 
+Providers execute on the caller's JavaScript event loop. Synchronous providers should
+return cached tokens quickly; use asynchronous SDK/network APIs for acquisition or renewal.
+Adding `async` or calling `Promise.resolve` around synchronous I/O does not make that work
+nonblocking. If a legacy provider requires blocking I/O, offload it using application-managed
+workers (for example Node.js `worker_threads`) with an appropriate thread-safety and timeout
+strategy. TypeChat invokes providers directly and does not automatically move them to workers.
+
 The same option works with `createOpenAILanguageModel`, including its Responses mode:
 
 ```ts

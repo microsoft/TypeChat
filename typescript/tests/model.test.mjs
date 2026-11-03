@@ -152,6 +152,29 @@ describe("token-provider authentication", () => {
             }
         });
 
+        test(`${name}: pending credential promises keep the event loop responsive and delay fetch`, async () => {
+            setupFetch([reply()]);
+            let releaseToken;
+            let invoked = false;
+            const token = new Promise(resolve => { releaseToken = resolve; });
+            const model = factory(() => {
+                invoked = true;
+                return token;
+            });
+            const completion = model.complete("request");
+            let result;
+            try {
+                await new Promise(resolve => setImmediate(resolve));
+                assert.equal(invoked, true);
+                assert.equal(capturedRequests.length, 0);
+            } finally {
+                releaseToken("ready-token");
+                result = await completion;
+            }
+            assert.deepEqual(result, { success: true, data: "reply" });
+            assert.equal(capturedRequests.length, 1);
+        });
+
         test(`${name}: awaits the provider again for each HTTP retry`, async () => {
             setupFetch([makeErrorResponse(429, "Too Many Requests"), makeErrorResponse(500, "Internal Server Error"), reply()]);
             let calls = 0;

@@ -93,7 +93,11 @@ export interface TypeChatLanguageModel {
     complete(prompt: string | PromptSection[]): Promise<Result<string>>;
 }
 
-/** Supplies a bearer token; credential acquisition, caching, and renewal remain caller-owned. */
+/**
+ * Supplies a bearer token; credential acquisition, caching, and renewal remain caller-owned.
+ * Invoked on the caller's event-loop thread. Keep synchronous providers nonblocking; use asynchronous
+ * I/O or application-managed workers for blocking acquisition rather than just wrapping it in a Promise.
+ */
 export type TokenProvider = () => string | Promise<string>;
 
 /**
