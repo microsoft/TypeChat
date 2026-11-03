@@ -28,6 +28,12 @@ response that is filtered or refused returns a concise error rather than putting
 provider body or refusal text in the error message. Filtering details remain in metadata, and
 available text remains in `responseText`.
 
+Models adapted by `createOpenAILanguageModelFromClient` use the same reported-usage and
+filtering parser for Chat Completions and Responses output. Their records cover resolved
+SDK responses visible to TypeChat, including translator repair, not requests/retries hidden
+inside the supplied client. Client exceptions propagate instead of creating fabricated
+response records. HTTP token-provider models retain the existing per-HTTP-response accounting.
+
 `metadata.usage` sums **reported counts only**, once per record: input/output/total 13/7/20 plus
 5/3/8 yields 18/10/28. Each corresponding `metadata.usageReporting` field is `"complete"` if every
 record reports that count, otherwise `"partial"`. If no record reports a count, its total and

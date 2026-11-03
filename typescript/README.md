@@ -45,6 +45,18 @@ To see TypeChat in action, we recommend exploring the [TypeChat example projects
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
 
+## Reusing model authentication
+
+The HTTP model factories accept a synchronous or asynchronous `tokenProvider` option
+with `undefined` for the API key. Existing string-key and environment-based calls are
+unchanged. For an already configured OpenAI/AzureOpenAI or compatible client, use
+`createOpenAILanguageModelFromClient`, optionally with `{ useResponsesApi: true }`.
+
+These paths add no SDK dependency to TypeChat. See the
+[token-provider example](../site/src/docs/typescript/basic-usage.md#using-a-bearer-token-provider)
+and [configured-client example](../site/src/docs/typescript/basic-usage.md#reusing-a-configured-client)
+for multimodal prompts, network-control ownership, and error behavior.
+
 ## Accessing failed output
 
 Failed results include a `message` and may also include `data: unknown` and `responseText: string`.

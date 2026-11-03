@@ -57,7 +57,8 @@ export type ImageUrl = {
  * Represents a AI language model that can complete prompts. TypeChat uses an implementation of this
  * interface to communicate with an AI service that can translate natural language requests to JSON
  * instances according to a provided schema. The `createLanguageModel`, `createOpenAILanguageModel`,
- * and `createAzureOpenAILanguageModel` functions create instances of this interface.
+ * `createAzureOpenAILanguageModel`, and `createOpenAILanguageModelFromClient` functions create
+ * instances of this interface.
  */
 export interface TypeChatLanguageModel {
     /**
@@ -92,6 +93,9 @@ export interface TypeChatLanguageModel {
     complete(prompt: string | PromptSection[]): Promise<Result<string>>;
 }
 
+/** Supplies a bearer token; credential acquisition, caching, and renewal remain caller-owned. */
+export type TokenProvider = () => string | Promise<string>;
+
 /**
  * Optional settings accepted by the language model factory functions.
  */
@@ -115,9 +119,52 @@ export interface LanguageModelOptions {
      * Selects the OpenAI API variant. When `true`, the Responses API (`/v1/responses`) is used
      * regardless of the endpoint URL; when `false`, the Chat Completions API is used. When omitted
      * (default), the variant is inferred from the endpoint URL (a path ending in `/responses`
-     * selects the Responses API). Only applies to `createOpenAILanguageModel`.
+     * selects the Responses API). Applies to `createOpenAILanguageModel`; configured-client adapters
+     * also accept this option but default to Chat Completions without endpoint inference.
      */
     useResponsesApi?: boolean;
+
+    /**
+     * Supplies a bearer token for each HTTP attempt, including retries. Pass `undefined` for the
+     * factory's `apiKey` argument when using this option. API keys and providers are mutually exclusive.
+     */
+    tokenProvider?: TokenProvider;
+}
+
+type ClientMessage =
+    | { role: "user"; content: string | (TextPromptContent | ImagePromptContent)[] }
+    | { role: "system"; content: string | TextPromptContent[] }
+    | { role: "assistant"; content: string | TextPromptContent[] };
+
+type ClientResponseContent =
+    | { type: "input_text"; text: string }
+    | { type: "input_image"; image_url: string; detail: NonNullable<ImageUrl["detail"]> };
+
+/** Structural contract for a caller-owned asynchronous Chat Completions client. */
+export interface ChatCompletionClient {
+    chat: {
+        completions: {
+            create(request: {
+                model: string;
+                messages: ClientMessage[];
+                temperature: number;
+                n: number;
+                stream: false;
+            }): PromiseLike<unknown>;
+        };
+    };
+}
+
+/** Structural contract for a caller-owned asynchronous Responses client. */
+export interface ResponsesClient {
+    responses: {
+        create(request: {
+            model: string;
+            input: string | { role: PromptSection["role"]; content: string | ClientResponseContent[] }[];
+            temperature: number;
+            stream: false;
+        }): PromiseLike<unknown>;
+    };
 }
 
 /**
@@ -180,7 +227,7 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  * the `/v1/responses` request/response format; otherwise the Chat Completions format is used.
  * The Responses API is auto-detected when the endpoint URL path ends with `/responses`
  * (e.g. `https://api.openai.com/v1/responses`).
- * @param apiKey The OpenAI API key.
+ * @param apiKey The OpenAI API key, or `undefined` when using `options.tokenProvider`.
  * @param model The model name (e.g. `"gpt-4o"`).
  * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to
  *   `"https://api.openai.com/v1/chat/completions"`. Supply a `/responses` URL to use the
@@ -190,7 +237,13 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
  *   See {@link LanguageModelOptions}.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", options?: LanguageModelOptions): TypeChatLanguageModel {
+export function createOpenAILanguageModel(apiKey: string | undefined, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", options?: LanguageModelOptions): TypeChatLanguageModel {
+    const tokenProvider = options?.tokenProvider;
+    validateAuthentication(apiKey, tokenProvider);
+    if (apiKey === undefined) {
+        return createFetchLanguageModel(endPoint, { "OpenAI-Organization": org }, { model },
+            resolveProxySettings(options), options?.useResponsesApi ?? isResponsesApiUrl(endPoint), tokenProvider);
+    }
     const headers = {
         "Authorization": `Bearer ${apiKey}`,
         "OpenAI-Organization": org
@@ -204,11 +257,16 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
  * @param endPoint The URL of the OpenAI REST API endpoint. The URL must be in the format
  *   "https://{your-resource-name}.openai.azure.com/openai/deployments/{your-deployment-name}/chat/completions?api-version={API-version}".
  *   Example deployment names are "gpt-35-turbo" and "gpt-4". An example API versions is "2023-05-15".
- * @param apiKey The Azure OpenAI API key.
+ * @param apiKey The Azure OpenAI API key, or `undefined` when using `options.tokenProvider`.
  * @param options Optional settings such as a proxy URL. See {@link LanguageModelOptions}.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string, options?: LanguageModelOptions): TypeChatLanguageModel {
+export function createAzureOpenAILanguageModel(apiKey: string | undefined, endPoint: string, options?: LanguageModelOptions): TypeChatLanguageModel {
+    const tokenProvider = options?.tokenProvider;
+    validateAuthentication(apiKey, tokenProvider);
+    if (apiKey === undefined) {
+        return createFetchLanguageModel(endPoint, {}, {}, resolveProxySettings(options), false, tokenProvider);
+    }
     const headers = {
         // Needed when using managed identity
         "Authorization": `Bearer ${apiKey}`,
@@ -216,6 +274,117 @@ export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string,
         "api-key": apiKey
     };
     return createFetchLanguageModel(endPoint, headers, {}, resolveProxySettings(options));
+}
+
+/**
+ * Adapts a configured asynchronous client without importing an SDK, changing its settings, closing
+ * it, or adding retries/timeouts. Client exceptions propagate. Only `complete` is exposed; configure
+ * network controls on the supplied client. Responses mode is explicit, not inferred from the client.
+ */
+export function createOpenAILanguageModelFromClient(client: ChatCompletionClient, model: string, options?: { useResponsesApi?: false }): Pick<TypeChatLanguageModel, "complete">;
+export function createOpenAILanguageModelFromClient(client: ResponsesClient, model: string, options: { useResponsesApi: true }): Pick<TypeChatLanguageModel, "complete">;
+export function createOpenAILanguageModelFromClient(client: ChatCompletionClient & ResponsesClient, model: string, options: Pick<LanguageModelOptions, "useResponsesApi">): Pick<TypeChatLanguageModel, "complete">;
+export function createOpenAILanguageModelFromClient(client: ChatCompletionClient | ResponsesClient, model: string, options?: Pick<LanguageModelOptions, "useResponsesApi">): Pick<TypeChatLanguageModel, "complete"> {
+    if (!model.trim()) {
+        throw new Error("The client model or deployment name must not be empty.");
+    }
+    const responsesApi = options?.useResponsesApi ?? false;
+    const finish = (json: unknown) => {
+        const metadata = responseMetadata(json, responsesApi);
+        return withResponseMetadata(completionResult(json, responsesApi, metadata), [metadata]);
+    };
+    if (responsesApi) {
+        if (!("responses" in client)) {
+            throw new Error("Responses mode requires a client with responses.create.");
+        }
+        return {
+            async complete(prompt) {
+                const messages = clientMessages(prompt);
+                if (!messages.success) return messages;
+                const input = typeof prompt === "string" ? prompt : messages.data.map(message => ({
+                    role: message.role,
+                    content: typeof message.content === "string" ? message.content :
+                        message.content.map((part): ClientResponseContent => part.type === "text" ?
+                            { type: "input_text", text: part.text } :
+                            { type: "input_image", image_url: part.image_url.url, detail: part.image_url.detail ?? "auto" })
+                }));
+                return finish(await client.responses.create({ model, input, temperature: 0, stream: false }));
+            }
+        };
+    }
+    if (!("chat" in client)) {
+        throw new Error("Chat Completions mode requires a client with chat.completions.create.");
+    }
+    return {
+        async complete(prompt) {
+            const messages = clientMessages(prompt);
+            if (!messages.success) return messages;
+            return finish(await client.chat.completions.create({
+                model, messages: messages.data, temperature: 0, n: 1, stream: false
+            }));
+        }
+    };
+}
+
+function validateAuthentication(apiKey: string | undefined, provider: TokenProvider | undefined): void {
+    if (provider !== undefined && typeof provider !== "function") {
+        throw new TypeError("Token provider must be a function.");
+    }
+    if (apiKey !== undefined && provider !== undefined) {
+        throw new Error("Specify either an API key or a token provider, not both.");
+    }
+    if (apiKey === undefined && provider === undefined) {
+        throw new Error("Specify an API key or a token provider.");
+    }
+}
+
+function clientMessages(prompt: string | PromptSection[]): Result<ClientMessage[]> {
+    const sections: PromptSection[] = typeof prompt === "string" ? [{ role: "user", content: prompt }] : prompt;
+    const messages: ClientMessage[] = [];
+    for (const { role, content } of sections) {
+        if (role !== "user" && role !== "system" && role !== "assistant") {
+            return error("Unsupported prompt role.");
+        }
+        if (typeof content === "string") {
+            messages.push({ role, content });
+            continue;
+        }
+        if (!Array.isArray(content)) {
+            return error("Prompt content must be a string or an array of text/image parts.");
+        }
+        const parts: (TextPromptContent | ImagePromptContent)[] = [];
+        for (const part of content) {
+            if (typeof part === "string") {
+                parts.push({ type: "text", text: part });
+                continue;
+            }
+            const value = record(part);
+            if (value?.type === "text" && typeof value.text === "string") {
+                parts.push({ type: "text", text: value.text });
+                continue;
+            }
+            const image = record(value?.image_url);
+            const detail = image?.detail;
+            if (value?.type !== "image_url" || typeof image?.url !== "string" ||
+                detail !== undefined && detail !== "auto" && detail !== "low" && detail !== "high") {
+                return error("Unsupported or malformed text/image prompt part.");
+            }
+            parts.push({ type: "image_url", image_url: { url: image.url, ...(detail !== undefined ? { detail } : {}) } });
+        }
+        if (role === "user") {
+            messages.push({ role, content: parts });
+        } else {
+            const textParts: TextPromptContent[] = [];
+            for (const part of parts) {
+                if (part.type !== "text") {
+                    return error("Image prompt parts are supported only in user messages.");
+                }
+                textParts.push(part);
+            }
+            messages.push({ role, content: textParts });
+        }
+    }
+    return success(messages);
 }
 
 /**
@@ -235,7 +404,7 @@ const defaultMaxResponseBytes = 100 * 1024 * 1024;
 /**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
-function createFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings, responsesApi = false) {
+function createFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings, responsesApi = false, tokenProvider?: TokenProvider) {
     let dispatcherPromise: Promise<RequestInit["dispatcher"]> | undefined;
     const model: TypeChatLanguageModel = {
         complete
@@ -281,6 +450,13 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             }
             let response: Response;
             try {
+                if (tokenProvider) {
+                    const token = await tokenProvider();
+                    if (typeof token !== "string" || !token.trim()) {
+                        return finish(error("Token provider must return a nonempty string."));
+                    }
+                    options.headers = { ...headers, "content-type": "application/json", "Authorization": `Bearer ${token}` };
+                }
                 response = await fetchWithTimeout(url, options, timeoutMs);
             } catch (e) {
                 if (retryCount >= retryMaxAttempts) {
@@ -296,26 +472,7 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             }
             const json = parsed.success ? parsed.data : undefined;
             if (response.ok) {
-                let content: unknown;
-                if (responsesApi) {
-                    const output = record(json)?.output;
-                    const message = Array.isArray(output) ? record(output.find(o => record(o)?.type === "message")) : undefined;
-                    const parts = message?.content;
-                    content = Array.isArray(parts) ? record(parts.find(c => record(c)?.type === "output_text"))?.text : undefined;
-                } else {
-                    const choices = record(json)?.choices;
-                    const choice = record(Array.isArray(choices) ? choices[0] : undefined);
-                    content = record(choice?.message)?.content;
-                }
-                if (responses[responses.length - 1].filtering?.blocked) {
-                    return finish(error("REST API response was filtered or refused.",
-                        typeof content === "string" ? { responseText: content } : undefined));
-                }
-                if (typeof content === "string") {
-                    return finish(success(content));
-                } else {
-                    return finish(error(`REST API unexpected response format: ${JSON.stringify(json)}`));
-                }
+                return finish(completionResult(json, responsesApi, responses[responses.length - 1]));
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
                 return finish(error(`REST API error ${response.status}: ${response.statusText}`));
@@ -324,6 +481,25 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             retryCount++;
         }
     }
+}
+
+function completionResult(json: unknown, responsesApi: boolean, metadata: TypeChatResponseMetadata): Result<string> {
+    let content: unknown;
+    if (responsesApi) {
+        const output = record(json)?.output;
+        const message = Array.isArray(output) ? record(output.find(o => record(o)?.type === "message")) : undefined;
+        const parts = message?.content;
+        content = Array.isArray(parts) ? record(parts.find(c => record(c)?.type === "output_text"))?.text : undefined;
+    } else {
+        const choices = record(json)?.choices;
+        const choice = record(Array.isArray(choices) ? choices[0] : undefined);
+        content = record(choice?.message)?.content;
+    }
+    if (metadata.filtering?.blocked) {
+        return error("REST API response was filtered or refused.",
+            typeof content === "string" ? { responseText: content } : undefined);
+    }
+    return typeof content === "string" ? success(content) : error(`REST API unexpected response format: ${JSON.stringify(json)}`);
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
