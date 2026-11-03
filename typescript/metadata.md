@@ -51,8 +51,8 @@ metadata without altering text, use `withResponseMetadata(result, [{ usage, filt
 computes reported totals from those records. Translation recomputes from records, not existing
 totals, so each response contributes exactly once and separate translations stay isolated.
 
-Run the offline mocked regression suite from `typescript/` with `npm test -- out/metadata.test.js`.
-This explicitly adds metadata tests to the existing test command without changing package scripts.
+Run the offline mocked regression suite from `typescript/` with `npm test`.
+The default test command includes the metadata, repair-accounting, and failure-retention tests.
 No live provider access or credentials are required.
 
 Thanks to [intuity-hans](https://github.com/intuity-hans) for the prior work in
