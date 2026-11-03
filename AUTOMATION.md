@@ -691,6 +691,13 @@ authority. Proposal history stays public after artifacts expire, but expired
 or unavailable sealed evidence requires another proposal before acceptance.
 The owner does not calculate hashes or look up artifact IDs.
 
+A proposal advertising acceptance must use a successful producing attempt, or
+the current in-progress attempt's seal. A writer-only rerun cannot make an older
+failed producer acceptance-eligible: posting is blocked before recording an
+intent or publishing that version. Inspect prior runs and retained intents, then
+request a fresh `/typechat propose` when no write remains unresolved. Advisory-only
+reply/proposal recovery retains its existing scan and seal requirements.
+
 Acceptance selects the named public version, not whichever proposal finishes
 last. A new community comment or newer proposal cannot silently change that
 selection. Append-only discussion after the proposal is allowed; its original

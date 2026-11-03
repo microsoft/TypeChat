@@ -1488,6 +1488,65 @@ test("direct-reply body integrity also binds non-public assessment and provenanc
     }
 });
 
+test("writer-only proposal recovery rejects an unsuccessful producer before reserving or posting", async () => {
+    for (const conclusion of ["failure", "cancelled"]) {
+        const fixture = await readyReply("issue", publicCandidate(), "propose");
+        fixture.state.producerRun.status = "completed";
+        fixture.state.producerRun.conclusion = conclusion;
+        fixture.publication.env.GITHUB_RUN_ATTEMPT = "2";
+        assert.match(fixture.bundle.body, /\/typechat accept P1/);
+        await assert.rejects(checkPublication(fixture.github, fixture.publication.context,
+            fixture.publication.env, fixture.bundle, clock), /unsuccessful producing attempt/);
+        await assert.rejects(publishDraft(fixture.github, fixture.publication.context,
+            fixture.publication.env, fixture.bundle, 501, clock), /unsuccessful producing attempt/);
+        assert.equal(fixture.state.posts.length, 0);
+        assert.equal(fixture.state.artifacts.size, 1);
+        assert.equal(fixture.state.historyRequests.length, 0);
+    }
+});
+
+test("a fresh proposal after rejected writer recovery can be published and accepted", async () => {
+    const failed = await readyReply("issue", publicCandidate(), "propose");
+    failed.state.producerRun.status = "completed";
+    failed.state.producerRun.conclusion = "failure";
+    failed.publication.env.GITHUB_RUN_ATTEMPT = "2";
+    await assert.rejects(checkPublication(failed.github, failed.publication.context,
+        failed.publication.env, failed.bundle, clock), /unsuccessful producing attempt/);
+
+    const fresh = await secondProposal(failed);
+    assert.equal(fresh.bundle.proposalVersion, 1);
+    assert.equal(fresh.bundle.producer.runId, 101);
+    assert.equal(fresh.state.posts.length, 1);
+    assert.match(fresh.state.posts[0], /\/typechat accept P1/);
+    fresh.publication = fresh.event("accept", "/typechat accept P1", "approve-fresh", 200);
+    fresh.state.postedAt = "2026-10-30T00:46:00Z";
+    const result = await publishDraft(fresh.github, fresh.publication.context,
+        fresh.publication.env, fresh.bundle, await reserve(fresh, 701), clock);
+    assert.equal(result.posted, true);
+    assert.equal(fresh.state.posts.length, 2);
+    assert.match(fresh.state.posts[1], /^## Accepted work\n/);
+    assert.match(fresh.state.posts[1], /Proposal \*\*P1\*\*/);
+    assert.match(fresh.state.posts[1], /actions\/runs\/101\/attempts\/1/);
+    assert.equal(fresh.state.reactions.has("approve-fresh"), true);
+});
+
+test("writer-only recovery preserves advisory proposals without acceptance authority", async () => {
+    const draft = { ...publicCandidate(), readiness: "needs_clarification",
+        readinessReason: "The compatibility baseline needs agreement.",
+        questions: ["Which compatibility baseline is required?"] };
+    const fixture = await readyReply("issue", draft, "propose");
+    fixture.state.producerRun.status = "completed";
+    fixture.state.producerRun.conclusion = "failure";
+    fixture.publication.env.GITHUB_RUN_ATTEMPT = "2";
+    fixture.state.postedAt = "2026-10-30T00:42:00Z";
+    const result = await publishDraft(fixture.github, fixture.publication.context,
+        fixture.publication.env, fixture.bundle, await reserve(fixture), clock);
+    assert.equal(result.posted, true);
+    assert.equal(fixture.bundle.acceptance, null);
+    assert.match(fixture.state.posts[0], /Not eligible for acceptance/);
+    assert.doesNotMatch(fixture.state.posts[0], /\/typechat accept P1/);
+});
+
 test("a writer-only reply rerun may use its inherited successful seal, but never duplicate a write", async () => {
     const fixture = await readyReply();
     fixture.state.producerRun.status = "completed";

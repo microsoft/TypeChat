@@ -1033,6 +1033,14 @@ function validateBundle(bundle, publication) {
         requireValue(equal(bundle.request, originalRequest(publication.request)),
             "The sealed reply belongs to a different owner command.");
     }
+    if (action === "propose" && bundle.acceptance !== null) {
+        // Acceptance validates the seal-producing attempt, not a later writer-only recovery.
+        requireValue(publication.run.status === "completed" && publication.run.conclusion === "success" ||
+            publication.run.status === "in_progress" && publication.run.conclusion === null &&
+                bundle.producer.attempt === publication.request.attempt,
+        "Cannot publish an acceptance-enabled proposal from an unsuccessful producing attempt. " +
+            "Inspect the prior run and request a fresh /typechat propose command.");
+    }
     if (publication.proposal) {
         requireValue(bundle.proposalVersion === publication.request.command.proposalVersion &&
             bundle.marker === publication.proposal.marker && bundle.body === publication.proposal.comment.body,
