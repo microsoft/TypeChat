@@ -80,9 +80,9 @@ describe("createTypeScriptJsonValidator", () => {
             },
             {
                 name: "unsupported library generics",
-                schema: "export interface Event { values: ReadonlyArray<string>; }",
+                schema: "export interface Event { values: Set<string>; }",
                 typeName: "Event",
-                diagnostic: /ReadonlyArray/
+                diagnostic: /Set/
             },
             {
                 name: "syntax errors",
