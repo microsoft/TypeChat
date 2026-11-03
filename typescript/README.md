@@ -73,6 +73,13 @@ or `undefined`, so check property presence when that distinction matters.
 
 Rejected values and response text may contain sensitive output. Do not log them automatically.
 
+## Accessing response metadata
+
+Model and translation results can include optional `metadata` on success and failure,
+separate from application data. See the [response metadata guide](https://github.com/microsoft/TypeChat/blob/main/typescript/metadata.md)
+for reported token usage, initial and repair response records, and available filtering details.
+The guide is also included as `metadata.md` in the npm package.
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a

@@ -87,6 +87,16 @@ test("published package works for a clean TypeScript 7 consumer", () => {
             stdio: "ignore",
             timeout: 120_000,
         });
+        assert.equal(
+            readFileSync(path.join(consumerPackage, "metadata.md"), "utf8"),
+            readFileSync(path.join(packageRoot, "metadata.md"), "utf8")
+        );
+        const readme = readFileSync(path.join(consumerPackage, "README.md"), "utf8");
+        assert.equal(
+            readme.match(/\[response metadata guide\]\(([^)]+)\)/)?.[1],
+            "https://github.com/microsoft/TypeChat/blob/main/typescript/metadata.md",
+            "Packaged README must link to the response metadata guide"
+        );
         symlinkSync(path.join(buildPackage, "node_modules", "typescript"), path.join(consumerModules, "typescript"), directoryLinkType);
         const installedTypeScript = JSON.parse(readFileSync(path.join(consumerModules, "typescript", "package.json"), "utf8"));
         assert.match(installedTypeScript.version, /^7\./);
