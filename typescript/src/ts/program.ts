@@ -99,7 +99,7 @@ function isValidFunctionName(name: unknown): name is string {
 export function createModuleTextFromProgram(jsonObject: object): Result<string> {
     const steps = (jsonObject as Program)["@steps"];
     if (!(Array.isArray(steps) && steps.every(step => typeof step === "object" && step !== null && step.hasOwnProperty("@func")))) {
-        return error("JSON object is not a valid program");
+        return error("JSON object is not a valid program", { data: jsonObject });
     }
     let hasError = false;
     let functionBody = "";
@@ -109,7 +109,7 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
         currentStep++;
     }
     return hasError ?
-        error("JSON program contains an invalid expression") :
+        error("JSON program contains an invalid expression", { data: jsonObject }) :
         success(`import { API } from "./schema";\nfunction program(api: API) {\n${functionBody}}`);
 
     function exprToString(expr: unknown): string {

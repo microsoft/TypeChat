@@ -1,4 +1,4 @@
-import { Result, success, error } from "./result.js";
+import { Result, success, error, withResponseMetadata, TypeChatResponseMetadata, Error as TypeChatError } from "./result.js";
 import { TypeChatLanguageModel, PromptSection, PromptContent } from "./model.js";
 
 /**
@@ -55,6 +55,9 @@ export interface TypeChatJsonTranslator<T extends object> {
      * the language model fails to validate and the `attemptRepair` property is `true`, a second
      * attempt to translate the request will be made. The prompt for the second attempt will include the
      * diagnostics produced for the first attempt. This often helps produce a valid instance.
+     * A failure retains the latest rejected candidate and available model response text. These may
+     * come from different attempts if a repair response couldn't be parsed.
+     * Optional result metadata retains response records and reported usage across both attempts.
      * @param request The natural language request.
      * @param promptPreamble An optional string or array of prompt sections to prepend to the generated
      *   prompt. If a string is specified, it is converted into a single "user" role prompt section.
@@ -78,7 +81,7 @@ export interface TypeChatJsonValidator<T extends object> {
     /**
      * Validates the given JSON object according to the associated TypeScript schema. Returns a
      * `Success<T>` object containing the JSON object if validation was successful. Otherwise, returns
-     * an `Error` object with a `message` property describing the error.
+     * an `Error` object with a `message` describing the error and, when available, rejected `data`.
      * @param jsonText The JSON object to validate.
      * @returns The JSON object or an error message.
      */
@@ -121,20 +124,32 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             `The following is a revised JSON object:\n`;
     }
 
-    async function translate(request: string, promptPreamble?: string | PromptSection[]) {
+    async function translate(request: string, promptPreamble?: string | PromptSection[]): Promise<Result<T>> {
         const preamble: PromptSection[] = typeof promptPreamble === "string" ? [{ role: "user", content: promptPreamble }] : promptPreamble ?? [];
         let prompt: PromptSection[] = [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }];
         let attemptRepair = typeChat.attemptRepair;
+        let failureContext: (Pick<TypeChatError, "data"> & { responseText: string }) | undefined;
+        const responses: TypeChatResponseMetadata[] = [];
+        const finish = (result: Result<T>) => withResponseMetadata(result, responses);
         while (true) {
             const response = await model.complete(prompt);
+            responses.push(...(response.metadata?.responses ?? [{}]));
             if (!response.success) {
-                return response;
+                return finish(failureContext ? {
+                    ...failureContext,
+                    ...response,
+                    success: false,
+                    message: response.message,
+                    ...("data" in response ? { data: response.data } : {}),
+                    responseText: response.responseText ?? failureContext.responseText
+                } : response);
             }
             const responseText = response.data;
+            failureContext = { ...failureContext, responseText };
             const startIndex = responseText.indexOf("{");
             const endIndex = responseText.lastIndexOf("}");
             if (!(startIndex >= 0 && endIndex > startIndex)) {
-                return error(`Response is not JSON:\n${responseText}`);
+                return finish(error(`Response is not JSON:\n${responseText}`, failureContext));
             }
             const jsonText = responseText.slice(startIndex, endIndex + 1);
             let jsonObject;
@@ -142,7 +157,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
                 jsonObject = JSON.parse(jsonText) as object;
             }
             catch (e) {
-                return error(e instanceof SyntaxError ? e.message : "JSON parse error");
+                return finish(error(e instanceof SyntaxError ? e.message : "JSON parse error", failureContext));
             }
             if (typeChat.stripNulls) {
                 stripNulls(jsonObject);
@@ -150,13 +165,21 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             const schemaValidation = validator.validate(jsonObject);
             const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
             if (validation.success) {
-                return validation;
+                return finish(validation);
             }
+            const failure: TypeChatError & { responseText: string } = {
+                ...validation,
+                success: false,
+                message: validation.message,
+                data: "data" in validation ? validation.data : schemaValidation.success ? schemaValidation.data : jsonObject,
+                responseText: validation.responseText ?? responseText
+            };
+            failureContext = { data: failure.data, responseText: failure.responseText };
             if (!attemptRepair) {
-                return error(`JSON validation failed: ${validation.message}\n${jsonText}`);
+                return finish({ ...failure, message: `JSON validation failed: ${failure.message}\n${jsonText}` });
             }
             prompt.push({ role: "assistant", content: responseText });
-            prompt.push({ role: "user", content: typeChat.createRepairPrompt(validation.message) });
+            prompt.push({ role: "user", content: typeChat.createRepairPrompt(failure.message) });
             attemptRepair = false;
         }
     }

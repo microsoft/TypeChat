@@ -29,7 +29,7 @@ class TypeChatValidator(Generic[T]):
         Validates the given Python object according to the associated schema type.
 
         Returns a `Success[T]` object containing the object if validation was successful.
-        Otherwise, returns a `Failure` object with a `message` property describing the error.
+        Otherwise, returns a `Failure` with an error message and the rejected object in `value`.
         """
         try:
             # TODO: Switch to `validate_python` when validation modes are exposed.
@@ -42,10 +42,10 @@ class TypeChatValidator(Generic[T]):
             typed_dict = self._adapted_type.validate_json(json_str, strict=True)
             return Success(typed_dict)
         except pydantic.ValidationError as validation_error:
-            return _handle_error(validation_error)
+            return _handle_error(validation_error, obj)
 
 
-def _handle_error(validation_error: pydantic.ValidationError) -> Failure:
+def _handle_error(validation_error: pydantic.ValidationError, value: object) -> Failure:
     error_strings: list[str] = []
     for error in validation_error.errors(include_url=False):
         error_string = ""
@@ -64,4 +64,4 @@ def _handle_error(validation_error: pydantic.ValidationError) -> Failure:
         failure_message = ""
     failure_message += "\n".join(error_strings)
 
-    return Failure(failure_message)
+    return Failure(failure_message, value=value)

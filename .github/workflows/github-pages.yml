@@ -3,7 +3,11 @@ on:
   push:
     branches:
       - main
-      
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 permissions:
   contents: read
   id-token: write
@@ -19,7 +23,7 @@ jobs:
     - name: Use Node.js
       uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
       with:
-        node-version: 24.x
+        node-version-file: .nvmrc
         cache: 'npm'
         cache-dependency-path: "site/package-lock.json"
     - name: Build site
@@ -31,7 +35,9 @@ jobs:
     - name : Upload artifact
       uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
       with:
-        name: github-pages
+        name: github-pages-${{ github.run_attempt }}
         path: site/_site
     - name: Deploy to GitHub Pages from artifacts
       uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+      with:
+        artifact_name: github-pages-${{ github.run_attempt }}

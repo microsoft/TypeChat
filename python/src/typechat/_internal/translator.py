@@ -1,3 +1,4 @@
+from copy import copy
 from typing_extensions import Generic, TypeVar
 
 import pydantic_core
@@ -55,6 +56,8 @@ class TypeChatJsonTranslator(Generic[T]):
         the language model fails to validate, repair attempts will be made up until `_max_repair_attempts`.
         The prompt for the subsequent attempts will include the diagnostics produced for the prior attempt.
         This often helps produce a valid instance.
+        A failure retains the latest rejected value and available model response text. These may come
+        from different attempts if a repair response couldn't be parsed.
 
         Args:
             input: A natural language request.
@@ -72,33 +75,54 @@ class TypeChatJsonTranslator(Generic[T]):
         messages.append({"role": "user", "content": self._create_request_prompt(input)})
 
         num_repairs_attempted = 0
+        last_failure: Failure | None = None
         while True:
             completion_response = await self.model.complete(messages)
             if isinstance(completion_response, Failure):
-                return completion_response
+                if last_failure is None:
+                    return completion_response
+                failure = copy(completion_response)
+                if not failure.has_value:
+                    failure.value = last_failure.value
+                if failure.response_text is None:
+                    failure.response_text = last_failure.response_text
+                return failure
 
             text_response = completion_response.value
             first_curly = text_response.find("{")
             last_curly = text_response.rfind("}") + 1
-            error_message: str
+            failure: Failure
             if 0 <= first_curly < last_curly:
                 trimmed_response = text_response[first_curly:last_curly]
                 try:
                     parsed_response = pydantic_core.from_json(trimmed_response, allow_inf_nan=False, cache_strings=False)
                 except ValueError as e:
-                    error_message = f"Error: {e}\n\nAttempted to parse:\n\n{trimmed_response}"
+                    failure = Failure(
+                        f"Error: {e}\n\nAttempted to parse:\n\n{trimmed_response}",
+                        response_text=text_response,
+                    )
                 else:
                     result = self.validator.validate_object(parsed_response)
                     if isinstance(result, Success):
                         return result
-                    error_message = result.message
+                    failure = copy(result)
+                    if failure.response_text is None:
+                        failure.response_text = text_response
+                    if not failure.has_value:
+                        failure.value = parsed_response
             else:
-                error_message = f"Response did not contain any text resembling JSON.\nResponse was\n\n{text_response}"
+                failure = Failure(
+                    f"Response did not contain any text resembling JSON.\nResponse was\n\n{text_response}",
+                    response_text=text_response,
+                )
+            if not failure.has_value and last_failure is not None:
+                failure.value = last_failure.value
+            last_failure = failure
             if num_repairs_attempted >= self._max_repair_attempts:
-                return Failure(error_message)
+                return failure
             num_repairs_attempted += 1
             messages.append({"role": "assistant", "content": text_response})
-            messages.append({"role": "user", "content": self._create_repair_prompt(error_message)})
+            messages.append({"role": "user", "content": self._create_repair_prompt(failure.message)})
 
     def _create_request_prompt(self, intent: str) -> str:
         prompt = f"""

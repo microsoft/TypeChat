@@ -23,7 +23,7 @@
     "build": "npm run build:cjs && npm run build:esm",
     "build:cjs": "tsc -p src",
     "build:esm": "tsc -p src/tsconfig.esm.json && node -e \"require('fs').writeFileSync('dist/esm/package.json', JSON.stringify({ type: 'module' }))\"",
-    "test": "npm run build && tsc -p test && node --test out/validate.test.js out/zod.test.js out/program.test.js tests/model.test.mjs tests/examples.test.mjs tests/package.test.mjs",
+    "test": "npm run build && tsc -p test && node --test out/validate.test.js out/zod.test.js out/program.test.js out/failure.test.js out/metadata.test.js out/interactive.test.js out/interactive-stdin.test.js tests/model.test.mjs tests/examples.test.mjs tests/package.test.mjs",
     "build-all": "npm run build && npm run build --workspaces",
     "prepare": "npm run build-all",
     "prepublishOnly": "node -e \"require('fs').copyFileSync('../SECURITY.md','SECURITY.md')\"",
@@ -82,12 +82,13 @@
     }
   },
   "engines": {
-    "node": ">=22.19.0"
+    "node": ">=24.22.1"
   },
   "files": [
     "dist",
     "LICENSE",
     "README.md",
+    "metadata.md",
     "SECURITY.md"
   ],
   "peerDependencies": {

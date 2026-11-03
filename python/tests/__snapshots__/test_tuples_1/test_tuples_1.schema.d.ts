@@ -11,4 +11,8 @@ interface TupleContainer {
     arbitrary_length_4: number[];
     arbitrary_length_5: number[] | [number];
     arbitrary_length_6: number[] | [number] | [number, number];
+    union_elements: Array<number | string>;
+    nullable_elements: Array<string | null>;
+    literal_elements: Array<"yes" | "no">;
+    nested_union_elements: Array<number | string>[];
 }

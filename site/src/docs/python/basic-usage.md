@@ -3,6 +3,9 @@ layout: doc-page
 title: Basic Python Usage
 ---
 
+For a runnable example without a chat loop and guidance on backend integration, start with the
+[non-interactive Python quickstart](/docs/python/non-interactive/).
+
 TypeChat is currently a small library, so we can get a solid understanding
 just by going through the following example:
 
@@ -83,7 +86,7 @@ def create_azure_openai_language_model(api_key: str, endpoint: str): ...
 For even more convenience, TypeChat also provides a function to infer whether
 you're using OpenAI or Azure OpenAI.
 
-```ts
+```py
 def create_language_model(
     vals: dict[str, str | None]
 ) -> TypeChatLanguageModel: ...
@@ -93,6 +96,29 @@ With `create_language_model`, you can populate your environment variables and
 pass them in.
 Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get
 a model of the appropriate type.
+
+#### Using OpenAI-compatible gateways
+
+TypeChat works with any service that exposes the OpenAI Chat Completions API.
+To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
+point `create_openai_language_model` at the gateway's endpoint via the
+`endpoint` argument:
+
+```py
+model = create_openai_language_model(
+    api_key, model, endpoint="https://api.orcarouter.ai/v1/chat/completions"
+)
+```
+
+With `create_language_model`, set the `OPENAI_ENDPOINT` environment variable to
+the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
+`OPENAI_MODEL`:
+
+```
+OPENAI_API_KEY=<your API key>
+OPENAI_MODEL=<model name>
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+```
 
 The `TypeChatLanguageModel` returned by these functions has a few writable
 attributes you might find useful:
@@ -143,8 +169,45 @@ We defined `Sentiment` as a `@dataclass` so we could have all of the convenience
 If we declared `Sentiment` as a `TypedDict`, TypeChat would provide us with a `dict`.
 That would mean that to access the value of `sentiment`, we would have to write `value["sentiment"]`.
 
-Note that while we used [the built-in `typing` module](https://docs.python.org/3/library/typing.html), [`typing_extensions`](https://pypi.org/project/typing-extensions/) is supported as well.
-TypeChat also understands constructs like `Annotated` and `Doc` to add comments to individual attributes.
+Both [the built-in `typing` module](https://docs.python.org/3/library/typing.html) and [`typing_extensions`](https://pypi.org/project/typing-extensions/) are supported.
+On Python 3.11, however, import `TypedDict` from `typing_extensions`: Pydantic requires it instead of `typing.TypedDict` on Python versions earlier than 3.12.
+`Annotated` and `Literal` can still be imported from `typing`.
+
+Here is a complete `TypedDict` version of `schema.py`, with a `Doc` description for the field:
+
+```py
+from typing import Annotated, Literal
+from typing_extensions import Doc, TypedDict
+
+class Sentiment(TypedDict):
+    sentiment: Annotated[
+        Literal["negative", "neutral", "positive"],
+        Doc("The sentiment of the user input."),
+    ]
+```
+
+Or use a plain string for the same field description:
+
+```py
+from typing import Annotated, Literal
+from typing_extensions import TypedDict
+
+class Sentiment(TypedDict):
+    sentiment: Annotated[
+        Literal["negative", "neutral", "positive"],
+        "The sentiment of the user input.",
+    ]
+```
+
+Either `Doc` or a plain string in `Annotated` supplies documentation to the generated TypeScript schema.
+Trailing inline comments on directly declared `TypedDict` and dataclass fields also supply schema documentation when their Python source is available.
+Explicit `Annotated` documentation takes precedence over inline comments, even when that explicit documentation is empty.
+If source is unavailable, conversion still uses the type annotations and explicit documentation, but cannot include inline comments.
+
+[`typing.NewType`](https://docs.python.org/3/library/typing.html#typing.NewType) (and `typing_extensions.NewType`) is also supported.
+TypeChat converts a NewType through its `__supertype__`, so the TypeScript schema uses the underlying JSON type: `NewType("UserId", str)` becomes `string`, and a NewType built on another NewType follows the chain.
+Runtime validation still uses the declared Python type; NewType itself does not add checks beyond that underlying type.
+
 
 ## Creating a Validator
 
@@ -170,7 +233,7 @@ class TypeChatValidator(Generic[T]):
         Validates the given Python object according to the associated schema type.
 
         Returns a `Success[T]` object containing the object if validation was successful.
-        Otherwise, returns a `Failure` object with a `message` property describing the error.
+        Otherwise, returns a `Failure` with an error message and the rejected object in `value`.
         """
         ...
 ```
@@ -262,6 +325,32 @@ In the ideal case, `result` will be a `typechat.Success` and we'll be able to
 access our well-typed `value` property!
 This will correspond to the type that we passed in when we created our
 translator object (i.e. `Sentiment`).
+
+## Accessing Failed Output
+
+A `Failure` can also provide an unvalidated `value: object` and `response_text: str | None`.
+Check `has_value` before using `value`; it distinguishes missing data from a rejected `None`,
+`False`, `0`, or empty string.
+
+```py
+result = await translator.translate(message)
+if isinstance(result, Failure):
+    original_response = result.response_text
+    if result.has_value:
+        rejected = result.value
+        # Validate or repair this value before using it as a Sentiment.
+```
+
+Use `isinstance` with `Success` or `Failure` to distinguish outcomes, not the presence of `value`.
+Validators also retain rejected inputs when used directly.
+Custom validators can return `Failure(message, value=rejected, response_text=text)`, and the
+translator preserves their payloads.
+
+If automatic repair fails, TypeChat retains the latest rejected candidate and available model text,
+not a full attempt history. These can refer to different attempts if the repair response could not
+be parsed. A network failure before any output has no candidate value. Repair limits and successful
+results are unchanged, including Python's existing repair of malformed JSON.
+Rejected values and response text may contain sensitive output; do not log or serialize them blindly.
 
 That's it!
 You should now have a basic idea of TypeChat's APIs and how to get started

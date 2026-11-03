@@ -1,4 +1,4 @@
-import { Result, success, error } from "./result.js";
+import { Result, success, error, withResponseMetadata, TypeChatResponseMetadata, TypeChatTokenUsage } from "./result.js";
 
 /**
  * Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for
@@ -87,6 +87,7 @@ export interface TypeChatLanguageModel {
      * Obtains a completion from the language model for the given prompt.
      * @param prompt A prompt string or an array of prompt sections. If a string is specified,
      *   it is converted into a single "user" role prompt section.
+     * Optional result metadata contains service-reported usage and filtering information.
      */
     complete(prompt: string | PromptSection[]): Promise<Result<string>>;
 }
@@ -195,10 +196,7 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
         "OpenAI-Organization": org
     };
     const proxy = resolveProxySettings(options);
-    if ((options?.useResponsesApi ?? isResponsesApiUrl(endPoint))) {
-        return createResponsesFetchLanguageModel(endPoint, headers, { model }, proxy);
-    }
-    return createFetchLanguageModel(endPoint, headers, { model }, proxy);
+    return createFetchLanguageModel(endPoint, headers, { model }, proxy, options?.useResponsesApi ?? isResponsesApiUrl(endPoint));
 }
 
 /**
@@ -237,7 +235,7 @@ const defaultMaxResponseBytes = 100 * 1024 * 1024;
 /**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
-function createFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings) {
+function createFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings, responsesApi = false) {
     let dispatcherPromise: Promise<RequestInit["dispatcher"]> | undefined;
     const model: TypeChatLanguageModel = {
         complete
@@ -245,8 +243,15 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
     return model;
 
     async function complete(prompt: string | PromptSection[]) {
+        const responses: TypeChatResponseMetadata[] = [];
+        const finish = (result: Result<string>) => withResponseMetadata(result, responses);
         dispatcherPromise ??= resolveProxyDispatcher(proxy);
-        const dispatcher = await dispatcherPromise;
+        let dispatcher: RequestInit["dispatcher"];
+        try {
+            dispatcher = await dispatcherPromise;
+        } catch (e) {
+            return finish(error(`REST API fetch error: ${getErrorMessage(e)}`));
+        }
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
@@ -256,7 +261,11 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
         while (true) {
             const options: RequestInit = {
                 method: "POST",
-                body: JSON.stringify({
+                body: JSON.stringify(responsesApi ? {
+                    ...defaultParams,
+                    input: prompt,
+                    temperature: 0
+                } : {
                     ...defaultParams,
                     messages,
                     temperature: 0,
@@ -275,28 +284,41 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
                 response = await fetchWithTimeout(url, options, timeoutMs);
             } catch (e) {
                 if (retryCount >= retryMaxAttempts) {
-                    return error(`REST API fetch error: ${getErrorMessage(e)}`);
+                    return finish(error(`REST API fetch error: ${getErrorMessage(e)}`));
                 }
                 await sleep(retryPauseMs);
                 retryCount++;
                 continue;
             }
+            const parsed = await readModelResponse(response, maxResponseBytes, responsesApi, responses);
+            if (!parsed.success && response.ok) {
+                return finish(parsed);
+            }
+            const json = parsed.success ? parsed.data : undefined;
             if (response.ok) {
-                let json: { choices?: { message?: PromptSection }[] } | null;
-                try {
-                    json = await readResponseJson(response, maxResponseBytes) as { choices?: { message?: PromptSection }[] } | null;
-                } catch (e) {
-                    return error(`REST API response error: ${getErrorMessage(e)}`);
-                }
-                const content = json?.choices?.[0]?.message?.content;
-                if (typeof content === "string") {
-                    return success(content);
+                let content: unknown;
+                if (responsesApi) {
+                    const output = record(json)?.output;
+                    const message = Array.isArray(output) ? record(output.find(o => record(o)?.type === "message")) : undefined;
+                    const parts = message?.content;
+                    content = Array.isArray(parts) ? record(parts.find(c => record(c)?.type === "output_text"))?.text : undefined;
                 } else {
-                    return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
+                    const choices = record(json)?.choices;
+                    const choice = record(Array.isArray(choices) ? choices[0] : undefined);
+                    content = record(choice?.message)?.content;
+                }
+                if (responses[responses.length - 1].filtering?.blocked) {
+                    return finish(error("REST API response was filtered or refused.",
+                        typeof content === "string" ? { responseText: content } : undefined));
+                }
+                if (typeof content === "string") {
+                    return finish(success(content));
+                } else {
+                    return finish(error(`REST API unexpected response format: ${JSON.stringify(json)}`));
                 }
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
-                return error(`REST API error ${response.status}: ${response.statusText}`);
+                return finish(error(`REST API error ${response.status}: ${response.statusText}`));
             }
             await sleep(getRetryDelayMs(response, retryPauseMs, retryPauseMs * retryMaxAttempts));
             retryCount++;
@@ -304,111 +326,83 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
     }
 }
 
-/**
- * OpenAI Responses API endpoint encapsulation using the fetch API.
- *
- * The Responses API uses a different request and response shape from Chat Completions:
- * - **Request body**: `input` (string or array of `PromptSection`) instead of `messages`.
- * - **Response body**: text is returned inside `output[n].content[m].text` where the matching
- *   output item has `type === "message"` and the content item has `type === "output_text"`.
- *
- * Example successful response:
- * ```json
- * {
- *   "id": "resp_...",
- *   "output": [
- *     {
- *       "type": "message",
- *       "role": "assistant",
- *       "content": [{ "type": "output_text", "text": "Hello!" }]
- *     }
- *   ]
- * }
- * ```
- *
- * @param url The Responses API endpoint URL (path should end with `/responses`).
- * @param headers HTTP headers to include in every request (e.g. `Authorization`).
- * @param defaultParams Additional JSON body parameters merged into every request (e.g. `{ model }`).
- */
-function createResponsesFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings) {
-    let dispatcherPromise: Promise<RequestInit["dispatcher"]> | undefined;
-    const model: TypeChatLanguageModel = {
-        complete
-    };
-    return model;
+function record(value: unknown): Record<string, unknown> | undefined {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
 
-    async function complete(prompt: string | PromptSection[]) {
-        dispatcherPromise ??= resolveProxyDispatcher(proxy);
-        const dispatcher = await dispatcherPromise;
-        let retryCount = 0;
-        const retryMaxAttempts = model.retryMaxAttempts ?? 3;
-        const retryPauseMs = model.retryPauseMs ?? 1000;
-        const timeoutMs = model.timeoutMs ?? defaultTimeoutMs;
-        const maxResponseBytes = model.maxResponseBytes ?? defaultMaxResponseBytes;
-        const input = typeof prompt === "string" ? prompt : (prompt as PromptSection[]);
-        while (true) {
-            const options: RequestInit = {
-                method: "POST",
-                body: JSON.stringify({
-                    ...defaultParams,
-                    input,
-                    temperature: 0,
-                }),
-                headers: {
-                    "content-type": "application/json",
-                    ...headers
-                }
-            };
-            if (dispatcher) {
-                options.dispatcher = dispatcher;
-            }
-            let response: Response;
-            try {
-                response = await fetchWithTimeout(url, options, timeoutMs);
-            } catch (e) {
-                if (retryCount >= retryMaxAttempts) {
-                    return error(`REST API fetch error: ${getErrorMessage(e)}`);
-                }
-                await sleep(retryPauseMs);
-                retryCount++;
-                continue;
-            }
-            if (response.ok) {
-                type ResponsesAPIOutputItem = {
-                    type: string;
-                    role?: string;
-                    content: { type: string; text: string }[];
-                };
-                let json: unknown;
-                try {
-                    json = await readResponseJson(response, maxResponseBytes);
-                } catch (e) {
-                    return error(`REST API response error: ${getErrorMessage(e)}`);
-                }
-                if (
-                    json === null ||
-                    typeof json !== "object" ||
-                    !("output" in json) ||
-                    !Array.isArray((json as { output?: unknown }).output)
-                ) {
-                    return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
-                }
-                const output = (json as { output: ResponsesAPIOutputItem[] }).output;
-                const message = output.find(o => o.type === "message");
-                const textContent = message?.content?.find(c => c.type === "output_text");
-                if (textContent?.text !== undefined) {
-                    return success(textContent.text);
-                } else {
-                    return error(`REST API unexpected response format: ${JSON.stringify(json)}`);
-                }
-            }
-            if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
-                return error(`REST API error ${response.status}: ${response.statusText}`);
-            }
-            await sleep(getRetryDelayMs(response, retryPauseMs, retryPauseMs * retryMaxAttempts));
-            retryCount++;
+function responseMetadata(json: unknown, responsesApi: boolean): TypeChatResponseMetadata {
+    const body = record(json);
+    const metadata: TypeChatResponseMetadata = {};
+    const reported = record(body?.usage);
+    const usage: TypeChatTokenUsage = {};
+    const sourceKeys = responsesApi ? ["input_tokens", "output_tokens", "total_tokens"] : ["prompt_tokens", "completion_tokens", "total_tokens"];
+    for (const [index, key] of (["inputTokens", "outputTokens", "totalTokens"] as const).entries()) {
+        const count = reported?.[sourceKeys[index]];
+        if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) {
+            usage[key] = count;
         }
     }
+    if (Object.keys(usage).length) {
+        metadata.usage = usage;
+    }
+    const choices = body?.choices;
+    const choice = record(Array.isArray(choices) ? choices[0] : undefined);
+    const failure = record(body?.error);
+    const inner = record(failure?.innererror);
+    const input = body?.prompt_filter_results ?? body?.prompt_annotations ?? inner?.content_filter_result;
+    const output = choice?.content_filter_results;
+    const filtering: NonNullable<TypeChatResponseMetadata["filtering"]> = {};
+    if (input !== undefined) filtering.input = input;
+    if (output !== undefined) filtering.output = output;
+    const filtered = (rule: unknown) => record(rule)?.filtered === true;
+    const blocked = (details: unknown) => Object.values(record(details) ?? {}).some(rule =>
+        filtered(rule) || Array.isArray(rule) && rule.some(filtered));
+    if (blocked(output) || (Array.isArray(input) ? input.some(item => blocked(record(item)?.content_filter_results)) : blocked(input))) {
+        filtering.blocked = true;
+    }
+    const reason = responsesApi ? record(body?.incomplete_details)?.reason : choice?.finish_reason;
+    const code = failure?.code;
+    if (reason === "content_filter" || code === "content_filter" || code === "content_policy_violation" || inner?.code === "ResponsibleAIPolicyViolation") {
+        filtering.reason = typeof code === "string" ? code : "content_filter";
+        filtering.blocked = true;
+    }
+    const refusals: string[] = [];
+    const refusal = record(choice?.message)?.refusal;
+    if (typeof refusal === "string" && refusal) refusals.push(refusal);
+    if (responsesApi && Array.isArray(body?.output)) {
+        for (const item of body.output) {
+            const content = record(item)?.content;
+            if (Array.isArray(content)) {
+                for (const part of content) {
+                    const value = record(part);
+                    if (value?.type === "refusal") {
+                        filtering.blocked = true;
+                        if (typeof value.refusal === "string") refusals.push(value.refusal);
+                    }
+                }
+            }
+        }
+    }
+    if (refusals.length) {
+        filtering.refusals = refusals;
+        filtering.blocked = true;
+    }
+    if (Object.keys(filtering).length) metadata.filtering = filtering;
+    return metadata;
+}
+
+async function readModelResponse(response: Response, maxBytes: number, responsesApi: boolean, responses: TypeChatResponseMetadata[]): Promise<Result<unknown>> {
+    let json: unknown;
+    try {
+        if (response.ok || response.headers.get("content-type")?.toLowerCase().includes("json")) {
+            json = await readResponseJson(response, maxBytes);
+        }
+    } catch (e) {
+        responses.push(response.ok ? {} : { error: e instanceof Error ? e.name : "ResponseReadError" });
+        return error(`REST API response error: ${getErrorMessage(e)}`);
+    }
+    responses.push(responseMetadata(json, responsesApi));
+    return success(json);
 }
 
 /**
@@ -560,7 +554,8 @@ async function importUndici() {
     try {
         return await import("undici");
     } catch (e) {
-        if (e instanceof Error && /Cannot find module|ERR_MODULE_NOT_FOUND/.test(e.message)) {
+        if (e instanceof Error && "code" in e && e.code === "ERR_MODULE_NOT_FOUND" &&
+            /Cannot find (?:module|package) ['"]undici['"]/.test(e.message)) {
             throw new Error(
                 `A proxy was configured, but the optional "undici" package is not installed. ` +
                 `Run "npm install undici" to enable proxy support.`
