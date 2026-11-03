@@ -1,6 +1,6 @@
 # TypeChat owner cheat sheet
 
-**For @robgruen. Last checked: 2026-11-01 (UTC).**
+**For @robgruen. Last checked: 2026-11-03 (UTC).**
 
 [Issues](https://github.com/microsoft/TypeChat/issues) |
 [Discussions](https://github.com/microsoft/TypeChat/discussions) |
@@ -11,10 +11,17 @@
 
 **Verified:** backlog assessment, automatic Copilot PR reviews, Issue draft generation,
 Issue `/typechat reply` delivery, and exact Issue `/typechat accept`, including
-duplicate-free reruns.
-**Awaiting review and live verification:** completion receipts for draft/reply requests.
-Manual publication and the Discussion path still need live verification.
-**Still human decisions:** work acceptance, implementation handoff, merging, and releases.
+duplicate-free reruns. Selected Issue/Discussion draft receipts, invalid-command
+reporting, and controller-only no-op retries are
+[live-verified](https://github.com/microsoft/TypeChat/discussions/508#discussioncomment-19342916).
+The separately authorized [#75 coding pilot](./AUTOMATION.md#successful-app-publication-and-human-review)
+created [#513](https://github.com/microsoft/TypeChat/pull/513), followed by CI,
+Copilot review, human fixes, approval, and merge.
+**Still unverified live:** manual response publication, Discussion replies and
+acceptance, and receipt cancellation, uncertain-write recovery,
+acceptance-ready wording, and direct-reply reuse.
+**Coding activation is off. Still human decisions:** work acceptance, each
+implementation run, merging, and releases.
 
 ## What do I do next?
 
@@ -26,7 +33,7 @@ Manual publication and the Discussion path still need live verification.
 | Post the proposed response | Review the exact draft, then copy its publish command into the same thread. | One Actions-bot comment, not approval to build. |
 | Accept an agent-prepared proposal | [Review and approve its exact terms](#accept-an-exact-proposal), or [record a human decision manually](#accept-work-manually). The Issue path is live-verified. | A visible scope agreement; no coding agent starts automatically. |
 | Move an existing PR forward | [Review the latest revision](#review-and-merge-manually); support the existing contributor rather than duplicate their PR. | A human decision to request changes or merge. |
-| Prepare one bounded coding run | After review/rollout, [prepare its exact build command](#prepare-an-implementation-run-disabled-by-default). | A copyable command, not spending or merge approval. |
+| Prepare one bounded coding run | [Prepare its exact build command](#prepare-an-implementation-run-disabled-by-default), then obtain separate owner authorization for that run. | A copyable command, not spending or merge approval. |
 | Resolve unclear or out-of-scope work | Pause dependent work. If changing direction, approve and merge a [policy PR](./GOALS.md#who-decides) first. | An explicit scope decision; popularity or a label is not approval. |
 
 ## Refresh the backlog (live)
@@ -66,11 +73,12 @@ doing anything else. Do not delete its intent artifact or retry blindly.
 
 ## Draft and publish
 
-**Draft generation is live-verified on Issues; manual publication is not.**
+**Issue drafts and selected input-needed Discussion draft outcomes are
+live-verified; manual publication is not.**
 Follow the [rollout checklist](./AUTOMATION.md#first-live-verification)
 for an owner-approved publication test.
 
-Once enabled, use your **@robgruen** account on an **open, unlocked issue or
+Use your **@robgruen** account on an **open, unlocked issue or
 Discussion**, not a PR. Each command must be a **new comment containing only
 the command**, with no leading text. Editing an old comment does not trigger it.
 
@@ -84,8 +92,8 @@ The Actions bot acknowledges the command comment with an `eyes` reaction when
 the workflow starts processing it. This is not a success or acceptance signal;
 check Actions for progress and errors.
 
-After completion-receipt rollout, a short status comment will link the run and
-say whether the draft is prepared, needs input, is outdated, or failed. The
+A short operational receipt links the run and says whether the draft is
+prepared, needs input, is outdated, or failed. The
 receipt is not the drafted response and is not acceptance. It is safe to review
 the original frozen preview after a canonical receipt appears.
 
@@ -130,9 +138,11 @@ separate check.** This is a real scope decision, not a test acknowledgment.
 4. Follow **Publish approved response or work acceptance** to the **Accepted
    work** comment. Confirm it records the terms you approved.
 
-After acknowledgment rollout, a thumbs-up on your command confirms that the
+A thumbs-up on your command confirms that the
 exact acceptance was recorded; it is not an acknowledgment of merely receiving
-the command. This works for both Issues and Discussions. If the reaction fails
+the command. The [#75 Issue acknowledgment](https://github.com/microsoft/TypeChat/issues/75#issuecomment-6592727753)
+was live-verified; Discussion acknowledgment still needs a separate live check.
+The behavior supports both Issues and Discussions. If the reaction fails
 after recording acceptance, inspect the publisher's error before retrying the
 still-valid command. An unchanged confirmed record is not posted twice.
 
@@ -162,8 +172,10 @@ This is not approval to merge. Material scope changes return to discussion.
 ```
 
 This remains an ordinary human comment, not an automation command. It does not
-assign a coding agent. Exact-proposal acceptance is also available on Issues;
-**no `/typechat build` command or implementation workflow is enabled**.
+assign a coding agent. Exact-proposal acceptance is also available. The
+default-off Issue implementation pilot consumes only canonical automated
+acceptance records, not this free-form comment, and always requires a separate
+[owner build authorization](#prepare-an-implementation-run-disabled-by-default).
 
 ## Review and merge manually
 
@@ -180,8 +192,10 @@ assign a coding agent. Exact-proposal acceptance is also available on Issues;
 ## Prepare an implementation run (disabled by default)
 
 The [#504 implementation pilot](./AUTOMATION.md#third-pilot-owner-triggered-issue-implementation)
-is prepared for review, not activated or live-verified. Do not post build commands
-yet. After review and merge, and a separate decision to activate:
+is merged and has [one successful App publication](./AUTOMATION.md#successful-app-publication-and-human-review)
+on #75, followed by human fixes and merge of [#513](https://github.com/microsoft/TypeChat/pull/513).
+The activation flag is currently unset. Preparing a command does not authorize
+another run; a separate owner decision is still required:
 
 1. Choose supported, explicitly accepted Issue work with no competing PR.
    The workflow requires the exact public `/typechat accept` record and hash,
@@ -193,14 +207,14 @@ yet. After review and merge, and a separate decision to activate:
    variable `TYPECHAT_IMPLEMENTATION_ENABLED=true`, then post the generated
    `/typechat build <acceptance-comment-id>:<sha256>` as a fresh Issue comment.
    This authorizes one run with **1,000 main credits plus 400 detection credits**.
-4. Follow Actions, then the resulting PR. After acknowledgment rollout, a rocket
+4. Follow Actions, then the resulting PR. A rocket
    reaction on the build command acknowledges startup, not successful validation
    or completion. No start comment is posted. The PR links the agreement,
    exact patch origin, checks, usage, and
    limitations. Verify normal PR CI and Copilot review actually ran before review
    and any separate merge decision.
 
-Do not use #504 itself as the first coding target: generated changes to the
+Do not use #504 or other automation/control work as a coding target: generated changes to the
 agent's own automation are forbidden. Dependency/configuration changes, binary
 files, Discussions, and inline notes are outside this first pilot.
 
@@ -209,7 +223,9 @@ budget exhaustion, failed checks, or an incomplete scan stop the run. Reruns do
 not spend again. Inspect failures before posting new authorization, and never
 delete retained intents or overwrite a partial branch to force recovery.
 To stop an active run, cancel it or withdraw the command as well as disabling
-the activation variable. No activation or live coding run was performed here.
+the activation variable. The temporary #75 activation was removed after that
+run; repository and inherited gates were confirmed unset on 2026-11-03 (UTC).
+This sheet does not activate or authorize another run.
 
 ## Website deployments
 
@@ -234,7 +250,7 @@ failure. No artifact deletion or coding-pilot activation is needed.
 | Acceptance says "already accepted" | Follow the existing record. No second acceptance comment is needed. |
 | No acceptance preview or wrong acceptance hash | Resolve the questions or scope, then request and review a new draft. Do not substitute the response hash or edit artifacts. |
 | A reply command says "already answered" | Follow the existing reply link. No new model execution or comment is needed. |
-| Eyes are present but no completion message appears | Receipt rollout must be merged and live-verified first. After rollout, check **Report TypeChat discussion outcome**. Existing public replies count as completion; removed/edited commands and closed/locked targets do not receive another comment. |
+| Eyes are present but no completion message appears | Check the source run and **Report TypeChat discussion outcome** for errors or rejected evidence. Existing public replies count as completion; removed/edited commands and closed/locked targets do not receive another comment. |
 | A completion receipt reports an unconfirmed reply or uncertain write | Inspect the run and thread before retrying. A newer attempt cannot bypass an unresolved update to the same receipt. Do not delete the intent. Receipt mutations stop seven days after the original command; use a fresh request after inspection. |
 | A receipt was edited or removed | Automation will not overwrite edited text or blindly recreate a missing receipt. Use the existing run evidence and inspect any retained intent before recovery. |
 | Workflow code changed | After merge and CI, use a new command. Old runs retain their original code, and older sealed artifacts may be stale. |
@@ -244,8 +260,8 @@ failure. No artifact deletion or coding-pilot activation is needed.
 **Spending reminder:** main assessment **400 AI credits/run**; main
 drafting/reply generation **50/run**. Each has a **separate detection budget, default 400**,
 so those main-agent limits are not whole-workflow caps. Publishing and acceptance use no
-model. Copilot PR reviews are billed separately. The prepared implementation
-configuration proposes **1,000 main credits plus 400 detection credits**; the
+model. Copilot PR reviews are billed separately. The reviewed implementation
+configuration limits each authorized run to **1,000 main credits plus 400 detection credits**; the
 activation gate remains **off**. Per-run budget overrides are **not enabled**.
 
 Keep this sheet's date and availability notes aligned with the

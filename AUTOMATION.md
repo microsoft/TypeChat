@@ -20,7 +20,7 @@ is available today.
 
 ## Status and implementation history
 
-**Last updated: 2026-11-01 (UTC).** The read-only
+**Last updated: 2026-11-03 (UTC).** The read-only
 [Backlog assessment workflow](https://github.com/microsoft/TypeChat/actions/workflows/backlog-assessment.lock.yml)
 is available for manual dispatch on `main`. The
 [latest run](https://github.com/microsoft/TypeChat/actions/runs/40997369231)
@@ -38,10 +38,17 @@ reviews are now enabled through a separate repository rule; broader autonomy
 is not enabled. The
 [owner-approved discussion pilot](#second-pilot-owner-approved-discussion-drafts)
 has verified Issue draft-only, direct-reply, and duplicate-free reply retry runs.
-Manual response publication and the Discussion path remain unverified live.
+Selected Issue and Discussion draft receipts, invalid-command reporting, and
+controller-only no-op retries are now
+[live-verified](https://github.com/microsoft/TypeChat/discussions/508#discussioncomment-19342916).
+Manual response publication, Discussion replies, and Discussion acceptance
+remain unverified live.
 [Exact owner work acceptance](#exact-work-acceptance) and its no-op retry are
-live-verified on an Issue. [Completion receipts](#completion-receipts) are
-prepared for review, not activated or live-verified.
+live-verified on an Issue. The separately owner-authorized
+[Issue implementation pilot](#third-pilot-owner-triggered-issue-implementation)
+published [#513](https://github.com/microsoft/TypeChat/pull/513), which received
+normal CI, Copilot review, owner-approved follow-up fixes, and human approval
+and merge. Its activation flag is unset; broader autonomy is not enabled.
 
 | Implemented | Change | Current state |
 | --- | --- | --- |
@@ -68,8 +75,10 @@ prepared for review, not activated or live-verified.
 | 2026-10-30 | [Owner-approved issue and Discussion drafts](#second-pilot-owner-approved-discussion-drafts) | Merged through [#493](https://github.com/microsoft/TypeChat/pull/493), [#494](https://github.com/microsoft/TypeChat/pull/494), and [#495](https://github.com/microsoft/TypeChat/pull/495). The Issue draft-only path passed in [run 41147057482](https://github.com/microsoft/TypeChat/actions/runs/41147057482) on 2026-10-31 (UTC); this does not verify publication or the Discussion path. |
 | 2026-10-31 | Conversational responses and `/typechat reply` | Merged through [#498](https://github.com/microsoft/TypeChat/pull/498). [Run 41226698016, attempt 1](https://github.com/microsoft/TypeChat/actions/runs/41226698016/attempts/1) posted one checked Issue response. [Attempt 2](https://github.com/microsoft/TypeChat/actions/runs/41226698016/attempts/2) skipped inference and posting, preserving the original reply. Discussion and manual publication remain unverified live. |
 | 2026-10-31 | [Exact owner work acceptance](#exact-work-acceptance) | Merged through [#503](https://github.com/microsoft/TypeChat/pull/503). [Run 41339605658, attempt 1](https://github.com/microsoft/TypeChat/actions/runs/41339605658/attempts/1) posted the exact Issue acceptance on 2026-11-01 (UTC); [attempt 2](https://github.com/microsoft/TypeChat/actions/runs/41339605658/attempts/2) skipped the write and preserved the original record. Discussion acceptance remains unverified live. |
-| Prepared | [Completion receipts](#completion-receipts) | Close the loop for eyes-acknowledged draft/reply requests without publishing private previews or granting acceptance. Review, merge, and live verification are pending. |
-| Not yet | Human-approved agent implementation | Planned with a future 1,000-credit implementation allowance; no build command, implementation workflow, or implementation spending is enabled. |
+| 2026-11-02 | [Completion receipts](#completion-receipts) | Merged through [#506](https://github.com/microsoft/TypeChat/pull/506). [Owner-authorized live checks](https://github.com/microsoft/TypeChat/discussions/508#discussioncomment-19342916) verified Issue/Discussion input-needed draft receipts, an invalid-command receipt, and controller-only no-op retries; other outcomes and uncertain-write recovery are not claimed live-verified. |
+| 2026-11-02 | [Owner-triggered Issue implementation](#third-pilot-owner-triggered-issue-implementation) | Merged through [#507](https://github.com/microsoft/TypeChat/pull/507), default-off. The separately authorized [#220 run](https://github.com/microsoft/TypeChat/actions/runs/41493733655) correctly blocked a candidate that failed strict Pyright checks; manual recovery did not change that failed result. |
+| 2026-11-02 | Acceptance and build acknowledgments | Merged through [#510](https://github.com/microsoft/TypeChat/pull/510). A thumbs-up on the [#75 acceptance command](https://github.com/microsoft/TypeChat/issues/75#issuecomment-6592727753) confirmed recorded acceptance; a rocket on the [build command](https://github.com/microsoft/TypeChat/issues/75#issuecomment-6592903964) acknowledged startup, not success. Discussion acknowledgment remains unverified live. |
+| 2026-11-03 | [Successful App publication and human review](#successful-app-publication-and-human-review) | [Run 41559378978](https://github.com/microsoft/TypeChat/actions/runs/41559378978) created [#513](https://github.com/microsoft/TypeChat/pull/513). Normal CI and Copilot reviews ran, human follow-up fixes were verified, and the owner approved and merged the PR. Original automated evidence remains bound to its original commit; activation is again unset. |
 | Not yet | Selective automatic adoption | Future work, after public criteria and maintainer approval. |
 
 These are implementation dates, not activation dates. Update this history,
@@ -488,13 +497,15 @@ human-review enforcement remain a separate owner decision.
 
 ## Second pilot: owner-approved discussion drafts
 
-**Issue direct replies and no-op retries verified on 2026-10-31 (UTC).**
+**Issue direct replies and no-op retries verified on 2026-10-31 (UTC);
+selected completion receipts verified on 2026-11-02 (UTC).**
 This pilot provides GitHub-native previews and owner-requested replies for Issues
-and Discussions; the Discussion and manual response-publication paths still need
-live verification. Issue work acceptance and its no-op retry were verified on
-2026-11-01 (UTC). Completion receipts are prepared for review and need a separate
-post-merge live check. No command changes labels,
-closes threads, starts an implementation run, creates PRs, or merges changes.
+and Discussions. Input-needed Issue and Discussion draft outcomes and their
+receipts were verified in [the owner-authorized checks](https://github.com/microsoft/TypeChat/discussions/508#discussioncomment-19342916).
+Discussion replies, Discussion acceptance, and manual response publication
+still need live verification. Issue work acceptance and its no-op retry were
+verified on 2026-11-01 (UTC). These discussion commands do not change labels,
+close threads, start an implementation run, create PRs, or merge changes.
 Existing Copilot PR review remains a separate capability.
 
 ### Owner commands
@@ -504,7 +515,7 @@ command in a **new comment**, with no additional text:
 
 | Command | Authorization and result |
 | --- | --- |
-| `/typechat draft` | Prepare a conversational reply and, when ready, a work-acceptance preview; do not post either. After receipt rollout, report the operational outcome separately. |
+| `/typechat draft` | Prepare a conversational reply and, when ready, a work-acceptance preview; do not post either. Report the operational outcome separately through a trusted receipt. |
 | `/typechat publish <artifact-id>:<body-sha256>` | Approve and post that exact reviewed draft. |
 | `/typechat reply` | Authorize one checked advisory reply to be posted without a second approval command. |
 | `/typechat accept <artifact-id>:<acceptance-sha256>` | Approve and record the exact proposed scope and criteria. No implementation run or merge is authorized. |
@@ -560,11 +571,20 @@ Unclear scope or an item under consideration requires an owner decision.
 
 ### Completion receipts
 
-**Prepared for review; not live-verified.** Eyes acknowledge that a draft or
-reply request has started. The separate
+**Merged through [#506](https://github.com/microsoft/TypeChat/pull/506);
+selected outcomes live-verified on 2026-11-02 (UTC).** Eyes acknowledge that a
+draft or reply request has started. The separate
 [outcome workflow](./.github/workflows/discussion-status.yml) waits for the full
 response workflow to finish, including failures and cancellations, then records
 one short, trusted operational outcome for the original command.
+
+The [verification report](https://github.com/microsoft/TypeChat/discussions/508#discussioncomment-19342916)
+records input-needed Issue and Discussion draft receipts, an invalid-command
+receipt, and controller-only retries that preserved comment IDs, text hashes,
+update timestamps, and counts without another model run. Cancellation,
+uncertain-network-write recovery, acceptance-ready wording, and direct-reply
+reuse were not exercised live in those checks; offline coverage is not live
+evidence for those paths.
 
 The receipt links the owner request and run/preview. Its fixed messages distinguish
 a prepared proposal, additional input, outdated or unavailable evidence, rejected
@@ -606,7 +626,7 @@ Delivery is fail-closed, not a guarantee of commenting despite lost permissions
 or unavailable evidence. Withdrawn/edited requests, closed/locked targets, older
 run-name formats, and superseded attempts do not receive new comments. If the
 controller cannot authenticate or verify its inputs, Actions remains the error
-channel. Use a new owner command after rollout; rerunning old workflow revisions
+channel. Use a new owner command on the current workflow revision; rerunning old workflow revisions
 does not add the new request binding or receipt behavior.
 
 ### Exact work acceptance
@@ -642,6 +662,9 @@ before posting one top-level **Accepted work** comment.
 After confirming that exact record, the publisher adds a thumbs-up reaction to
 the owner's `/typechat accept` comment, on either an Issue or a Discussion.
 The reaction confirms recorded acceptance, not merely receipt of the command.
+The [#75 owner acceptance command](https://github.com/microsoft/TypeChat/issues/75#issuecomment-6592727753)
+received this reaction after its exact record was confirmed on 2026-11-03 (UTC).
+Discussion acknowledgment remains unverified live.
 Rejected approvals and unconfirmed publication outcomes do not receive it.
 An unchanged, already-published record can also confirm a subsequent valid
 approval command without creating another acceptance comment.
@@ -893,7 +916,7 @@ decisions should be clear and visible.
 
 ## Third pilot: owner-triggered Issue implementation
 
-**Default-off; successful automated PR publication is not yet live-verified.** The
+**Default-off; successful App PR publication verified on 2026-11-03 (UTC).** The
 [accepted agreement for #504](https://github.com/microsoft/TypeChat/issues/504#issuecomment-6562465109)
 authorizes development of this workflow, not an automated coding run. The new
 [workflow](./.github/workflows/issue-implementation.md) requires
@@ -929,6 +952,40 @@ blocked, and the temporary activation flag was removed. Native usage was
 50.71891 coding credits plus 10.53936 detection credits. This verifies rejection
 of a failing candidate, not successful automated PR creation. Manual recovery
 of that candidate does not change the failed run's outcome.
+
+### Successful App publication and human review
+
+On 2026-11-03 (UTC), the separately owner-authorized
+[#75 run](https://github.com/microsoft/TypeChat/actions/runs/41559378978)
+completed preparation, coding, full-patch detection, isolated checks, and
+trusted publication. It created the App-authored
+[#513](https://github.com/microsoft/TypeChat/pull/513) from the exact
+[accepted record](https://github.com/microsoft/TypeChat/issues/75#issuecomment-6592736337).
+That run used **124.05274 main credits plus 16.76878 detection credits =
+140.82152 AI credits**, within the separate 1,000/400 limits.
+
+Original automated commit
+[adcfc932](https://github.com/microsoft/TypeChat/commit/adcfc9323fc2b5afa1130ed6a121c78a5d02a0a8)
+remains the revision bound by the original context, candidate, patch, scan, and
+isolated-check evidence. Its new metadata tests compiled but were omitted from
+the default test selector. Owner-approved human follow-ups registered those
+tests, fixed filtered-response error privacy and token-total overflow, and
+shipped the metadata guide with a README link. Later test runs actually
+executed the metadata suite. The original scan is not claimed to cover those
+human changes.
+
+Normal PR CI and Copilot reviews ran on the original and follow-up revisions.
+All 12 checks passed at final head
+[1c1abe6](https://github.com/microsoft/TypeChat/commit/1c1abe6f9566ecd7d691596344911ce1f30f83bd);
+the owner approved and merged it as
+[488c8ef](https://github.com/microsoft/TypeChat/commit/488c8efdcfbb41e44f31c420c84ba2a499f90e20).
+Post-merge Node, Python, and Pages runs succeeded. Human review and fixes were
+part of this pilot, not automatic approval or merging.
+
+The temporary activation flag was removed after the authorized run and was
+confirmed unset at repository and inherited organization scope on 2026-11-03
+(UTC). This verifies one bounded TypeScript publication path, not broader
+autonomy, Discussion implementation, or permission for another coding run.
 
 ### Frozen authorization and bounded spending
 
@@ -1022,7 +1079,9 @@ an unpublished or partially published branch requiring human inspection.
 
 ### Activation and first live verification
 
-Review and merge the workflow through the ordinary owner process first.
+The workflow was merged through the ordinary owner process in
+[#507](https://github.com/microsoft/TypeChat/pull/507). Each later activation
+still requires a separate owner decision.
 The existing default token permissions, PR-creation/approval setting, Dependabot
 workflow, library behavior, and discussion commands stay unchanged. Compiler
 safe-update approval of the existing App binding is a code-review step, not
@@ -1039,8 +1098,10 @@ Record whether the resulting App-created PR actually starts normal CI and
 receives Copilot review. Neither is claimed successful in advance; both remain
 separate from human approval and merging. The CI sandbox smoke test uses a
 synthetic TypeScript/Python patch and no inference or App credentials. It verifies
-container behavior, not a live coding run. Discussion-path verification and
-receipt rollout remain their separate milestones.
+container behavior, not a live coding run. The
+[successful #75 publication](#successful-app-publication-and-human-review)
+and [selected receipt checks](#completion-receipts) supply separate live
+evidence; unverified Discussion paths and receipt outcomes remain separate.
 
 ## Existing issues and contributions
 
