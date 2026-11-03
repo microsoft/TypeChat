@@ -36,8 +36,17 @@ npm install
 npm run build
 ```
 
-Run the test suite with `npm test`. The Zod schema tests also compile their generated
-TypeScript schema text to check for syntax errors and unresolved type references.
+Run the test suite with `npm test`. It builds the library, compiles TypeScript tests,
+and recursively discovers compiled `*.test.js` suites under `out/` and runtime
+`*.test.mjs` suites under `tests/`. Add TypeScript tests under
+[test/](https://github.com/microsoft/TypeChat/tree/main/typescript/test) or runtime
+tests under [tests/](https://github.com/microsoft/TypeChat/tree/main/typescript/tests);
+no manual suite-list update is needed.
+Quoted patterns let Node handle discovery consistently across platforms, including
+nested directories, without executing helper files or uncompiled TypeScript.
+
+The Zod schema tests also compile their generated TypeScript schema text to check
+for syntax errors and unresolved type references.
 Node.js CI runs this suite across its Node.js matrix after a clean dependency
 installation and workspace build.
 
