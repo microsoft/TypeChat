@@ -44,6 +44,7 @@
     "dist",
     "LICENSE",
     "README.md",
+    "metadata.md",
     "SECURITY.md"
   ],
   "peerDependencies": {
