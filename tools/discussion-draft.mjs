@@ -437,7 +437,13 @@ function replyKey(request) {
 }
 
 function replyIntentName(request) {
-    return `${INTENT_PREFIX}${request.command.action === "propose" ? "propose" : "reply"}-${replyKey(request)}`;
+    return `${INTENT_PREFIX}reply-${replyKey(request)}`;
+}
+
+function proposalIntentName(target, version) {
+    integer(version, "Invalid proposal reservation version.");
+    const targetKey = digest({ repositoryId: REPOSITORY.id, targetId: target.id });
+    return `${INTENT_PREFIX}propose-v2-${targetKey}-P${version}`;
 }
 
 function existingReply(thread, request) {
@@ -511,6 +517,7 @@ export async function prepareDraft(github, context, env, clock = () => new Date(
     await verifyCommand(github, request);
     const controls = await readControls(github, request.commit);
     const thread = await readThread(github, request.target);
+    let proposalVersion;
     if (["reply", "propose"].includes(request.command.action)) {
         const current = await currentControls(github);
         requireValue(equal(current.fingerprints, controls.fingerprints), request.command.action === "propose" ?
@@ -521,17 +528,13 @@ export async function prepareDraft(github, context, env, clock = () => new Date(
             return { alreadyReplied: true, url: existing.url };
         }
         requireFreshReply(request, clock());
-        requireValue(!await priorIntent(github, replyIntentName(request)),
-            "A previous reply intent exists without a confirmed comment. Inspect that run; automatic retry is blocked.");
         if (request.command.action === "propose") {
-            for (const comment of thread.comments) {
-                if (comment.id === request.commentId || comment.author?.type !== "User" ||
-                    comment.author.login !== OWNER.login || !/^\/typechat propose\s*$/.test(comment.body)) continue;
-                const earlier = { target: request.target, command: { action: "propose" }, commentId: comment.id,
-                    commandBody: comment.body, commandCreatedAt: comment.createdAt };
-                requireValue(existingReply(thread, earlier) || !await priorIntent(github, replyIntentName(earlier)),
-                    "An earlier proposal write is unconfirmed. Inspect it before requesting another round.");
-            }
+            proposalVersion = nextProposalVersion(thread);
+            requireValue(!await priorIntent(github, proposalIntentName(request.target, proposalVersion)),
+                "An earlier proposal write is unconfirmed. Inspect it before requesting another round.");
+        } else {
+            requireValue(!await priorIntent(github, replyIntentName(request)),
+                "A previous reply intent exists without a confirmed comment. Inspect that run; automatic retry is blocked.");
         }
     }
     requireOpen(thread);
@@ -544,7 +547,7 @@ export async function prepareDraft(github, context, env, clock = () => new Date(
         snapshotHash: snapshotHash(thread),
         policyText: controls.policyText,
         thread: { target: thread.target, comments: thread.comments.filter(comment => !isControlComment(comment)) },
-        ...(request.command.action === "propose" ? { proposalVersion: nextProposalVersion(thread) } : {}),
+        ...(request.command.action === "propose" ? { proposalVersion } : {}),
     };
     requireValue(Buffer.byteLength(JSON.stringify(prepared, null, 2) + "\n") <= MAX_CONTEXT_BYTES,
         "The prepared context exceeds the pilot size limit.");
@@ -1071,8 +1074,11 @@ export function publishedComment(thread, bundle, action = "publish") {
     return matches[0];
 }
 
-function publicationIntentName(publication) {
-    return ["reply", "propose"].includes(publication.request.command.action) ?
+function publicationIntentName(publication, bundle) {
+    if (publication.request.command.action === "propose") {
+        return proposalIntentName(bundle.target, bundle.proposalVersion);
+    }
+    return publication.request.command.action === "reply" ?
         replyIntentName(publication.request) :
         `${INTENT_PREFIX}${publication.request.command.action === "accept" ? "accept-" : ""}${publication.artifact.id}`;
 }
@@ -1137,16 +1143,17 @@ export async function checkPublication(github, context, env, bundle, clock = () 
         await acknowledgeAcceptance(github, publication.request);
         return { shouldPost: false, url: existing.url };
     }
-    const prior = await priorIntent(github, publicationIntentName(publication));
+    const prior = await priorIntent(github, publicationIntentName(publication, bundle));
     requireValue(!prior, "A previous publication intent exists without a confirmed comment. Inspect that run; automatic retry is blocked.");
     return {
         shouldPost: true,
-        intentName: publicationIntentName(publication),
+        intentName: publicationIntentName(publication, bundle),
         intent: {
             version: 3, authorization: publication.request.command.action,
             artifactId: publication.artifact.id, bodyHash: publicationContent(bundle, publication.request.command.action).bodyHash,
             target: bundle.target, approvalComment: publication.request.commentId,
             runId: publication.request.runId, attempt: publication.request.attempt,
+            ...(publication.request.command.action === "propose" ? { request: bundle.request } : {}),
         },
     };
 }
@@ -1160,12 +1167,12 @@ export async function publishDraft(github, context, env, bundle, intentId, clock
     }
     const intent = (await github.rest.actions.getArtifact({ ...API_REPO, artifact_id: integer(Number(intentId), "Missing durable publication intent.") })).data;
     requireValue(intent.id === Number(intentId) &&
-        intent.name === publicationIntentName(publication) &&
+        intent.name === publicationIntentName(publication, bundle) &&
         intent.workflow_run?.id === publication.request.runId &&
         intent.workflow_run.repository_id === REPOSITORY.id && intent.workflow_run.head_sha === context.sha &&
         intent.expired === false &&
         Date.parse(intent.expires_at) >= publication.validUntil, "The publication intent is missing, stale, or insufficiently retained.");
-    requireValue(!await priorIntent(github, publicationIntentName(publication), intent.id),
+    requireValue(!await priorIntent(github, publicationIntentName(publication, bundle), intent.id),
         "A previous publication attempt exists. No second write will be attempted.");
     const latest = await identifyPublication(github, context, env, clock);
     const rechecked = await verifyBundleContext(github, latest, bundle);

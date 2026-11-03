@@ -327,9 +327,9 @@ async function reserve(fixture, id = 501) {
     return id;
 }
 
-async function readyReply(kind = "issue", draft = candidate(), action = "reply") {
+async function readyReply(kind = "issue", draft = candidate(), action = "reply", commentId = "request") {
     const fixture = setup(kind);
-    const draftRun = fixture.event(action, `/typechat ${action}`);
+    const draftRun = fixture.event(action, `/typechat ${action}`, commentId);
     const prepared = await prepareDraft(fixture.github, draftRun.context, draftRun.env, clock);
     const bundle = await sealDraft(fixture.github, draftRun.context, draftRun.env, prepared, draft,
         () => new Date("2026-10-30T00:20:00Z"));
@@ -641,6 +641,57 @@ test("an unresolved earlier proposal write blocks inference for a new round", as
     await reserve(f);
     const next = f.event("propose", "/typechat propose", "next-round", 101);
     await assert.rejects(prepareDraft(f.github, next.context, next.env, clock), /earlier proposal write is unconfirmed/);
+});
+
+for (const mutation of ["edited", "deleted"]) {
+    test(`an unconfirmed proposal write still blocks a new round after its command is ${mutation}`, async () => {
+        const fixture = await readyReply("issue", publicCandidate(), "propose");
+        const intent = await reserve(fixture);
+        fixture.state.postError = new Error("The write outcome is unknown");
+        await assert.rejects(publishDraft(fixture.github, fixture.publication.context,
+            fixture.publication.env, fixture.bundle, intent, clock), /Publication outcome is uncertain/);
+        fixture.state.producerRun.status = "completed";
+        fixture.state.producerRun.conclusion = "failure";
+        if (mutation === "edited") {
+            const original = fixture.state.comments.get("request");
+            original.body += "\n";
+            original.lastEditedAt = original.updatedAt = "2026-10-30T00:35:00Z";
+        } else {
+            fixture.state.comments.delete("request");
+            fixture.state.thread.comments = fixture.state.thread.comments.filter(comment => comment.id !== "request");
+        }
+        const next = fixture.event("propose", "/typechat propose", "next-round", 101);
+        next.context.payload.comment.created_at = "2026-10-30T00:40:00Z";
+        const nextComment = fixture.state.comments.get("next-round");
+        nextComment.createdAt = nextComment.updatedAt = next.context.payload.comment.created_at;
+        await assert.rejects(prepareDraft(fixture.github, next.context, next.env, clock),
+            /earlier proposal write is unconfirmed/);
+        assert.equal(fixture.state.posts.length, 1, "Only the original uncertain write was attempted");
+        assert.equal(fixture.state.artifacts.size, 2, "The original seal and intent are retained");
+    });
+}
+
+test("proposal reservations use immutable target/version identity and retain original request data", async () => {
+    const first = await readyReply("issue", publicCandidate(), "propose", "first-command");
+    const second = await readyReply("issue", publicCandidate(), "propose", "second-command");
+    const a = await checkPublication(first.github, first.publication.context, first.publication.env, first.bundle, clock);
+    const b = await checkPublication(second.github, second.publication.context, second.publication.env, second.bundle, clock);
+    assert.equal(a.intentName, b.intentName, "Different commands cannot reserve the same Issue/version independently");
+    assert.match(a.intentName, /^typechat-publish-intent-propose-v2-[a-f0-9]{64}-P1$/);
+    assert.deepEqual(a.intent.request, first.bundle.request);
+    assert.equal(a.intent.approvalComment, "first-command");
+    assert.deepEqual(b.intent.request, second.bundle.request);
+    assert.equal(b.intent.approvalComment, "second-command");
+});
+
+test("confirmed proposal history can advance after the original command is deleted", async () => {
+    const fixture = await publicProposal();
+    fixture.state.comments.delete("request");
+    fixture.state.thread.comments = fixture.state.thread.comments.filter(comment => comment.id !== "request");
+    const next = await secondProposal(fixture);
+    assert.equal(next.bundle.proposalVersion, 2);
+    assert.equal(next.state.posts.length, 2);
+    assert.match(next.state.posts[1], /^## Work proposal P2\n/);
 });
 
 test("proposals require owner authorization, Issue targets, and successful scan and seal", async () => {

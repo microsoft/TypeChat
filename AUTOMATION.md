@@ -703,9 +703,15 @@ last. A new community comment or newer proposal cannot silently change that
 selection. Append-only discussion after the proposal is allowed; its original
 evidence, public body, source command, policy/control fingerprints, and inspected
 contribution revisions must remain unchanged and verifiable. Hidden, edited,
-duplicate, future-dated, expired, or ambiguous versions fail closed. An unresolved
-earlier write blocks a new round rather than risking duplicate version numbers.
-Keep durable intents and inspect uncertain outcomes; never delete them to retry.
+duplicate, future-dated, expired, or ambiguous versions fail closed. A pending
+proposal write reserves the immutable Issue identity and proposal version, not
+a key reconstructed from mutable command comments. All commands competing for
+that version share the same reservation; its retained intent includes the
+original command Node ID, body, and creation time. Preparation checks that exact
+target/version reservation even if the earlier command is edited or deleted.
+Confirmed public history advances the next version; an unresolved write blocks
+a new round rather than risking duplicate version numbers. Keep durable intents
+and inspect uncertain outcomes; never delete them to retry.
 
 The exact acceptance remains a separate public record. The selected version's
 visible goal, scope, non-goals, and criteria must match that record. Build resolves
