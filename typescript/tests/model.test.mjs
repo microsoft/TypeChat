@@ -188,11 +188,14 @@ describe("token-provider authentication", () => {
             assert.equal(capturedRequests.length, 1);
         });
 
-        for (const token of ["", " ", undefined, null, 42, {}]) {
+        for (const token of [
+            "", " ", undefined, null, 42, {}, "token value", " token",
+            "token\r\nother", "token\u0100", "token\n", "token\r", "token\u0000", "token\u007f"
+        ]) {
             test(`${name}: rejects invalid token ${JSON.stringify(token)} before fetch`, async () => {
                 setupFetch([]);
                 assert.deepEqual(await factory(() => token).complete("request"), {
-                    success: false, message: "Token provider must return a nonempty string."
+                    success: false, message: "Token provider must return a nonempty, header-safe bearer-token string."
                 });
                 assert.equal(capturedRequests.length, 0);
             });
@@ -255,6 +258,15 @@ describe("token-provider authentication", () => {
         await createAzureOpenAILanguageModel("", "https://example.test/chat/completions").complete("request");
         assert.equal(capturedRequests[0].options.headers["api-key"], "");
         assert.equal(capturedRequests[0].options.headers.Authorization, "Bearer ");
+    });
+
+    test("accepts printable ASCII bearer-token boundary characters", async () => {
+        setupFetch([makeChatCompletionsResponse("reply")]);
+        const model = createAzureOpenAILanguageModel(undefined, "https://example.test/chat/completions", {
+            tokenProvider: () => "!~"
+        });
+        assert.deepEqual(await model.complete("request"), { success: true, data: "reply" });
+        assert.equal(capturedRequests[0].options.headers.Authorization, "Bearer !~");
     });
 });
 

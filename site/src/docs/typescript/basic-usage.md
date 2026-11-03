@@ -103,8 +103,9 @@ const model = createAzureOpenAILanguageModel(undefined, endpoint, {
 without a `Bearer ` prefix. The provider owns credential acquisition, caching, renewal,
 and cleanup; TypeChat adds no Azure Identity dependency. It invokes the provider for each
 HTTP attempt, including retries, and sends bearer authorization without an `api-key`
-header. API keys and providers are mutually exclusive. Empty or invalid tokens return
-an error without sending a request. Provider exceptions follow the HTTP model's existing
+header. API keys and providers are mutually exclusive. Non-string/empty tokens or tokens
+containing whitespace, control characters, or non-ASCII characters return an error before
+dispatch. Provider exceptions follow the HTTP model's existing
 retry/error policy.
 
 The same option works with `createOpenAILanguageModel`, including its Responses mode:

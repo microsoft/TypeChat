@@ -452,8 +452,8 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
             try {
                 if (tokenProvider) {
                     const token = await tokenProvider();
-                    if (typeof token !== "string" || !token.trim()) {
-                        return finish(error("Token provider must return a nonempty string."));
+                    if (typeof token !== "string" || !token || /[^\x21-\x7e]/.test(token)) {
+                        return finish(error("Token provider must return a nonempty, header-safe bearer-token string."));
                     }
                     options.headers = { ...headers, "content-type": "application/json", "Authorization": `Bearer ${token}` };
                 }
