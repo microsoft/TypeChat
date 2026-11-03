@@ -54,6 +54,20 @@ To learn more about TypeChat, visit the
 [documentation](https://microsoft.github.io/TypeChat/docs/python/basic-usage/)
 which includes more information on TypeChat and how to get started.
 
+## Reusing model authentication
+
+For keyless Azure OpenAI requests, pass a synchronous or asynchronous bearer-token
+provider to `create_azure_openai_language_model` with `api_key=None`. If your app
+already has a configured asynchronous OpenAI or Azure OpenAI client, use
+`create_openai_language_model_from_client` instead.
+
+Both paths reuse authentication supplied by your application without adding SDK
+dependencies to TypeChat or requiring TypeChat-specific environment-variable names.
+Existing API-key and environment-based calls are unchanged. See the
+[token-provider example](../site/src/docs/python/basic-usage.md#using-a-bearer-token-provider)
+and [configured-client example](../site/src/docs/python/basic-usage.md#reusing-an-already-configured-client)
+for ownership, retry, and error behavior.
+
 ## Documenting schema fields
 
 Trailing Python comments on directly declared `TypedDict` and dataclass fields become

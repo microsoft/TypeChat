@@ -80,7 +80,12 @@ def create_openai_language_model(
 ):
     ...
 
-def create_azure_openai_language_model(api_key: str, endpoint: str): ...
+def create_azure_openai_language_model(
+    api_key: str | None,
+    endpoint: str,
+    *,
+    token_provider: TokenProvider | None = None
+): ...
 ```
 
 For even more convenience, TypeChat also provides a function to infer whether
@@ -96,6 +101,67 @@ With `create_language_model`, you can populate your environment variables and
 pass them in.
 Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get
 a model of the appropriate type.
+
+#### Using a bearer-token provider
+
+For keyless Azure OpenAI authentication, pass `api_key=None` and an existing
+token provider directly. `TokenProvider` is a callable returning either a token
+string or an awaitable token string, so both synchronous and asynchronous
+providers work:
+
+```py
+from typechat import create_azure_openai_language_model
+
+model = create_azure_openai_language_model(
+    api_key=None,
+    endpoint=chat_completions_endpoint,
+    token_provider=token_provider,
+)
+```
+
+The endpoint is the full deployment Chat Completions URL, including its
+`api-version` query parameter. The provider is called for every HTTP attempt,
+including retries, and this authentication path sends only an `Authorization:
+Bearer ...` header, not an `api-key` header. The provider owns credential
+acquisition, caching, renewal, and cleanup. TypeChat does not cache tokens or
+require an Azure Identity dependency.
+
+API keys and token providers are mutually exclusive. Empty or invalid tokens
+produce a `Failure` without sending a request. Provider exceptions use the
+existing HTTP model retry/failure behavior; cancellation propagates.
+
+Existing API-key calls, positional arguments, environment-variable handling,
+and legacy headers are unchanged. In particular, setting
+`AZURE_OPENAI_API_KEY=identity` does not activate a credential provider.
+
+#### Reusing an already configured client
+
+If your application already has an `AsyncOpenAI`, `AsyncAzureOpenAI`, or
+compatible asynchronous Chat Completions client, adapt that instance directly:
+
+```py
+from typechat import create_openai_language_model_from_client
+
+model = create_openai_language_model_from_client(
+    openai_client,
+    model="my-model-or-azure-deployment",
+)
+```
+
+The adapter uses `client.chat.completions.create` and reads
+`choices[0].message.content`. It requires no environment variables and adds no
+SDK dependency to TypeChat. It sends TypeChat's prompt sections with
+`temperature=0.0`, `n=1`, and `stream=False`; the caller supplies the model or
+Azure deployment name.
+
+Your client's endpoint, API version, authentication, retries, and timeouts
+remain configured by your application. TypeChat does not reconfigure or close
+the client, or add another retry/timeout layer. Client exceptions and
+cancellation propagate unchanged. Missing choices or text produce a `Failure`.
+The adapter is for Chat Completions, not the Responses API.
+
+Pass either model to `TypeChatJsonTranslator` as usual. Schema generation,
+validation, and repair behavior remain unchanged.
 
 #### Using OpenAI-compatible gateways
 
@@ -120,8 +186,9 @@ OPENAI_MODEL=<model name>
 OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
 ```
 
-The `TypeChatLanguageModel` returned by these functions has a few writable
-attributes you might find useful:
+The HTTP models returned by `create_language_model`,
+`create_openai_language_model`, and `create_azure_openai_language_model` have a
+few writable attributes you might find useful:
 
 - `max_retry_attempts`
 - `retry_pause_seconds`
