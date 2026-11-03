@@ -1,4 +1,4 @@
-import { Result, success, error, Error as TypeChatError } from "./result";
+import { Result, success, error, withResponseMetadata, TypeChatResponseMetadata, Error as TypeChatError } from "./result";
 import { TypeChatLanguageModel, PromptSection, PromptContent } from "./model";
 
 /**
@@ -57,6 +57,7 @@ export interface TypeChatJsonTranslator<T extends object> {
      * diagnostics produced for the first attempt. This often helps produce a valid instance.
      * A failure retains the latest rejected candidate and available model response text. These may
      * come from different attempts if a repair response couldn't be parsed.
+     * Optional result metadata retains response records and reported usage across both attempts.
      * @param request The natural language request.
      * @param promptPreamble An optional string or array of prompt sections to prepend to the generated
      *   prompt. If a string is specified, it is converted into a single "user" role prompt section.
@@ -128,24 +129,27 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
         let prompt: PromptSection[] = [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }];
         let attemptRepair = typeChat.attemptRepair;
         let failureContext: (Pick<TypeChatError, "data"> & { responseText: string }) | undefined;
+        const responses: TypeChatResponseMetadata[] = [];
+        const finish = (result: Result<T>) => withResponseMetadata(result, responses);
         while (true) {
             const response = await model.complete(prompt);
+            responses.push(...(response.metadata?.responses ?? [{}]));
             if (!response.success) {
-                return failureContext ? {
+                return finish(failureContext ? {
                     ...failureContext,
                     ...response,
                     success: false,
                     message: response.message,
                     ...("data" in response ? { data: response.data } : {}),
                     responseText: response.responseText ?? failureContext.responseText
-                } : response;
+                } : response);
             }
             const responseText = response.data;
             failureContext = { ...failureContext, responseText };
             const startIndex = responseText.indexOf("{");
             const endIndex = responseText.lastIndexOf("}");
             if (!(startIndex >= 0 && endIndex > startIndex)) {
-                return error(`Response is not JSON:\n${responseText}`, failureContext);
+                return finish(error(`Response is not JSON:\n${responseText}`, failureContext));
             }
             const jsonText = responseText.slice(startIndex, endIndex + 1);
             let jsonObject;
@@ -153,7 +157,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
                 jsonObject = JSON.parse(jsonText) as object;
             }
             catch (e) {
-                return error(e instanceof SyntaxError ? e.message : "JSON parse error", failureContext);
+                return finish(error(e instanceof SyntaxError ? e.message : "JSON parse error", failureContext));
             }
             if (typeChat.stripNulls) {
                 stripNulls(jsonObject);
@@ -161,7 +165,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             const schemaValidation = validator.validate(jsonObject);
             const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
             if (validation.success) {
-                return validation;
+                return finish(validation);
             }
             const failure: TypeChatError & { responseText: string } = {
                 ...validation,
@@ -172,7 +176,7 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             };
             failureContext = { data: failure.data, responseText: failure.responseText };
             if (!attemptRepair) {
-                return { ...failure, message: `JSON validation failed: ${failure.message}\n${jsonText}` };
+                return finish({ ...failure, message: `JSON validation failed: ${failure.message}\n${jsonText}` });
             }
             prompt.push({ role: "assistant", content: responseText });
             prompt.push({ role: "user", content: typeChat.createRepairPrompt(failure.message) });
