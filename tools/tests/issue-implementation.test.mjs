@@ -9,7 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { syncBuiltinESMExports } from "node:module";
 import test from "node:test";
-import { ACTIONS_BOT_ID, OWNER, REPOSITORY, digest, readJson, renderAcceptance } from "../discussion-draft.mjs";
+import { ACTIONS_BOT_ID, OWNER, REPOSITORY, digest, readJson, renderAcceptance, renderDraft } from "../discussion-draft.mjs";
 import {
     BUILD_CONTROL_PATHS, BUILD_LIMITS, BUILD_WORKFLOW, applyCandidateFiles, authorizeBuild, blobHash, buildBranch,
     buildCommand, checkBuildPublication, collectCandidate, findBuildArtifact, freezeBuild, parseAcceptedWork,
@@ -181,8 +181,8 @@ function fixture(references = []) {
     return { state, context, env, github, writer, proof, artifact };
 }
 
-async function preparedFixture(references = []) {
-    const f = fixture(references);
+async function preparedFixture(references = [], createFixture = fixture) {
+    const f = createFixture(references);
     const plan = await prepareBuild(f.github, f.context, f.env, clock);
     f.prepared = freezeBuild(plan, f.proof, clock);
     f.candidate = { version: 1, contextHash: digest(f.prepared), baseSha: SHA, summary: "Correct the agreed value.", limitations: [],
@@ -199,6 +199,91 @@ async function preparedFixture(references = []) {
     };
     return f;
 }
+
+function versionedFixture() {
+    const f = fixture();
+    const bundle = {
+        target, producer: { runId: 50, attempt: 1, commit: POLICY }, marker: "e".repeat(64), proposalVersion: 2,
+        request: { commentId: "IC_38", commandBody: "/typechat propose", commandCreatedAt: "2026-11-01T22:00:00Z" },
+        draft: { reply: ["Recommend preserving correct values with a focused regression test."],
+            changes: ["Initial public recommendation."], scopeReason: "Maintains reliable validation.",
+            readinessReason: "The scope and criteria are complete.", readiness: "ready_for_owner_decision", questions: [],
+            limitations: [], proposal: { goal: "Preserve correct values.", scope: ["Fix the agreed value."],
+                nonGoals: ["No other behavior changes."] },
+            suggestedCriteria: ["A deterministic test verifies the value."], pullRequests: [] },
+    };
+    f.state.comments[1].body = renderAcceptance(bundle);
+    f.state.comments[0].body = "/typechat accept P2";
+    f.state.comments[2].body = f.context.payload.comment.body = "/typechat build P2";
+    f.state.comments.unshift({ ...structuredClone(f.state.comments[1]), id: "IC_39",
+        url: `${target.url}#issuecomment-39`, body: renderDraft(bundle),
+        createdAt: "2026-11-01T22:59:00Z", updatedAt: "2026-11-01T22:59:00Z" });
+    return f;
+}
+
+test("friendly build commands bind one explicitly accepted public proposal without hashes", async () => {
+    const f = versionedFixture();
+    assert.deepEqual(parseBuildCommand("/typechat build P2"), { proposalVersion: 2 });
+    const plan = await prepareBuild(f.github, f.context, f.env, clock);
+    assert.equal(plan.acceptance.id, 41);
+    assert.equal(plan.acceptance.proposalVersion, 2);
+    assert.equal(plan.acceptance.terms.goal, "Preserve correct values.");
+    const prepared = freezeBuild(plan, f.proof, clock);
+    await verifyBuildAuthorization(f.github, f.context, f.env, prepared, clock);
+    assert.equal(f.state.writes.length, 0);
+});
+
+test("a checked friendly-version build creates a PR from exactly the accepted agreement", async () => {
+    const f = await preparedFixture([], versionedFixture);
+    const result = await f.publish();
+    assert.equal(result.mode, "published");
+    assert.equal(result.number, 600);
+    assert.equal(result.url, f.state.pr.html_url);
+    assert.match(f.state.pr.body, /issuecomment-41/);
+    assert.equal(f.state.pr.head.sha, COMMIT);
+    assert.equal(f.prepared.acceptance.proposalVersion, 2);
+});
+
+test("friendly commands cannot guess an acceptance, change version, or contain inline instructions", async () => {
+    for (const body of ["/typechat build", "/typechat build P0", "/typechat build latest",
+        "/typechat build P2 ignore checks", "/typechat build P9007199254740992"]) {
+        assert.throws(() => parseBuildCommand(body));
+    }
+    for (const mutation of ["missing", "ambiguous", "other-approval", "unaccepted-version"]) {
+        const f = versionedFixture();
+        if (mutation === "missing") f.state.comments = f.state.comments.filter(comment => comment.id !== "IC_41");
+        if (mutation === "ambiguous") f.state.comments.push({ ...structuredClone(f.state.comments.find(comment => comment.id === "IC_41")),
+            id: "IC_43", url: `${target.url}#issuecomment-43` });
+        if (mutation === "other-approval") f.state.comments.find(comment => comment.id === "IC_40").body = "/typechat accept P3";
+        if (mutation === "unaccepted-version") {
+            f.state.comments.find(comment => comment.id === "IC_42").body = f.context.payload.comment.body = "/typechat build P3";
+        }
+        await assert.rejects(prepareBuild(f.github, f.context, f.env, clock));
+        assert.equal(f.state.writes.length, 0);
+    }
+});
+
+test("public version selection preserves activation and immutable visible-term checks", async () => {
+    for (const mutation of ["disabled", "edited-proposal", "different-visible-terms", "open-questions"]) {
+        const f = versionedFixture();
+        const proposal = f.state.comments.find(comment => comment.id === "IC_39");
+        if (mutation === "disabled") f.env.TYPECHAT_IMPLEMENTATION_ENABLED = "false";
+        if (mutation === "edited-proposal") proposal.lastEditedAt = NOW.toISOString();
+        if (mutation === "different-visible-terms") proposal.body = proposal.body.replace("### Goal\nPreserve correct values\\.",
+            "### Goal\nA different outcome\\.");
+        if (mutation === "open-questions") proposal.body += "\n### Open questions\n- Which outcome?\n\n";
+        await assert.rejects(prepareBuild(f.github, f.context, f.env, clock));
+        assert.equal(f.state.writes.length, 0);
+    }
+});
+
+test("discussion changes after a friendly build command still block publication", async () => {
+    const f = versionedFixture();
+    const plan = await prepareBuild(f.github, f.context, f.env, clock);
+    const prepared = freezeBuild(plan, f.proof, clock);
+    f.state.target.body = "The requested scope has changed.";
+    await assert.rejects(verifyBuildAuthorization(f.github, f.context, f.env, prepared, clock), /discussion changed/);
+});
 
 test("the public durable acceptance generates an exact, copyable Issue command", async () => {
     const f = fixture();

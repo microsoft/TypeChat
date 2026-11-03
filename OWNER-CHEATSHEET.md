@@ -23,15 +23,79 @@ acceptance-ready wording, and direct-reply reuse.
 **Coding activation is off. Still human decisions:** work acceptance, each
 implementation run, merging, and releases.
 
+**Public proposal rounds are prepared for owner review and controlled live
+verification; they are not claimed live-verified.** Use the new commands only
+after the extension is merged and the owner authorizes its verification.
+
+## Follow the workflow
+
+```text
+Conversation:
+  reply -> public discussion
+
+Development on an Issue:
+  propose -> discuss -> propose again -> accept -> build -> PR -> review -> merge
+```
+
+**No separate publish step is required in either normal flow.** Proposal versions
+such as **P2** are visible in the Issue; you do not look up artifact IDs or hashes.
+
+1. **Reply, if a conversation is needed.** Post `/typechat reply` for one checked
+   public response. This does not accept work or start a build.
+2. **Propose a concrete approach.** Post `/typechat propose` on the Issue.
+   The agent considers the complete frozen discussion, prior proposals, relevant
+   code, and existing contributions, then recommends an approach with reasons,
+   scope, non-goals, testable criteria, assumptions, and open questions.
+   Validation, threat detection, and trusted workflow code precede the public post.
+3. **Discuss and iterate publicly.** Anyone can comment. After feedback, post
+   `/typechat propose` again for a new numbered proposal explaining what changed.
+   Earlier versions stay in the thread. Community comments do not automatically
+   trigger model runs or establish agreement. Policy conflicts or incomplete
+   evidence are reported, not silently treated as resolved.
+4. **Accept a specific ready version.** Review its exact public terms and post,
+   for example, `/typechat accept P2`. Use the version actually shown on your
+   Issue. A proposal with unresolved questions is not acceptance-eligible.
+   Later discussion is allowed, but edited proposals, changed original evidence,
+   policy/control changes, or changed contribution references can block approval.
+   Wait for **Accepted work** and its confirmation; acceptance does not start coding.
+5. **Authorize a build separately.** After reviewing the accepted terms and
+   explicitly activating the pilot, post `/typechat build P2`. The workflow
+   resolves the exact public acceptance internally. Do not run manual command
+   preparation or calculate hashes for this path. Build is Issue-only and the
+   `TYPECHAT_IMPLEMENTATION_ENABLED=true` gate is still required.
+6. **Review and merge.** A successful build creates a ready-for-review PR, not
+   an approved or merged change. Verify normal CI and Copilot review ran, review
+   the latest revision against the accepted criteria, then make the human merge
+   decision. Material scope changes return to propose/accept.
+
+Wait for each operation before starting the next. All commands are new comments
+containing only the command from the owner on the same open, unlocked thread.
+An assistant can manage the commands and monitor runs, but cannot infer your
+acceptance, coding authorization, or merge decision from community discussion.
+If a proposal's internal sealed evidence expires or becomes stale, request
+another proposal; the public history remains, and you still do not handle hashes.
+Never delete intents or retry uncertain writes blindly.
+
+### Optional wording-review mode
+
+Use `draft -> review wording -> publish` only when you want to check reply text
+before it is posted. It is not a prerequisite for proposing, accepting, or building.
+The legacy artifact/hash commands below remain available for that route.
+Publishing a legacy reply changes the thread, so do not reuse its old acceptance
+preview; prefer a fresh public proposal for development.
+
 ## What do I do next?
 
 | I want to... | My next action | What I get |
 | --- | --- | --- |
 | Decide what to tackle | [Run a backlog assessment](#refresh-the-backlog-live). | An advisory report, not acceptance. Artifacts follow public repository visibility. |
 | Have the agent answer an issue or Discussion | [Request one direct reply](#reply-directly); the Issue path is live-verified. | One checked conversational response, without accepting work. |
+| Have the agent recommend an implementation | Post `/typechat propose` on the Issue, then discuss its public version and repeat as needed. | A concrete recommendation, not agreed or accepted work. |
 | Review wording before responding | [Request a draft](#draft-and-publish). | The actual reply as a preview; assessment metadata stays in Actions. |
 | Post the proposed response | Review the exact draft, then copy its publish command into the same thread. | One Actions-bot comment, not approval to build. |
-| Accept an agent-prepared proposal | [Review and approve its exact terms](#accept-an-exact-proposal), or [record a human decision manually](#accept-work-manually). The Issue path is live-verified. | A visible scope agreement; no coding agent starts automatically. |
+| Accept a public proposal | Review its exact ready terms and post `/typechat accept P<number>`. | A visible scope agreement; no coding agent starts automatically. |
+| Build an accepted public proposal | Separately activate and authorize the pilot, then post `/typechat build P<number>`. | One bounded implementation, followed by PR review and a separate merge decision. |
+| Accept a legacy draft or coordinate human work | [Review the legacy preview](#accept-an-exact-proposal), or [record a human decision manually](#accept-work-manually). | A visible scope agreement, not automatic coding authorization. |
 | Move an existing PR forward | [Review the latest revision](#review-and-merge-manually); support the existing contributor rather than duplicate their PR. | A human decision to request changes or merge. |
 | Prepare one bounded coding run | [Prepare its exact build command](#prepare-an-implementation-run-disabled-by-default), then obtain separate owner authorization for that run. | A copyable command, not spending or merge approval. |
 | Resolve unclear or out-of-scope work | Pause dependent work. If changing direction, approve and merge a [policy PR](./GOALS.md#who-decides) first. | An explicit scope decision; popularity or a label is not approval. |
@@ -72,6 +136,8 @@ write has an uncertain outcome, inspect the original run and thread before
 doing anything else. Do not delete its intent artifact or retry blindly.
 
 ## Draft and publish
+
+This is the optional wording-review route, not the normal reply or development flow.
 
 **Issue drafts and selected input-needed Discussion draft outcomes are
 live-verified; manual publication is not.**
@@ -120,6 +186,10 @@ comment, even when your command was a reply.
 operation to finish before sending another command on that thread.
 
 ## Accept an exact proposal
+
+For public proposals, use `/typechat accept P<number>` from the
+[normal workflow](#follow-the-workflow). The instructions below retain the
+legacy sealed-preview route; do not substitute its hashes for public versions.
 
 **The Issue path and no-op retry are live-verified; Discussions still need a
 separate check.** This is a real scope decision, not a test acknowledgment.
@@ -191,6 +261,10 @@ acceptance records, not this free-form comment, and always requires a separate
 
 ## Prepare an implementation run (disabled by default)
 
+For an accepted public version, use `/typechat build P<number>` after separate
+owner authorization and activation. No manual Actions dispatch or hash lookup
+is needed. The preparation steps below remain supported for legacy records.
+
 The [#504 implementation pilot](./AUTOMATION.md#third-pilot-owner-triggered-issue-implementation)
 is merged and has [one successful App publication](./AUTOMATION.md#successful-app-publication-and-human-review)
 on #75, followed by human fixes and merge of [#513](https://github.com/microsoft/TypeChat/pull/513).
@@ -244,8 +318,10 @@ failure. No artifact deletion or coding-pilot activation is needed.
 
 | Symptom | Safe next step |
 | --- | --- |
-| No draft, reply, publish, or accept run | Confirm rollout, owner account, new-comment syntax, and target type. Open Actions; do not keep reposting commands. |
-| Draft is stale or expired | Request and review a new draft. The approval window is at most seven days; thread, policy/control, or referenced-PR changes can invalidate it sooner. |
+| No propose, accept, build, reply, or legacy draft/publish run | Confirm rollout, owner account, new-comment syntax, and target type. Propose/build are Issue-only; build also requires activation. Inspect Actions rather than repeatedly reposting. |
+| A public proposal is not ready, stale, or expired | Discuss its questions or evidence gaps, then request `/typechat propose` again. The new version is posted publicly; no hash lookup is needed. |
+| A legacy draft is stale or expired | Request and review a new draft. The approval window is at most seven days; thread, policy/control, or referenced-PR changes can invalidate it sooner. |
+| Accept/build cannot find P2 or finds ambiguous records | Use an existing ready public version and confirm its exact acceptance before building. Never guess the latest version or substitute another version's record. |
 | Publishing says "already published" | Follow the existing-comment link. This is the intended no-op, not another post. |
 | Acceptance says "already accepted" | Follow the existing record. No second acceptance comment is needed. |
 | No acceptance preview or wrong acceptance hash | Resolve the questions or scope, then request and review a new draft. Do not substitute the response hash or edit artifacts. |

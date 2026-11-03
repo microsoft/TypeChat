@@ -62,6 +62,40 @@ test("discussion commands are created-comment events guarded by owner and truste
     }
 });
 
+test("public proposals use the scanned Issue writer and cannot trigger Discussion inference", () => {
+    const github = {
+        repository: "microsoft/TypeChat", event_name: "issue_comment",
+        triggering_actor: "robgruen", ref: "refs/heads/main",
+        event: { sender: { type: "User", id: 25374553 },
+            comment: { user: { id: 25374553 }, body: "/typechat propose" },
+            repository: { default_branch: "main" }, issue: {} },
+    };
+    const needs = {
+        prepare: { outputs: { should_draft: "true" } }, agent: { result: "success" },
+        seal: { result: "success" }, detection: { result: "success",
+            outputs: { run_detection: "true", detection_conclusion: "success" } },
+    };
+    function allowed(condition, event = github) {
+        return new Function("github", "needs", "startsWith", "format", `return (${condition});`)(
+            event, needs, (value, prefix) => value.startsWith(prefix), (_, branch) => `refs/heads/${branch}`);
+    }
+    assert.equal(allowed(source.if), true);
+    assert.equal(allowed(source.jobs.reply_issue.if), true);
+    assert.equal(allowed(source.if, { ...github, event_name: "discussion_comment" }), false);
+    assert.equal(allowed(source.jobs.reply_discussion.if, { ...github, event_name: "discussion_comment" }), false);
+    for (const step of ["agent", "seal", "detection"]) {
+        needs[step].result = "failure";
+        assert.equal(allowed(source.jobs.reply_issue.if), false);
+        needs[step].result = "success";
+    }
+    assert.ok(compiled.jobs.activation.if.includes(source.if));
+    assert.ok(compiled.jobs.reply_issue.if.includes("'/typechat propose'"));
+    const body = fs.readFileSync(new URL("discussion-draft.md", directory), "utf8");
+    assert.match(body, /Recommend one concrete approach/);
+    assert.match(body, /entire frozen conversation/);
+    assert.match(body, /changes.*containing a[\s\S]*nonempty list/);
+});
+
 test("exact owner acceptance uses only the target-scoped manual publisher", () => {
     assert.deepEqual(Object.keys(publisher.jobs), ["publish_issue", "publish_discussion"]);
     for (const kind of ["issue", "discussion"]) {

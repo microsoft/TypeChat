@@ -14,7 +14,7 @@ import {
     CONTROL_PATHS, MAX_AGE_MS, MAX_BUNDLE_BYTES, MAX_COMMENT_BYTES, authorize, parseCommand, digest, readThread, readControls,
     prepareDraft, validateDraft, renderDraft, renderAcceptance, renderAssessment, sealDraft, identifyPublication, checkPublication, publishDraft,
     readJson, writeJson, stageCandidateForDetection, createCandidateScan, readDetectedDraft, snapshotHash,
-    renderStatusReceipt, parseStatusRunTitle, identifyStatus, checkStatus, publishStatus,
+    renderStatusReceipt, parseStatusRunTitle, identifyStatus, checkStatus, publishStatus, findPublicProposal, draftSummary,
 } from "../discussion-draft.mjs";
 
 const SHA = "a".repeat(40);
@@ -150,6 +150,7 @@ function setup(kind = "issue") {
     async function post(body) {
         state.posts.push(body);
         const result = comment(`posted-${state.posts.length}`, body, "github-actions", "Bot");
+        if (state.postedAt) result.createdAt = result.updatedAt = state.postedAt;
         result.url = `${target.url}#${kind === "issue" ? "issuecomment" : "discussioncomment"}-${10000 + state.posts.length}`;
         if (!state.postError || state.persistBeforeError) {
             thread.comments.push(result);
@@ -252,9 +253,16 @@ function setup(kind = "issue") {
                     return { data: structuredClone(artifact) };
                 },
                 getWorkflowRunAttempt: async ({ run_id, attempt_number }) => {
-                    assert.equal(run_id, 100);
                     assert.equal(attempt_number, 1);
-                    return { data: structuredClone(state.producerRun) };
+                    const run = run_id === 100 ? state.producerRun : state.producerRuns?.get(run_id);
+                    assert.ok(run, "Unknown fixture producer");
+                    return { data: structuredClone(run) };
+                },
+                listWorkflowRunArtifacts: async ({ run_id, name, per_page, page: pageNumber }) => {
+                    assert.equal(per_page, 2);
+                    assert.equal(pageNumber, 1);
+                    const matches = [...artifacts.values()].filter(item => item.workflow_run?.id === run_id && item.name === name);
+                    return { data: { total_count: matches.length, artifacts: structuredClone(matches.slice(0, 2)) } };
                 },
                 getWorkflow: async ({ workflow_id }) => {
                     assert.equal(workflow_id, path.posix.basename(DRAFT_WORKFLOW));
@@ -319,9 +327,9 @@ async function reserve(fixture, id = 501) {
     return id;
 }
 
-async function readyReply(kind = "issue", draft = candidate()) {
+async function readyReply(kind = "issue", draft = candidate(), action = "reply") {
     const fixture = setup(kind);
-    const draftRun = fixture.event("reply", "/typechat reply");
+    const draftRun = fixture.event(action, `/typechat ${action}`);
     const prepared = await prepareDraft(fixture.github, draftRun.context, draftRun.env, clock);
     const bundle = await sealDraft(fixture.github, draftRun.context, draftRun.env, prepared, draft,
         () => new Date("2026-10-30T00:20:00Z"));
@@ -344,6 +352,41 @@ async function readyReply(kind = "issue", draft = candidate()) {
     };
     fixture.state.historyRequests = [];
     return { ...fixture, bundle, publication, draftRun, prepared };
+}
+
+function publicCandidate() {
+    return { ...proposalCandidate(), changes: ["Initial recommendation based on the complete issue discussion."] };
+}
+
+async function publicProposal(draft = publicCandidate()) {
+    const f = await readyReply("issue", draft, "propose");
+    f.state.postedAt = "2026-10-30T00:31:00Z";
+    await publishDraft(f.github, f.publication.context, f.publication.env, f.bundle, await reserve(f), clock);
+    f.state.producerRun.status = "completed";
+    f.state.producerRun.conclusion = "success";
+    return f;
+}
+
+async function secondProposal(f) {
+    const draftRun = f.event("propose", "/typechat propose", "round-two", 101);
+    draftRun.context.payload.comment.created_at = "2026-10-30T00:35:00Z";
+    const command = f.state.comments.get("round-two");
+    command.createdAt = command.updatedAt = draftRun.context.payload.comment.created_at;
+    f.state.producerRuns = new Map([[101, { ...f.state.producerRun, id: 101, status: "in_progress", conclusion: null }]]);
+    const prepared = await prepareDraft(f.github, draftRun.context, draftRun.env, clock);
+    const draft = { ...publicCandidate(), changes: ["Community feedback narrows the agreed interface."] };
+    const bundle = await sealDraft(f.github, draftRun.context, draftRun.env, prepared, draft,
+        () => new Date("2026-10-30T00:40:00Z"));
+    f.state.artifacts.set(600, { ...f.state.artifacts.get(500), id: 600, created_at: "2026-10-30T00:41:00Z",
+        workflow_run: { ...f.state.artifacts.get(500).workflow_run, id: 101 } });
+    const publication = { context: structuredClone(draftRun.context),
+        env: { ...f.publication.env, ...draftRun.env, TYPECHAT_DRAFT_ARTIFACT_ID: "600", TYPECHAT_DRAFT_BODY_SHA256: bundle.bodyHash } };
+    const next = { ...f, draftRun, prepared, bundle, publication };
+    f.state.postedAt = "2026-10-30T00:42:00Z";
+    await publishDraft(f.github, publication.context, publication.env, bundle, await reserve(next, 601), clock);
+    f.state.producerRuns.get(101).status = "completed";
+    f.state.producerRuns.get(101).conclusion = "success";
+    return next;
 }
 
 async function statusFixture(kind = "issue", action = "draft", draft = candidate()) {
@@ -439,6 +482,202 @@ async function reserveStatus(fixture, id = 601) {
     });
     return id;
 }
+
+test("public proposal commands use bounded explicit versions without exposing hashes", () => {
+    assert.deepEqual(parseCommand("/typechat propose\n"), { action: "propose" });
+    assert.deepEqual(parseCommand("/typechat accept P2"), { action: "accept", proposalVersion: 2 });
+    for (const body of ["/typechat accept P0", "/typechat accept P9007199254740992",
+        "/typechat accept P2 extra", "/typechat propose extra", "/typechat accept latest"]) {
+        assert.throws(() => parseCommand(body));
+    }
+});
+
+test("a proposal is scanned, sealed, and posted directly, never accepted implicitly", async () => {
+    const f = await publicProposal();
+    assert.equal(f.bundle.version, 4);
+    assert.equal(f.bundle.proposalVersion, 1);
+    assert.match(f.state.posts[0], /^## Work proposal P1\n/);
+    assert.match(f.state.posts[0], /Changes since the previous proposal/);
+    assert.match(f.state.posts[0], /\/typechat accept P1/);
+    assert.doesNotMatch(f.state.posts[0], /## Accepted work|\/typechat publish/);
+    assert.equal(findPublicProposal(await readThread(f.github, f.state.target), 1).bodyHash, f.bundle.acceptance.bodyHash);
+    const rerun = await prepareDraft(f.github, f.draftRun.context, f.draftRun.env, clock);
+    assert.equal(rerun.alreadyReplied, true);
+    assert.equal(f.state.posts.length, 1);
+});
+
+test("discussion proposals can state concrete opinions and open questions without permitting acceptance", async () => {
+    const draft = { ...publicCandidate(), readiness: "needs_clarification", questions: ["Which compatibility baseline is required?"] };
+    assert.throws(() => validateDraft(draft));
+    const f = await publicProposal(draft);
+    assert.equal(f.bundle.acceptance, null);
+    assert.match(f.state.posts[0], /Which compatibility baseline/);
+    assert.match(f.state.posts[0], /Not eligible for acceptance/);
+    const approval = f.event("accept", "/typechat accept P1", "accept-one", 200);
+    await assert.rejects(identifyPublication(f.github, approval.context, approval.env, clock), /unresolved questions or scope/);
+});
+
+test("in-scope proposal mode cannot fall back to a question-only response", () => {
+    assert.throws(() => validateDraft({ ...candidate(), changes: ["First round."] }, "propose"), /must recommend explicit terms/);
+    const blocked = { ...candidate(), readiness: "blocked_by_evidence", changes: ["The required source could not be inspected."] };
+    assert.equal(validateDraft(blocked, "propose").proposal, null);
+});
+
+test("public proposal summaries expose version commands, not artifact/hash lookup", async () => {
+    const f = await publicProposal();
+    const parts = [];
+    const summary = {};
+    for (const method of ["addHeading", "addLink", "addRaw", "addCodeBlock"]) {
+        summary[method] = (...values) => { parts.push(values.join(" ")); return summary; };
+    }
+    summary.write = async () => {};
+    await draftSummary({ summary }, f.bundle, 500, "https://github.com/microsoft/TypeChat/actions/runs/100");
+    assert.match(parts.join("\n"), /\/typechat accept P1/);
+    assert.doesNotMatch(parts.join("\n"), /\/typechat accept 500:|\/typechat publish/);
+});
+
+test("the proposal candidate scan binds changes and all proposed terms", () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-proposal-scan-"));
+    const output = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-proposal-detection-"));
+    try {
+        const draft = publicCandidate();
+        writeJson(directory, "discussion-draft.json", draft);
+        const hash = stageCandidateForDetection(directory, output, "propose");
+        const scan = createCandidateScan(hash, "success", 100, 1);
+        assert.deepEqual(readDetectedDraft(directory, scan, 100, 1), draft);
+        fs.appendFileSync(path.join(directory, "discussion-draft.json"), " ");
+        assert.throws(() => readDetectedDraft(directory, scan, 100, 1), /differs from the threat-scanned/);
+    } finally {
+        fs.rmSync(directory, { recursive: true, force: true });
+        fs.rmSync(output, { recursive: true, force: true });
+    }
+});
+
+test("proposal rounds preserve earlier public versions and include community feedback in the full context", async () => {
+    const f = await publicProposal();
+    const originalBody = f.state.posts[0];
+    const feedback = f.state.comment("feedback", "Preserve the optional callback.", "contributor");
+    feedback.createdAt = feedback.updatedAt = "2026-10-30T00:33:00Z";
+    f.state.thread.comments.push(feedback);
+    const next = await secondProposal(f);
+    assert.equal(next.bundle.proposalVersion, 2);
+    assert.ok(next.prepared.thread.comments.some(comment => comment.body === originalBody));
+    assert.ok(next.prepared.thread.comments.some(comment => comment.id === feedback.id));
+    assert.equal(next.state.posts[0], originalBody);
+    assert.match(next.state.posts[1], /^## Work proposal P2\n/);
+    assert.match(next.state.posts[1], /Community feedback narrows/);
+});
+
+test("accept selects the exact public version despite later feedback and newer proposals", async () => {
+    const first = await publicProposal();
+    const second = await secondProposal(first);
+    const publication = second.event("accept", "/typechat accept P1", "accept-one", 200);
+    const f = { ...first, publication };
+    f.state.postedAt = "2026-10-30T00:46:00Z";
+    const result = await publishDraft(f.github, publication.context, publication.env, f.bundle, await reserve(f, 701), clock);
+    assert.equal(result.posted, true);
+    assert.match(f.state.posts.at(-1), /## Accepted work/);
+    assert.match(f.state.posts.at(-1), /Proposal \*\*P1\*\*/);
+    assert.match(f.state.posts.at(-1), /\/typechat build P1/);
+    assert.doesNotMatch(f.state.posts.at(-1), /Proposal \*\*P2\*\*/);
+    assert.equal(f.state.reactions.has("accept-one"), true);
+    const repeated = await checkPublication(f.github, publication.context, publication.env, f.bundle, clock);
+    assert.equal(repeated.shouldPost, false);
+    assert.equal(f.state.posts.length, 3);
+});
+
+test("proposal acceptance rejects a mismatched bundle, an edited proposal, or a future version", async () => {
+    for (const mutation of ["edited", "wrong-version", "future"]) {
+        const f = await publicProposal();
+        const publication = f.event("accept", "/typechat accept P1", "accept-one", 200);
+        const posted = f.state.thread.comments.find(comment => comment.body === f.bundle.body);
+        if (mutation === "edited") posted.lastEditedAt = "2026-10-30T00:40:00Z";
+        if (mutation === "future") posted.createdAt = "2026-10-30T00:50:00Z";
+        if (mutation === "wrong-version") f.bundle.proposalVersion = 2;
+        await assert.rejects(checkPublication(f.github, publication.context, publication.env, f.bundle, clock));
+        assert.equal(f.state.posts.length, 1);
+    }
+});
+
+test("editing evidence that preceded a proposal still blocks acceptance", async () => {
+    const f = await publicProposal();
+    const publication = f.event("accept", "/typechat accept P1", "accept-one", 200);
+    f.state.thread.body = "Changed the original requirement.";
+    await assert.rejects(checkPublication(f.github, publication.context, publication.env, f.bundle, clock), /target context changed/);
+});
+
+test("a proposal edited between intent reservation and publication cannot be accepted", async () => {
+    const f = await publicProposal();
+    f.publication = f.event("accept", "/typechat accept P1", "accept-one", 200);
+    const intent = await reserve(f, 701);
+    f.state.onHistory = () => {
+        f.state.thread.comments.find(comment => comment.body === f.bundle.body).lastEditedAt = NOW.toISOString();
+        f.state.onHistory = null;
+    };
+    await assert.rejects(publishDraft(f.github, f.publication.context, f.publication.env, f.bundle, intent, clock), /edited|changed/);
+    assert.equal(f.state.posts.length, 1);
+});
+
+test("a public version cannot select ambiguous or expired sealed artifacts", async () => {
+    for (const mutation of ["ambiguous", "expired"]) {
+        const f = await publicProposal();
+        const approval = f.event("accept", "/typechat accept P1", "accept-one", 200);
+        if (mutation === "ambiguous") f.state.artifacts.set(502, { ...f.state.artifacts.get(500), id: 502 });
+        if (mutation === "expired") f.state.artifacts.get(500).expired = true;
+        await assert.rejects(identifyPublication(f.github, approval.context, approval.env, clock), /ambiguous|expired/);
+    }
+});
+
+test("public proposal acceptance preserves policy and automation freshness checks", async () => {
+    const f = await publicProposal();
+    const publication = f.event("accept", "/typechat accept P1", "accept-one", 200);
+    f.state.currentCommit = OTHER_SHA;
+    f.state.revisions.set(OTHER_SHA, { policy, fingerprints: { ...f.state.fingerprints, "AUTOMATION.md": "b".repeat(40) } });
+    await assert.rejects(identifyPublication(f.github, publication.context, publication.env, clock), /trusted code changed/);
+});
+
+test("an unresolved earlier proposal write blocks inference for a new round", async () => {
+    const f = await readyReply("issue", publicCandidate(), "propose");
+    await reserve(f);
+    const next = f.event("propose", "/typechat propose", "next-round", 101);
+    await assert.rejects(prepareDraft(f.github, next.context, next.env, clock), /earlier proposal write is unconfirmed/);
+});
+
+test("proposals require owner authorization, Issue targets, and successful scan and seal", async () => {
+    const f = await readyReply("issue", publicCandidate(), "propose");
+    f.publication.env.TYPECHAT_SEAL_RESULT = "failure";
+    await assert.rejects(checkPublication(f.github, f.publication.context, f.publication.env, f.bundle, clock), /successful model execution/);
+    const otherOwner = structuredClone(f.draftRun.context);
+    otherOwner.payload.sender.id = 7;
+    await assert.rejects(prepareDraft(f.github, otherOwner, f.draftRun.env, clock), /human project owner/);
+    const discussion = setup("discussion");
+    const request = discussion.event("propose", "/typechat propose");
+    await assert.rejects(prepareDraft(discussion.github, request.context, request.env, clock), /Issue thread/);
+});
+
+test("community-authored proposal markers cannot be accepted as Actions-bot proposals", async () => {
+    const f = await publicProposal();
+    f.state.thread.comments.push(f.state.comment("forged", f.bundle.body.replaceAll("P1", "P9"), "contributor"));
+    assert.throws(() => findPublicProposal({ target: f.state.target,
+        comments: f.state.thread.comments.map(comment => ({ ...comment,
+            parentId: null, minimized: comment.isMinimized,
+            author: { ...comment.author, type: comment.author.__typename } })) }, 9), /unavailable/);
+});
+
+test("canonical proposal completion receipts do not make a proposal stale", async () => {
+    const f = await publicProposal();
+    const before = snapshotHash(await readThread(f.github, f.state.target));
+    const data = { version: 1, kind: "issue", number: 75, commentId: 42, runId: 100,
+        attempt: 1, started: Date.parse("2026-10-30T00:01:00Z"),
+        action: "propose", outcome: "replied", result: "10001" };
+    const body = renderStatusReceipt(data);
+    assert.match(body, /requested proposal is available/);
+    const receipt = f.state.comment("receipt", body, "github-actions", "Bot");
+    f.state.thread.comments.push(receipt);
+    assert.equal(snapshotHash(await readThread(f.github, f.state.target)), before);
+    receipt.body += "An edited receipt is still discussion evidence.";
+    assert.notEqual(snapshotHash(await readThread(f.github, f.state.target)), before);
+});
 
 test("completion titles bind only numeric owner-comment and target IDs", () => {
     assert.deepEqual(parseStatusRunTitle("TypeChat response: issue_comment #504 / comment 6562188203"),
