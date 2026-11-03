@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from collections.abc import Awaitable, Callable, Sequence
 from inspect import isawaitable
 from types import TracebackType
@@ -168,8 +169,8 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                     token = self._token_provider()
                     if isawaitable(token):
                         token = await token
-                    if not isinstance(token, str) or not token.strip():
-                        return Failure("Token provider must return a nonempty string.")
+                    if not isinstance(token, str) or re.fullmatch(r"[\x21-\x7e]+", token) is None:
+                        return Failure("Token provider must return a nonempty, header-safe bearer-token string.")
                     request_headers = {**headers, "Authorization": f"Bearer {token}"}
                 async with self._async_client.stream(
                     "POST",

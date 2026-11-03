@@ -126,9 +126,29 @@ Bearer ...` header, not an `api-key` header. The provider owns credential
 acquisition, caching, renewal, and cleanup. TypeChat does not cache tokens or
 require an Azure Identity dependency.
 
-API keys and token providers are mutually exclusive. Empty or invalid tokens
-produce a `Failure` without sending a request. Provider exceptions use the
+API keys and token providers are mutually exclusive. Return the raw token without
+a `Bearer ` prefix. Non-string/empty tokens and tokens containing whitespace,
+control characters, or non-ASCII characters produce a fixed, credential-free
+`Failure` before an authorization header is constructed or a request is sent. Provider exceptions use the
 existing HTTP model retry/failure behavior; cancellation propagates.
+
+Synchronous providers execute on the event-loop thread and should be nonblocking.
+Prefer an asynchronous provider for network I/O. For an existing thread-safe
+`blocking_token_provider` that returns a token string, offload it explicitly:
+
+```py
+import asyncio
+
+async def token_provider() -> str:
+    return await asyncio.to_thread(blocking_token_provider)
+```
+
+Pass this wrapper as `token_provider` to the factory. The blocking provider owns
+its I/O timeouts and thread safety; cancelling the wrapper does not forcibly stop
+work already running in the thread. The model's HTTP timeout does not bound token
+acquisition. Do not offload providers that create loop-bound futures or otherwise
+require the running event loop: pass those directly and return their awaitable.
+TypeChat does not automatically move synchronous providers to a worker thread.
 
 Existing API-key calls, positional arguments, environment-variable handling,
 and legacy headers are unchanged. In particular, setting
