@@ -109,6 +109,27 @@ describe("createModuleTextFromProgram result references", () => {
 // @func name validation (source injection / unchecked dispatch)
 // ---------------------------------------------------------------------------
 
+describe("hasOwnProperty shadowing in parsed programs", () => {
+    it("returns an error result for a step with no @func", () => {
+        const input = JSON.parse('{"@steps":[{"hasOwnProperty":1}]}');
+        const result = createModuleTextFromProgram(input);
+        assert.equal(result.success, false);
+    });
+
+    it("generates code for an object argument named hasOwnProperty", () => {
+        const program = JSON.parse('{"@steps":[{"@func":"first","@args":[{"hasOwnProperty":1}]}]}');
+        const result = createModuleTextFromProgram(program);
+        assert.equal(result.success, true);
+        assert.match((result as { data: string }).data, /"hasOwnProperty": 1/);
+    });
+
+    it("evaluates an object argument named hasOwnProperty", async () => {
+        const program = JSON.parse('{"@steps":[{"@func":"first","@args":[{"hasOwnProperty":1}]}]}');
+        const result = await evaluateJsonProgram(program, async (_func, args) => args[0]);
+        assert.deepEqual(result, { hasOwnProperty: 1 });
+    });
+});
+
 describe("@func name validation", () => {
     const maliciousProgram: Program = {
         "@steps": [
