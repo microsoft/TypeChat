@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os, { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -10,7 +10,7 @@ import path from "node:path";
 
 const require = createRequire(import.meta.url);
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
-const directory = mkdtempSync(join(tmpdir(), "typechat-package-"));
+const directory = realpathSync(mkdtempSync(join(tmpdir(), "typechat-package-")));
 const withPeers = join(directory, "with-peers");
 const withoutPeers = join(directory, "without-peers");
 const stagedPackage = join(withPeers, "node_modules", "typechat");
@@ -107,6 +107,30 @@ describe("published package", () => {
                 }
             }
         `);
+    });
+
+    test("resolves package entry points through a symlinked temporary directory", () => {
+        const target = join(directory, "tmp");
+        const link = join(directory, "tmp-link");
+        mkdirSync(target);
+        symlinkSync(target, link, directoryLinkType);
+        const env = { ...childEnv, TMPDIR: link, TEMP: link, TMP: link };
+        // The nested runner needs its own reporting context.
+        delete env.NODE_TEST_CONTEXT;
+        const result = spawnSync(process.execPath, [
+            "--test",
+            "--test-reporter=tap",
+            "--test-name-pattern=selects native ESM and CommonJS builds with identical named exports",
+            fileURLToPath(import.meta.url),
+        ], {
+            cwd: packageRoot,
+            encoding: "utf8",
+            env,
+            timeout: 30000,
+        });
+        assert.ifError(result.error);
+        assert.equal(result.status, 0, `${result.stdout}${result.stderr}`);
+        assert.match(result.stdout, /^# pass 1$/m);
     });
 
     test("preserves native ESM default imports for every entry point", () => {
