@@ -53,6 +53,25 @@ const schemaFileName = "/schema.ts";
 const jsonFileName = "/json.ts";
 
 /**
+ * Returns a type alias name that does not collide with identifiers in the schema.
+ */
+function createUniqueJsonWireTypeName(schemaText: string): string {
+    let name = "__TypeChatJsonWire";
+    while (schemaText.includes(name)) {
+        name += "_";
+    }
+    return name;
+}
+
+/**
+ * Maps serialized string-enum values back to their literal enum member types while preserving the
+ * rest of the schema's structure.
+ */
+function createJsonWireTypeDefinition(typeName: string): string {
+    return `type ${typeName}<T> = T extends string ? \`\${T}\` : T extends object ? { [K in keyof T]: ${typeName}<T[K]> } : T;`;
+}
+
+/**
  * Represents an object that can validate JSON strings according to a given TypeScript schema.
  */
 export interface TypeScriptJsonValidator<T extends object> extends TypeChatJsonValidator<T> {
@@ -98,6 +117,7 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
         throw new Error("The TypeScript virtual file system doesn't support writing files.");
     }
     const writeJsonFile = fileSystem.writeFile;
+    const jsonWireTypeName = createUniqueJsonWireTypeName(schema);
     const validator: TypeScriptJsonValidator<T> = {
         getSchemaText: () => schema,
         getTypeName: () => typeName,
@@ -173,7 +193,10 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
                     // Use getStart() to exclude leading trivia from the range check.
                     if (decl.getStart(file) <= position && position <= decl.end &&
                             decl.type && isTypeReferenceNode(decl.type) && decl.initializer) {
-                        const targetType = checker.getTypeAtLocation(decl.type);
+                        // The generated JSON declaration wraps the schema type in the JsonWire helper.
+                        // Use the wrapped schema type for user-facing diagnostics.
+                        const targetTypeNode = decl.type.typeArguments?.[0] ?? decl.type;
+                        const targetType = checker.getTypeAtLocation(targetTypeNode);
                         const sourceType = checker.getTypeAtLocation(decl.initializer);
                         if (!targetType || !sourceType) {
                             continue;
@@ -195,6 +218,9 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
     }
 
     function createModuleTextFromJson(jsonObject: object) {
-        return success(`import { ${typeName} } from './schema';\nconst json: ${typeName} = ${JSON.stringify(jsonObject, undefined, 2)};\n`);
+        // String enums do not accept their serialized values in a normal enum-typed assignment.
+        // The JsonWire helper maps each string literal back to itself while recursively preserving
+        // object, array, tuple, optional-property, and union shapes. Numeric enums remain unchanged.
+        return success(`import { ${typeName} } from './schema';\n${createJsonWireTypeDefinition(jsonWireTypeName)}\nconst json: ${jsonWireTypeName}<${typeName}> = ${JSON.stringify(jsonObject, undefined, 2)};\n`);
     }
 }
