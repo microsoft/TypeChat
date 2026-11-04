@@ -3,7 +3,8 @@ import { test } from "node:test";
 import {
     createOpenAILanguageModel, createAzureOpenAILanguageModel, createJsonTranslator,
     success, error, getData, withResponseMetadata,
-    Result, TypeChatLanguageModel, TypeChatJsonValidator, TypeChatResponseMetadata, PromptSection
+    Result, TypeChatLanguageModel, TypeChatJsonValidator, TypeChatResponseMetadata, PromptSection,
+    TokenProvider, ChatCompletionClient, ResponsesClient, createOpenAILanguageModelFromClient
 } from "../dist/index.js";
 import { createTypeScriptJsonValidator } from "../dist/ts/index.js";
 
@@ -33,6 +34,89 @@ function translatorFor(results: Result<string>[], schema = validator) {
         }
     };
     return { translator: createJsonTranslator(model, schema), calls: () => calls, prompts };
+}
+
+test("token-provider retries retain reported metadata without retaining credentials", async t => {
+    let calls = 0;
+    const tokens: (string | null)[] = [];
+    t.mock.method(globalThis, "fetch", async (_url: unknown, init?: RequestInit) => {
+        tokens.push(new Headers(init?.headers).get("Authorization"));
+        return ++calls === 1 ?
+            Response.json({ usage: { prompt_tokens: 13, completion_tokens: 7, total_tokens: 20 } }, { status: 429 }) :
+            Response.json({ choices: [{ message: { content: valid } }], usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 } });
+    });
+    let tokenCount = 0;
+    const tokenProvider: TokenProvider = async () => `token-${++tokenCount}`;
+    const model = createOpenAILanguageModel(undefined, "test", "https://example.test/chat/completions", "", { tokenProvider });
+    model.retryPauseMs = 0;
+    const result = await model.complete("request");
+    assert.ok(result.success);
+    assert.deepEqual(tokens, ["Bearer token-1", "Bearer token-2"]);
+    assert.deepEqual(result.metadata?.responses, [{ usage: first }, { usage: second }]);
+    assert.deepEqual(result.metadata?.usage, { inputTokens: 18, outputTokens: 10, totalTokens: 28 });
+    assert.ok(!JSON.stringify(result.metadata).includes("token-"));
+});
+
+for (const api of ["chat", "responses"] as const) {
+    const wireUsage = (input: number, output: number, total: number) => api === "responses" ?
+        { input_tokens: input, output_tokens: output, total_tokens: total } :
+        { prompt_tokens: input, completion_tokens: output, total_tokens: total };
+    const body = (text: string, usage: unknown) => ({
+        usage,
+        ...(api === "responses" ? { output: [{ type: "message", content: [{ type: "output_text", text }] }] } :
+            { choices: [{ message: { content: text } }] })
+    });
+    const fromClient = (replies: unknown[], requests: unknown[]) => {
+        const chat: ChatCompletionClient = { chat: { completions: {
+            async create(request) { requests.push(structuredClone(request)); return replies.shift(); }
+        } } };
+        const responses: ResponsesClient = { responses: {
+            async create(request) { requests.push(structuredClone(request)); return replies.shift(); }
+        } };
+        return api === "responses" ? createOpenAILanguageModelFromClient(responses, "test", { useResponsesApi: true }) :
+            createOpenAILanguageModelFromClient(chat, "test");
+    };
+
+    test(`client ${api}: validation/repair retains metadata and multimodal context`, async () => {
+        const requests: unknown[] = [];
+        const model = fromClient([body(invalid, wireUsage(13, 7, 20)), body(valid, wireUsage(5, 3, 8))], requests);
+        const translator = createJsonTranslator(model, validator);
+        const preamble: PromptSection[] = [{ role: "user", content: [
+            { type: "image_url", image_url: { url: "data:image/png;base64,AAAA" } }
+        ] }];
+        const result = await translator.translate("request", preamble);
+        assert.ok(result.success);
+        assert.deepEqual(result.data, { value: 42 });
+        assert.deepEqual(result.metadata?.responses, [{ usage: first }, { usage: second }]);
+        assert.deepEqual(result.metadata?.usage, { inputTokens: 18, outputTokens: 10, totalTokens: 28 });
+        assert.equal(requests.length, 2);
+        assert.ok(requests.every(request => JSON.stringify(request).includes("data:image/png;base64,AAAA")));
+    });
+
+    test(`client ${api}: filtering blocks valid-looking JSON and preserves metadata`, async () => {
+        const requests: unknown[] = [];
+        const json = body(valid, wireUsage(13, 7, 20));
+        const filtered = api === "responses" ? {
+            ...json, incomplete_details: { reason: "content_filter" },
+            output: [{ type: "message", content: [{ type: "refusal", refusal: "declined" }] }]
+        } : { ...json, choices: [{ finish_reason: "content_filter", message: { content: valid, refusal: "declined" } }] };
+        const model = fromClient([filtered], requests);
+        const result = await createJsonTranslator(model, validator).translate("request");
+        assert.ok(!result.success);
+        assert.match(result.message, /filtered or refused/);
+        assert.ok(!result.message.includes("declined"));
+        assert.deepEqual(result.metadata?.usage, first);
+        assert.equal(result.metadata?.responses[0].filtering?.blocked, true);
+        assert.equal(requests.length, 1);
+    });
+
+    test(`client ${api}: malformed output retains reported-only usage`, async () => {
+        const model = fromClient([{ usage: wireUsage(0, 7, 7) }], []);
+        const result = await model.complete("request");
+        assert.ok(!result.success);
+        assert.match(result.message, /unexpected response format/);
+        assert.deepEqual(result.metadata?.usage, { inputTokens: 0, outputTokens: 7, totalTokens: 7 });
+    });
 }
 
 for (const api of ["chat", "responses", "azure"] as const) {
