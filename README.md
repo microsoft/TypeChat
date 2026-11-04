@@ -106,6 +106,15 @@ unverified live. Receipts do not publish draft content or accept work.
 Generation keeps its 50-credit main budget and separately budgeted detection.
 Acceptance does not launch a coding agent or activate implementation spending.
 
+The [public-proposal extension](./AUTOMATION.md#public-proposal-rounds-prepared)
+is prepared for owner review and controlled live verification, not claimed
+live-verified. Its default flow is `reply` for conversation, or
+`propose -> discuss/revise -> accept -> build -> PR -> review -> merge`
+for development on an Issue. Proposals are posted directly for community
+discussion; the owner selects a visible version such as `P2` for acceptance
+and a separately authorized build. IDs and hashes stay internal. The optional
+draft/publish review mode remains supported. See the [owner cheat sheet](./OWNER-CHEATSHEET.md#follow-the-workflow).
+
 The [owner-triggered implementation pilot](./AUTOMATION.md#third-pilot-owner-triggered-issue-implementation)
 implements the workflow accepted in [#504](https://github.com/microsoft/TypeChat/issues/504)
 as a separate, disabled-by-default extension. Review, activation, and a fresh

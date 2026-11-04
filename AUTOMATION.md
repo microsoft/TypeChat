@@ -79,6 +79,7 @@ and merge. Its activation flag is unset; broader autonomy is not enabled.
 | 2026-11-02 | [Owner-triggered Issue implementation](#third-pilot-owner-triggered-issue-implementation) | Merged through [#507](https://github.com/microsoft/TypeChat/pull/507), default-off. The separately authorized [#220 run](https://github.com/microsoft/TypeChat/actions/runs/41493733655) correctly blocked a candidate that failed strict Pyright checks; manual recovery did not change that failed result. |
 | 2026-11-02 | Acceptance and build acknowledgments | Merged through [#510](https://github.com/microsoft/TypeChat/pull/510). A thumbs-up on the [#75 acceptance command](https://github.com/microsoft/TypeChat/issues/75#issuecomment-6592727753) confirmed recorded acceptance; a rocket on the [build command](https://github.com/microsoft/TypeChat/issues/75#issuecomment-6592903964) acknowledged startup, not success. Discussion acknowledgment remains unverified live. |
 | 2026-11-03 | [Successful App publication and human review](#successful-app-publication-and-human-review) | [Run 41559378978](https://github.com/microsoft/TypeChat/actions/runs/41559378978) created [#513](https://github.com/microsoft/TypeChat/pull/513). Normal CI and Copilot reviews ran, human follow-up fixes were verified, and the owner approved and merged the PR. Original automated evidence remains bound to its original commit; activation is again unset. |
+| Prepared, not live-verified | [Public proposal rounds](#public-proposal-rounds-prepared) | Owner-triggered Issue proposals, visible-version acceptance/build commands, and preserved legacy review mode. Requires review, merge, and controlled owner-commanded live verification. |
 | Not yet | Selective automatic adoption | Future work, after public criteria and maintainer approval. |
 
 These are implementation dates, not activation dates. Update this history,
@@ -97,6 +98,11 @@ autonomous conversation. The separate owner-only `/typechat accept` command
 approves exact proposed terms; its Issue path is live-verified. Dispositions,
 acceptance of work, implementation runs, merging,
 and releases remain separate human decisions.
+
+The [public-proposal extension](#public-proposal-rounds-prepared) makes the normal
+development flow `propose -> discuss/revise -> accept -> build -> PR -> review -> merge`.
+An owner proposal command authorizes one checked public recommendation, not
+acceptance or coding. Draft/publish remains an optional exact-text review mode.
 
 Agents may investigate problems, summarize discussions, suggest questions, write
 tests, and propose changes. Automated tests and GitHub Copilot code reviews will
@@ -504,7 +510,8 @@ and Discussions. Input-needed Issue and Discussion draft outcomes and their
 receipts were verified in [the owner-authorized checks](https://github.com/microsoft/TypeChat/discussions/508#discussioncomment-19342916).
 Discussion replies, Discussion acceptance, and manual response publication
 still need live verification. Issue work acceptance and its no-op retry were
-verified on 2026-11-01 (UTC). These discussion commands do not change labels,
+verified on 2026-11-01 (UTC). Reply, proposal, legacy draft/publish, and acceptance
+commands do not change labels,
 close threads, start an implementation run, create PRs, or merge changes.
 Existing Copilot PR review remains a separate capability.
 
@@ -515,12 +522,17 @@ command in a **new comment**, with no additional text:
 
 | Command | Authorization and result |
 | --- | --- |
+| `/typechat propose` | Issue-only: authorize one checked, versioned public recommendation using the full frozen conversation. Further rounds incorporate community feedback without overwriting earlier versions. |
+| `/typechat accept P<number>` | Issue-only: approve the exact ready terms in that public version. IDs and hashes are resolved internally; no coding run is authorized. |
+| `/typechat build P<number>` | Issue-only: separately authorize implementation of that exact accepted version. The default-off implementation activation gate and all existing limits still apply. |
 | `/typechat draft` | Prepare a conversational reply and, when ready, a work-acceptance preview; do not post either. Report the operational outcome separately through a trusted receipt. |
 | `/typechat publish <artifact-id>:<body-sha256>` | Approve and post that exact reviewed draft. |
 | `/typechat reply` | Authorize one checked advisory reply to be posted without a second approval command. |
 | `/typechat accept <artifact-id>:<acceptance-sha256>` | Approve and record the exact proposed scope and criteria. No implementation run or merge is authorized. |
 
-Use `/typechat draft` when you want to review the wording first. Use
+Use `/typechat reply` for normal conversation and `/typechat propose` for public
+development recommendations. No separate publish action is needed for either.
+Use `/typechat draft` only when you want optional wording review first. Use
 `/typechat reply` only when you want the agent to respond publicly after the
 checks. The public comment addresses the author and answers or asks focused
 clarifying questions; scope analysis, readiness, criteria, and detailed evidence
@@ -550,7 +562,7 @@ Editing a command does not trigger or authorize a run. Other users, bots, PR
 comments, non-default-branch code, and changed or deleted commands cannot
 authorize drafting or publication. Comment events may still show ignored or
 skipped workflow runs; they do not authorize model inference or posting.
-An `eyes` reaction on a draft or reply command comment acknowledges that the
+An `eyes` reaction on a draft, reply, or proposal command comment acknowledges that the
 workflow has started processing the request. It is not confirmation that a draft
 is ready, that scanning succeeded, or that work was accepted. Check Actions for
 completion and errors. Native workflow code handles the reaction; the model
@@ -629,16 +641,101 @@ controller cannot authenticate or verify its inputs, Actions remains the error
 channel. Use a new owner command on the current workflow revision; rerunning old workflow revisions
 does not add the new request binding or receipt behavior.
 
+### Public proposal rounds (prepared)
+
+**Prepared for owner review and controlled live verification; not live-verified.**
+The default development flow is on the Issue's public comment thread:
+
+```text
+/typechat propose
+  -> public proposal P1 -> community discussion
+/typechat propose
+  -> public proposal P2, including what changed and why
+/typechat accept P2
+  -> exact Accepted work record
+/typechat build P2
+  -> checked PR -> human review -> human merge
+```
+
+Only a new command from the configured human owner triggers a round. Anyone may
+discuss; comments, votes, or apparent consensus do not trigger inference, accept
+work, authorize coding, or change project direction. Ordinary Issue/Discussion
+conversation uses `/typechat reply`. Development proposals and builds are
+Issue-only; a GitHub Discussion does not silently become a build target.
+
+Preparation freezes the complete bounded substantive thread, including all
+community comments and previous public proposals, approved policy, and trusted
+revision. The agent considers that whole snapshot and relevant code and existing
+PRs, recommends one concrete approach, and explains rationale, alternatives,
+scope, non-goals, testable criteria, assumptions, evidence gaps, and changes since
+the previous round. Proposing does not require consensus. An in-scope
+`needs_clarification` proposal must still recommend concrete terms and identify
+the blocking questions. Insufficient evidence is reported as blocked, not
+silently guessed. Unresolved policy or direction still cannot become accepted
+implementation scope.
+
+The existing read-only model, schema validation, exact candidate scan, native
+completion guard, sealing, current-controls checks, and target-scoped trusted
+writer precede every post. The proposal command gives advance permission for
+that one public advisory post, analogous to reply. Each new round posts a new
+numbered version; it never edits or deletes earlier proposals. Changes while
+generating or posting invalidate that snapshot. Thread/context bounds and
+inference/detection budgets are unchanged; incomplete coverage is an error,
+not silent truncation.
+
+Every public proposal is prominently advisory. Its version, exact terms,
+producer, and internal integrity values are bound to immutable sealed evidence.
+Ready versions show `/typechat accept P<number>`; unresolved questions, policy
+conflicts, incomplete evidence, or competing work do not become acceptance
+authority. Proposal history stays public after artifacts expire, but expired
+or unavailable sealed evidence requires another proposal before acceptance.
+The owner does not calculate hashes or look up artifact IDs.
+
+A proposal advertising acceptance must use a successful producing attempt, or
+the current in-progress attempt's seal. A writer-only rerun cannot make an older
+failed producer acceptance-eligible: posting is blocked before recording an
+intent or publishing that version. Inspect prior runs and retained intents, then
+request a fresh `/typechat propose` when no write remains unresolved. Advisory-only
+reply/proposal recovery retains its existing scan and seal requirements.
+
+Acceptance selects the named public version, not whichever proposal finishes
+last. A new community comment or newer proposal cannot silently change that
+selection. Append-only discussion after the proposal is allowed; its original
+evidence, public body, source command, policy/control fingerprints, and inspected
+contribution revisions must remain unchanged and verifiable. Hidden, edited,
+duplicate, future-dated, expired, or ambiguous versions fail closed. A pending
+proposal write reserves the immutable Issue identity and proposal version, not
+a key reconstructed from mutable command comments. All commands competing for
+that version share the same reservation; its retained intent includes the
+original command Node ID, body, and creation time. Preparation checks that exact
+target/version reservation even if the earlier command is edited or deleted.
+Confirmed public history advances the next version; an unresolved write blocks
+a new round rather than risking duplicate version numbers. Keep durable intents
+and inspect uncertain outcomes; never delete them to retry.
+
+The exact acceptance remains a separate public record. The selected version's
+visible goal, scope, non-goals, and criteria must match that record. This check
+compares decoded semantic fields by section name, not Markdown section positions
+or presentation; canonical accepted-record, hash, and provenance checks stay strict.
+Build resolves
+only that version's unambiguous owner-approved record, then retains all existing
+activation, reservation, budget, source-pin, competing-contribution, isolated-test,
+scan, and publication checks. It does not rerun or guess acceptance. Material
+scope changes return to a new proposal and explicit acceptance. PR publication
+does not approve or merge work.
+
 ### Exact work acceptance
 
 **Issue acceptance and retry verified on 2026-11-01 (UTC); Discussion verification
-is pending.** Ordinary
+is pending.** Those live results cover the legacy hash-based approval path,
+not the prepared public-version extension. Ordinary
 human maintainer acceptance remains available. The automated pilot accepts only
 an explicit command from the project owner; it does not replace the normal
 maintainer process or grant the model acceptance authority.
 
-Use `/typechat draft` after the discussion establishes the intended outcome,
-boundaries, and completion criteria. A candidate may contain a proposal only
+Prefer the public proposal/version flow above. The legacy `/typechat draft`
+route remains supported after discussion establishes the intended outcome,
+boundaries, and completion criteria. A candidate is acceptance-eligible only
 when its scope is `in_scope`, its readiness is `ready_for_owner_decision`, and
 it has no open questions. The proposal must name a goal, nonempty scope and
 non-goals, and nonempty testable criteria. Other readiness states cannot produce
@@ -707,8 +804,10 @@ The [drafting source](./.github/workflows/discussion-draft.md) uses a trusted
 preparation job to freeze the public thread and approved policy. A read-only
 agent examines that snapshot and related contributions. It writes the actual
 reply and a separate assessment containing questions, recorded requirements,
-suggested criteria, a readiness recommendation, and an eligible proposal or
-explicit `null`. The model never marks its own proposal accepted.
+suggested criteria, a readiness recommendation, and proposal terms or explicit
+`null`. Public proposal mode may recommend in-scope terms with blocking questions,
+but only ready terms with no open questions produce acceptance authority.
+The model never marks its own proposal accepted.
 Discussion evidence remains bounded at 1 MiB and 1,000 non-receipt comments,
 including replies. Canonical operational receipts have a separate collection
 allowance so they do not consume that existing budget: the raw thread is capped

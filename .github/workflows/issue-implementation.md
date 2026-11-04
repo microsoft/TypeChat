@@ -1,6 +1,6 @@
 ---
 name: TypeChat accepted Issue implementation
-description: Prepare a copyable build command or execute one separately authorized, bounded Issue implementation.
+description: Build an explicitly accepted public proposal or prepare a legacy command for separately authorized Issue work.
 run-name: "TypeChat build: #${{ github.event.issue.number || inputs.issue }} / comment ${{ github.event.comment.id || 'preview' }}"
 on:
   issue_comment:

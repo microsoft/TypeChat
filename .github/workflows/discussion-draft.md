@@ -1,6 +1,6 @@
 ---
 name: TypeChat discussion response
-description: Prepare checked discussion responses and work proposals for separate owner approval.
+description: Post checked advisory replies and versioned public proposals; only the owner can accept work.
 run-name: "TypeChat response: ${{ github.event_name }} #${{ github.event.issue.number || github.event.discussion.number }} / comment ${{ github.event.comment.id }}"
 on:
   issue_comment:
@@ -20,7 +20,8 @@ if: &draft_request >-
   github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
   !github.event.issue.pull_request &&
   (startsWith(github.event.comment.body, '/typechat draft') ||
-  startsWith(github.event.comment.body, '/typechat reply'))
+  startsWith(github.event.comment.body, '/typechat reply') ||
+  (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/typechat propose')))
 permissions:
   contents: read
   issues: read
@@ -57,7 +58,8 @@ safe-outputs:
             const { pathToFileURL } = require("node:url");
             const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
             const directory = path.join(process.env.RUNNER_TEMP, "typechat-detection-candidate");
-            const hash = helper.stageCandidateForDetection(directory, process.env.TYPECHAT_DETECTION_DIRECTORY);
+            const hash = helper.stageCandidateForDetection(directory, process.env.TYPECHAT_DETECTION_DIRECTORY,
+              helper.parseCommand(context.payload.comment.body).action);
             core.setOutput("sha256", hash);
     post-steps:
       - name: Record the candidate scan
@@ -99,7 +101,8 @@ concurrency:
         github.event.comment.user.id == 25374553 &&
         github.triggering_actor == 'robgruen' &&
         (startsWith(github.event.comment.body, '/typechat draft') ||
-         startsWith(github.event.comment.body, '/typechat reply')) &&
+         startsWith(github.event.comment.body, '/typechat reply') ||
+         (github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/typechat propose'))) &&
         format('typechat-discussion-{0}-{1}-{2}', github.repository_id, github.event_name, github.event.issue.number || github.event.discussion.number) ||
         format('typechat-ignored-draft-{0}', github.run_id) }}
   cancel-in-progress: false
@@ -253,7 +256,8 @@ jobs:
       github.triggering_actor == 'robgruen' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) &&
       !github.event.issue.pull_request &&
-      startsWith(github.event.comment.body, '/typechat reply') &&
+      (startsWith(github.event.comment.body, '/typechat reply') ||
+      startsWith(github.event.comment.body, '/typechat propose')) &&
       needs.prepare.outputs.should_draft == 'true' &&
       needs.agent.result == 'success' && needs.seal.result == 'success' &&
       needs.detection.result == 'success' &&
@@ -351,7 +355,8 @@ jobs:
             const result = await helper.publishDraft(github, context, process.env, bundle, Number(process.env.TYPECHAT_INTENT_ARTIFACT_ID));
             const directory = path.join(process.env.RUNNER_TEMP, "typechat-reply-receipt");
             helper.writeJson(directory, "receipt.json", {
-              ...result, authorization: "reply", target: bundle.target, producer: bundle.producer,
+              ...result, authorization: helper.parseCommand(context.payload.comment.body).action,
+              target: bundle.target, producer: bundle.producer,
               requestComment: context.payload.comment.node_id,
             });
             core.setOutput("receipt_path", path.join(directory, "receipt.json"));
@@ -466,6 +471,33 @@ a moving branch or an unmerged policy proposal.
 
 ## Public reply, assessment, and proposal
 
+First inspect the original command in the frozen context.
+For `/typechat propose`, read the entire frozen conversation, including all
+community feedback and earlier public proposals. Recommend one concrete approach
+and explain why it is preferable to the alternatives. Do not merely repeat a
+question asking the owner to choose a design when you can make an evidence-based
+recommendation. State assumptions, tradeoffs, compatibility constraints, and
+blocking questions honestly. Proposing does not require consensus and never
+establishes agreement.
+
+For this mode, add exactly one additional JSON field, `changes`, containing a
+nonempty list of what changed since the preceding proposal and why. For the
+first round, explain that it is the initial recommendation. All recommendation,
+scope, criteria, questions, changes, and limitations are published by trusted
+workflow code after validation and scanning. Write for the public community,
+not an internal report. Do not put credentials or sensitive details in any field.
+Use the same bounded plain-text schema below. An in-scope discussion proposal
+must include concrete `proposal` terms and testable `suggestedCriteria` while
+`readiness` is `needs_clarification`; list the actual blocking questions.
+If the evidence cannot support any recommendation, use `blocked_by_evidence`
+and explain the missing evidence rather than inventing terms.
+Only `ready_for_owner_decision` with no open questions is eligible for acceptance.
+Unresolved direction, conflicting policy, or an existing competing implementation
+must not be treated as approved scope. For other modes, do not add `changes`.
+
+The remaining conversational formatting instructions apply to `/typechat reply`
+and the optional `/typechat draft` review mode.
+
 Write `reply` as the actual conversational response to the issue or Discussion
 author, not as a report about them. Answer the question using the inspected code
 and evidence before asking for clarification. Inspect the relevant model-service
@@ -479,7 +511,7 @@ internal audit report in `reply`. Do not claim that work is accepted or promised
 and do not mention accounts or teams with `@`. The workflow adds a short
 non-acceptance notice and links any structured PR references.
 
-The other fields are assessment and evidence for the Actions summary and
+Except in public proposal mode, the other fields are assessment and evidence for the Actions summary and
 artifact, not the conversational reply. Eligible proposal terms also form a
 separate acceptance preview, which only an explicit owner acceptance command
 can publish. Explain the user's need in plain English.
@@ -540,7 +572,9 @@ pass/fail outcomes. Align the proposal with the recorded discussion and approved
 policy. Do not invent agreement, resolve unanswered questions by guessing, or
 turn an under-consideration item into accepted scope. Preserve existing
 contributions and identify relevant PRs instead of proposing duplicate work.
-For every other readiness value, `proposal` must be `null`.
+For every other readiness value, `proposal` must be `null`, except that
+`/typechat propose` must include an in-scope `needs_clarification` discussion
+proposal as described above. Open questions never make it eligible for acceptance.
 
 Use single-line plain-text strings, without URLs, Markdown, hidden markup, or
 control characters. Use one to six reply paragraphs of at most 2,000 characters
@@ -561,7 +595,12 @@ requires a later owner publish command. When a proposal is ready, it also shows
 the exact work-acceptance preview and a separate `/typechat accept` command.
 `/typechat reply` authorizes one response after the trusted checks, without a
 second approval command; its artifact cannot authorize acceptance. You do not
-post anything yourself. Drafting, replying, and publishing a response never
+post anything yourself. `/typechat propose` authorizes one new, numbered public
+proposal on the Issue, without a separate publish command. Later rounds preserve
+earlier proposals and consider all intervening feedback. The owner selects exact
+terms with `/typechat accept P<number>` and separately authorizes implementation
+with `/typechat build P<number>`. IDs and hashes remain internal. Drafting, replying,
+proposing, and publishing a response never
 accept work. Only the owner's exact acceptance command can accept the proposal,
 and even that does not authorize an automated implementation run or merging.
 Keep all assessment metadata factual and nonsensitive: Actions artifacts follow

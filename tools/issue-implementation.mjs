@@ -9,7 +9,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
     ACTIONS_BOT_ID, CONTROL_PATHS, MAX_COMMENT_BYTES, MAX_CONTEXT_BYTES, OWNER, REPOSITORY,
-    digest, parseCommand, priorIntent, readControls, readJson, readThread, renderAcceptance, snapshotHash, stageDetectionContent, writeJson,
+    decodeMarkdown, digest, findPublicProposal, parseCommand, priorIntent, readControls, readJson, readThread, renderAcceptance, snapshotHash, stageDetectionContent, writeJson,
 } from "./discussion-draft.mjs";
 import { IMPLEMENTATION_APP, IMPLEMENTATION_PERMISSIONS } from "./implementation-app.mjs";
 
@@ -75,14 +75,11 @@ export function buildCommand(acceptanceId, bodyHash) {
 
 export function parseBuildCommand(body) {
     requireValue(typeof body === "string" && body.length <= 2000, "Missing build command.");
+    const proposal = /^\/typechat build P([1-9][0-9]*)\s*$/.exec(body);
+    if (proposal) return { proposalVersion: integer(Number(proposal[1]), "Invalid proposal version.") };
     const match = /^\/typechat build ([1-9][0-9]*):([a-fA-F0-9]{64})\s*$/.exec(body);
-    requireValue(match, "Use /typechat build <acceptance-comment-id>:<sha256> without inline notes.");
+    requireValue(match, "Use /typechat build P<number> or /typechat build <acceptance-comment-id>:<sha256> without inline notes.");
     return { acceptanceId: integer(Number(match[1]), "Invalid acceptance comment identifier."), bodyHash: match[2].toLowerCase() };
-}
-
-function decodeMarkdown(value) {
-    return value.replace(/\\([\\`*_{}\[\]()#+\-.!|~@])/g, "$1")
-        .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
 
 export function parseAcceptedWork(body, target) {
@@ -122,13 +119,17 @@ export function parseAcceptedWork(body, target) {
         runId: integer(Number(provenance[1]), "Invalid proposal run."), attempt: integer(Number(provenance[2]), "Invalid proposal attempt."),
         commit: provenance[3],
     };
+    const versionMatch = / Proposal \*\*P([1-9][0-9]*)\*\*\.$/.exec(sections[1]);
+    const proposalVersion = versionMatch ? integer(Number(versionMatch[1]), "Invalid accepted proposal version.") : null;
     const reconstructed = renderAcceptance({
         target, producer, marker: marker[1],
+        ...(proposalVersion ? { proposalVersion } : {}),
         draft: { proposal: { goal: terms.goal, scope: terms.scope, nonGoals: terms.nonGoals },
             suggestedCriteria: terms.criteria, pullRequests: references },
     });
     requireValue(reconstructed === body, "The record is not an exact canonical acceptance.");
-    return { terms, references, policyCommit: producer.commit };
+    return { terms, references, policyCommit: producer.commit,
+        ...(proposalVersion ? { proposalVersion, proposalMarker: marker[1] } : {}) };
 }
 
 export function authorizeBuild(context, env) {
@@ -199,10 +200,16 @@ async function acceptanceRecord(github, thread, acceptanceId, expectedHash, curr
     const bodyHash = digest(comment.body);
     requireValue(expectedHash === undefined || bodyHash === expectedHash, "The accepted-work hash does not match.");
     const parsed = parseAcceptedWork(comment.body, thread.target);
+    const proposal = parsed.proposalVersion ? findPublicProposal(thread, parsed.proposalVersion, parsed.terms) : null;
+    requireValue(!proposal || proposal.bodyHash === bodyHash && proposal.marker === parsed.proposalMarker,
+        "The accepted terms do not match the immutable public proposal.");
     const approvals = thread.comments.filter(value => value.author?.type === "User" && value.author.login === OWNER.login &&
         value.lastEditedAt === null && !value.minimized &&
-        /^\/typechat accept [1-9][0-9]*:[a-fA-F0-9]{64}\s*$/.test(value.body) &&
-        parseCommand(value.body).bodyHash === bodyHash && Date.parse(value.createdAt) <= Date.parse(comment.createdAt))
+        /^\/typechat accept (?:[1-9][0-9]*:[a-fA-F0-9]{64}|P[1-9][0-9]*)\s*$/.test(value.body) &&
+        (proposal ? parseCommand(value.body).proposalVersion === parsed.proposalVersion &&
+            Date.parse(proposal.comment.createdAt) <= Date.parse(value.createdAt) :
+            parseCommand(value.body).bodyHash === bodyHash) &&
+        Date.parse(value.createdAt) <= Date.parse(comment.createdAt))
         .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
     requireValue(approvals.length > 0, "No unchanged public owner approval binds this exact acceptance.");
     const approval = approvals[0];
@@ -333,8 +340,18 @@ export async function prepareBuild(github, context, env, clock = () => new Date(
     const thread = await readThread(github, target);
     requireOpen(thread);
     if (request.mode === "build") ownerComment(thread, request);
-    const acceptance = await acceptanceRecord(github, thread,
-        request.mode === "command" ? request.acceptanceId : request.command.acceptanceId, request.command?.bodyHash, current);
+    let acceptanceId = request.mode === "command" ? request.acceptanceId : request.command.acceptanceId;
+    if (request.command?.proposalVersion) {
+        const label = ` Proposal **P${request.command.proposalVersion}**.`;
+        const matches = thread.comments.filter(comment => comment.author?.type === "Bot" &&
+            comment.author.id === ACTIONS_BOT_ID && comment.body.startsWith("## Accepted work\n") &&
+            comment.body.split("\n\n")[1]?.endsWith(label));
+        requireValue(matches.length === 1, "Exactly one accepted record must exist for this proposal. Accept it before building.");
+        acceptanceId = commentNumber(matches[0]);
+    }
+    const acceptance = await acceptanceRecord(github, thread, acceptanceId, request.command?.bodyHash, current);
+    requireValue(!request.command?.proposalVersion || acceptance.proposalVersion === request.command.proposalVersion,
+        "The build command selects a different accepted proposal.");
     const existing = await existingBuild(github, target, acceptance);
     if (existing) return existing;
     await competingContributions(github, target);
@@ -391,7 +408,10 @@ export async function verifyBuildAuthorization(github, context, env, prepared, c
     const thread = await readThread(github, request.target);
     requireOpen(thread);
     ownerComment(thread, request);
-    const acceptance = await acceptanceRecord(github, thread, request.command.acceptanceId, request.command.bodyHash, current);
+    requireValue(!request.command.proposalVersion || prepared.acceptance.proposalVersion === request.command.proposalVersion,
+        "The frozen agreement selects a different public proposal.");
+    const acceptance = await acceptanceRecord(github, thread,
+        request.command.acceptanceId ?? prepared.acceptance.id, request.command.bodyHash, current);
     requireValue(same(acceptance, prepared.acceptance) && snapshotHash(thread) === prepared.snapshotHash,
         "The acceptance or discussion changed after authorization; obtain a new owner decision.");
     await competingContributions(github, request.target);
