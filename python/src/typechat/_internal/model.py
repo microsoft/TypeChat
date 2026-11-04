@@ -1,5 +1,8 @@
 import asyncio
 import json
+import re
+from collections.abc import Awaitable, Callable, Sequence
+from inspect import isawaitable
 from types import TracebackType
 from typing_extensions import AsyncContextManager, Literal, Protocol, Self, TypedDict, cast, override
 
@@ -16,6 +19,8 @@ class PromptSection(TypedDict):
     role: Literal["system", "user", "assistant"]
     content: str
 
+TokenProvider = Callable[[], str | Awaitable[str]]
+
 class TypeChatLanguageModel(Protocol):
     async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
         """
@@ -27,6 +32,71 @@ class TypeChatLanguageModel(Protocol):
         The `create_language_model` function can create an instance.
         """
         ...
+
+class _ClientMessage(Protocol):
+    @property
+    def content(self) -> str | None: ...
+
+class _ClientChoice(Protocol):
+    @property
+    def message(self) -> _ClientMessage: ...
+
+class _ClientCompletion(Protocol):
+    @property
+    def choices(self) -> Sequence[_ClientChoice]: ...
+
+class _ClientCompletions(Protocol):
+    @property
+    def create(self) -> Callable[..., Awaitable[_ClientCompletion]]:
+        # SDK methods have overloaded parameters; require the awaited response shape.
+        ...
+
+class _ClientChat(Protocol):
+    @property
+    def completions(self) -> _ClientCompletions: ...
+
+class ChatCompletionClient(Protocol):
+    """An asynchronous OpenAI-compatible Chat Completions client supplied by the caller."""
+    @property
+    def chat(self) -> _ClientChat: ...
+
+class _ClientLanguageModel(TypeChatLanguageModel):
+    _client: ChatCompletionClient
+    _model: str
+
+    def __init__(self, client: ChatCompletionClient, model: str):
+        super().__init__()
+        self._client = client
+        self._model = model
+
+    @override
+    async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
+        messages = [{"role": "user", "content": prompt}] if isinstance(prompt, str) else prompt
+        completion = await self._client.chat.completions.create(
+            model=self._model,
+            messages=messages,
+            temperature=0.0,
+            n=1,
+            stream=False,
+        )
+        if not completion.choices:
+            return Failure("Client completion returned no choices.")
+        content = completion.choices[0].message.content
+        if not isinstance(content, str):
+            return Failure("Client completion returned no text content.")
+        return Success(content)
+
+def create_openai_language_model_from_client(client: ChatCompletionClient, model: str) -> TypeChatLanguageModel:
+    """
+    Adapts an already configured asynchronous OpenAI-compatible Chat Completions client.
+
+    TypeChat does not import an SDK, reconfigure or close the client, or add retries or timeouts.
+    Exceptions raised by the client propagate unchanged. The caller supplies the model name,
+    or the deployment name for Azure OpenAI.
+    """
+    if not model.strip():
+        raise ValueError("The client model or deployment name must not be empty.")
+    return _ClientLanguageModel(client, model)
 
 _TRANSIENT_ERROR_CODES = [
     429,
@@ -58,12 +128,21 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
     # Set to 0 or a negative value to disable the limit.
     max_response_bytes: int = 100 * 1024 * 1024
     _async_client: httpx.AsyncClient
+    _token_provider: TokenProvider | None
 
-    def __init__(self, url: str, headers: dict[str, str], default_params: dict[str, str]):
+    def __init__(
+        self,
+        url: str,
+        headers: dict[str, str],
+        default_params: dict[str, str],
+        *,
+        token_provider: TokenProvider | None = None,
+    ):
         super().__init__()
         self.url = url
         self.headers = headers
         self.default_params = default_params
+        self._token_provider = token_provider
         self._async_client = httpx.AsyncClient()
 
     @override
@@ -85,10 +164,18 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         retry_count = 0
         while True:
             try:
+                request_headers = headers
+                if self._token_provider is not None:
+                    token = self._token_provider()
+                    if isawaitable(token):
+                        token = await token
+                    if not isinstance(token, str) or re.fullmatch(r"[\x21-\x7e]+", token) is None:
+                        return Failure("Token provider must return a nonempty, header-safe bearer-token string.")
+                    request_headers = {**headers, "Authorization": f"Bearer {token}"}
                 async with self._async_client.stream(
                     "POST",
                     self.url,
-                    headers=headers,
+                    headers=request_headers,
                     json=body,
                     timeout=self.timeout_seconds,
                 ) as response:
@@ -209,14 +296,27 @@ def create_openai_language_model(api_key: str, model: str, endpoint: str = "http
     }
     return HttpxLanguageModel(url=endpoint, headers=headers, default_params=default_params)
 
-def create_azure_openai_language_model(api_key: str, endpoint: str) -> HttpxLanguageModel:
+def create_azure_openai_language_model(
+    api_key: str | None,
+    endpoint: str,
+    *,
+    token_provider: TokenProvider | None = None,
+) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an Azure OpenAI REST API endpoint.
 
     Args:
-        api_key: The Azure OpenAI API key.
+        api_key: The Azure OpenAI API key, or None when using a token provider.
         endpoint: The Azure OpenAI REST API endpoint.
+        token_provider: An optional synchronous or asynchronous bearer-token provider.
+            Invoked for each request attempt; the provider is responsible for caching and renewal.
     """
+    if token_provider is not None:
+        if api_key is not None:
+            raise ValueError("Specify either an API key or a token provider, not both.")
+        return HttpxLanguageModel(url=endpoint, headers={}, default_params={}, token_provider=token_provider)
+    if api_key is None:
+        raise ValueError("Specify an API key or a token provider.")
     headers = {
         # Needed when using managed identity
         "Authorization": f"Bearer {api_key}",

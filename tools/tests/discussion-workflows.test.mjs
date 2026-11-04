@@ -58,7 +58,92 @@ test("discussion commands are created-comment events guarded by owner and truste
     assert.ok(publisher.jobs.publish_discussion.if.includes("github.event_name == 'discussion_comment'"));
     for (const job of Object.values(publisher.jobs)) {
         assert.ok(job.if.includes("startsWith(github.event.comment.body, '/typechat publish ')"));
+        assert.ok(job.if.includes("startsWith(github.event.comment.body, '/typechat accept ')"));
     }
+});
+
+test("public proposals use the scanned Issue writer and cannot trigger Discussion inference", () => {
+    const github = {
+        repository: "microsoft/TypeChat", event_name: "issue_comment",
+        triggering_actor: "robgruen", ref: "refs/heads/main",
+        event: { sender: { type: "User", id: 25374553 },
+            comment: { user: { id: 25374553 }, body: "/typechat propose" },
+            repository: { default_branch: "main" }, issue: {} },
+    };
+    const needs = {
+        prepare: { outputs: { should_draft: "true" } }, agent: { result: "success" },
+        seal: { result: "success" }, detection: { result: "success",
+            outputs: { run_detection: "true", detection_conclusion: "success" } },
+    };
+    function allowed(condition, event = github) {
+        return new Function("github", "needs", "startsWith", "format", `return (${condition});`)(
+            event, needs, (value, prefix) => value.startsWith(prefix), (_, branch) => `refs/heads/${branch}`);
+    }
+    assert.equal(allowed(source.if), true);
+    assert.equal(allowed(source.jobs.reply_issue.if), true);
+    assert.equal(allowed(source.if, { ...github, event_name: "discussion_comment" }), false);
+    assert.equal(allowed(source.jobs.reply_discussion.if, { ...github, event_name: "discussion_comment" }), false);
+    for (const step of ["agent", "seal", "detection"]) {
+        needs[step].result = "failure";
+        assert.equal(allowed(source.jobs.reply_issue.if), false);
+        needs[step].result = "success";
+    }
+    assert.ok(compiled.jobs.activation.if.includes(source.if));
+    assert.ok(compiled.jobs.reply_issue.if.includes("'/typechat propose'"));
+    const body = fs.readFileSync(new URL("discussion-draft.md", directory), "utf8");
+    assert.match(body, /Recommend one concrete approach/);
+    assert.match(body, /entire frozen conversation/);
+    assert.match(body, /changes.*containing a[\s\S]*nonempty list/);
+});
+
+test("exact owner acceptance uses only the target-scoped manual publisher", () => {
+    assert.deepEqual(Object.keys(publisher.jobs), ["publish_issue", "publish_discussion"]);
+    for (const kind of ["issue", "discussion"]) {
+        const job = publisher.jobs[`publish_${kind}`];
+        const github = {
+            repository: "microsoft/TypeChat", event_name: `${kind}_comment`,
+            triggering_actor: "robgruen", ref: "refs/heads/main",
+            event: { sender: { type: "User", id: 25374553 },
+                comment: { user: { id: 25374553 }, body: `/typechat accept 500:${"a".repeat(64)}` },
+                repository: { default_branch: "main" }, issue: {} },
+        };
+        const evaluate = new Function("github", "startsWith", "format", `return (${job.if});`);
+        const allowed = context => evaluate(context,
+            (value, prefix) => value.startsWith(prefix), (_, branch) => `refs/heads/${branch}`);
+        assert.equal(allowed(github), true);
+        for (const change of [
+            value => { value.event.sender.id = 7; },
+            value => { value.event.sender.type = "Bot"; },
+            value => { value.event.comment.user.id = 7; },
+            value => { value.triggering_actor = "someone-else"; },
+            value => { value.repository = "other/repository"; },
+            value => { value.ref = "refs/pull/1/merge"; },
+            value => { value.event_name = "workflow_dispatch"; },
+        ]) {
+            const altered = structuredClone(github);
+            change(altered);
+            assert.equal(allowed(altered), false);
+        }
+        for (const body of ["/typechat accept", "/typechat accept-latest", "/typechat reply", "/typechat draft", "/typechat build"]) {
+            const altered = structuredClone(github);
+            altered.event.comment.body = body;
+            assert.equal(allowed(altered), false);
+        }
+        if (kind === "issue") {
+            const pullRequest = structuredClone(github);
+            pullRequest.event.issue.pull_request = {};
+            assert.equal(allowed(pullRequest), false);
+        }
+        assert.deepEqual(job.permissions, {
+            contents: "read", actions: "read", "pull-requests": "read",
+            [kind === "issue" ? "issues" : "discussions"]: "write",
+        });
+        assert.equal(job.env.TYPECHAT_PUBLISH_KIND, kind);
+    }
+    assert.ok(publisher.concurrency.group.includes("startsWith(github.event.comment.body, '/typechat accept ')"));
+    const publish = publishSteps.find(step => step.id === "publish");
+    assert.ok(publish.with.script.includes("authorization"));
+    assert.ok(publish.with.script.includes("does not authorize an automated implementation run"));
 });
 
 test("draft requests use the native eyes acknowledgment without public status comments", () => {
@@ -345,7 +430,7 @@ test("direct replies require the reply command and every mandatory successful st
         const allowed = (context, results) => evaluate(context, results,
             (value, prefix) => value.startsWith(prefix), (_, branch) => `refs/heads/${branch}`);
         assert.equal(allowed(github, needs), true);
-        for (const body of ["/typechat draft", `/typechat publish 500:${"a".repeat(64)}`]) {
+        for (const body of ["/typechat draft", `/typechat publish 500:${"a".repeat(64)}`, `/typechat accept 500:${"a".repeat(64)}`]) {
             assert.equal(allowed({ ...github, event: { ...github.event, comment: { ...github.event.comment, body } } }, needs), false);
         }
         for (const dependency of ["agent", "seal", "detection"]) {
@@ -448,12 +533,12 @@ test("the candidate-file validator enforces the exact 64-KiB bound and safe JSON
     }
 });
 
-test("CI covers helper changes and compiles both workflows with the pinned runtime", () => {
+test("CI covers helper changes and compiles all three workflows with the pinned runtime", () => {
     for (const event of ["push", "pull_request"]) {
         assert.ok(checks.on[event].paths.includes("tools/**"));
         assert.ok(checks.on[event].paths.includes(".github/workflows/**"));
     }
     const compile = checks.jobs.compile.steps.find(step => step.name === "Validate and compile agent workflows");
-    assert.match(compile.run, /gh aw compile backlog-assessment discussion-draft --strict --no-check-update --no-logo/);
+    assert.match(compile.run, /gh aw compile backlog-assessment discussion-draft issue-implementation --strict --no-check-update --no-logo/);
     assert.match(compile.run, /--action-tag 32ecafbc061c9af57e9361942099e381102ae304/);
 });

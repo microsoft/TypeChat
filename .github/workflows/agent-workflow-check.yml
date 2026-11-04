@@ -49,7 +49,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          gh aw compile backlog-assessment discussion-draft --strict --no-check-update --no-logo
+          gh aw compile backlog-assessment discussion-draft issue-implementation --strict --no-check-update --no-logo
           --action-tag 32ecafbc061c9af57e9361942099e381102ae304
       - name: Check generated files are current
         run: |
@@ -69,3 +69,18 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm test
+  implementation-sandbox:
+    name: Verify the credential-free implementation test container
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version-file: .nvmrc
+      - name: Run real isolated TypeScript and Python checks on a synthetic patch
+        env:
+          TYPECHAT_SANDBOX_SMOKE: "true"
+        run: node --test tools/tests/implementation-sandbox.integration.test.mjs

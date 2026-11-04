@@ -36,8 +36,19 @@ npm install
 npm run build
 ```
 
-Run the test suite with `npm test`. The Zod schema tests also compile their generated
-TypeScript schema text to check for syntax errors and unresolved type references.
+Run the test suite with `npm test`. It builds the library, compiles TypeScript tests,
+and recursively discovers compiled `*.test.js` suites under `out/` and runtime
+`*.test.mjs` suites under `tests/`. Add TypeScript tests under
+[test/](https://github.com/microsoft/TypeChat/tree/main/typescript/test) or runtime
+tests under [tests/](https://github.com/microsoft/TypeChat/tree/main/typescript/tests);
+no manual suite-list update is needed.
+Quoted patterns let Node handle discovery consistently across platforms, including
+nested directories, without executing helper files or uncompiled TypeScript.
+
+The Zod schema tests also compile their generated TypeScript schema text to check
+for syntax errors and unresolved type references.
+Node.js CI runs this suite across its Node.js matrix after a clean dependency
+installation and workspace build.
 
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 
@@ -70,6 +81,13 @@ the original message-only shape. A present `data` property can contain any value
 or `undefined`, so check property presence when that distinction matters.
 
 Rejected values and response text may contain sensitive output. Do not log them automatically.
+
+## Accessing response metadata
+
+Model and translation results can include optional `metadata` on success and failure,
+separate from application data. See the [response metadata guide](https://github.com/microsoft/TypeChat/blob/main/typescript/metadata.md)
+for reported token usage, initial and repair response records, and available filtering details.
+The guide is also included as `metadata.md` in the npm package.
 
 ## Contributing
 

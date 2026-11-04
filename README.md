@@ -72,7 +72,7 @@ proposals progress from discussion to accepted, reviewed changes with less
 manual coordination. Read about the [automation experiment](./AUTOMATION.md)
 and how to participate.
 
-**Status as of 2026-10-30 (UTC):** The
+**Status as of 2026-11-03 (UTC):** The
 [latest backlog assessment](https://github.com/microsoft/TypeChat/actions/runs/40997369231)
 completed successfully after the control hardening merged through
 [#491](https://github.com/microsoft/TypeChat/pull/491). It inventories 20 issues
@@ -89,12 +89,42 @@ checked. The earlier CI access restriction was not retested. Reports are not
 acceptance of work, GitHub Copilot code reviews, or merge approval.
 
 The [owner-approved discussion pilot](./AUTOMATION.md#second-pilot-owner-approved-discussion-drafts)
-has a verified Issue draft-only run. The next revision prepares conversational
-replies and adds owner-only `/typechat reply`: one checked public response per
-command, without a second text-approval step. `/typechat draft` remains
-preview-only, followed by exact-text approval through `/typechat publish`.
-The new mode is pending review and live verification, keeps the 50-credit main
-budget and separately budgeted detection, and does not enable acceptance or builds.
+has verified Issue draft generation, conversational `/typechat reply` delivery,
+and a duplicate-free reply retry after [#498](https://github.com/microsoft/TypeChat/pull/498)
+merged. Manual response publication, Discussion replies, and Discussion
+acceptance still need live verification.
+`/typechat draft` remains preview-only, with exact-text response approval through
+`/typechat publish`. Owner-only `/typechat accept` and its no-op retry have also
+been verified on an Issue after [#503](https://github.com/microsoft/TypeChat/pull/503)
+merged. Completion-only operational receipts were merged through
+[#506](https://github.com/microsoft/TypeChat/pull/506);
+[selected live checks](https://github.com/microsoft/TypeChat/discussions/508#discussioncomment-19342916)
+verified Issue/Discussion input-needed draft receipts, invalid-command
+reporting, and controller-only no-op retries. Cancellation, uncertain-write
+recovery, acceptance-ready receipt wording, and direct-reply reuse remain
+unverified live. Receipts do not publish draft content or accept work.
+Generation keeps its 50-credit main budget and separately budgeted detection.
+Acceptance does not launch a coding agent or activate implementation spending.
+
+The [public-proposal extension](./AUTOMATION.md#public-proposal-rounds-prepared)
+is prepared for owner review and controlled live verification, not claimed
+live-verified. Its default flow is `reply` for conversation, or
+`propose -> discuss/revise -> accept -> build -> PR -> review -> merge`
+for development on an Issue. Proposals are posted directly for community
+discussion; the owner selects a visible version such as `P2` for acceptance
+and a separately authorized build. IDs and hashes stay internal. The optional
+draft/publish review mode remains supported. See the [owner cheat sheet](./OWNER-CHEATSHEET.md#follow-the-workflow).
+
+The [owner-triggered implementation pilot](./AUTOMATION.md#third-pilot-owner-triggered-issue-implementation)
+implements the workflow accepted in [#504](https://github.com/microsoft/TypeChat/issues/504)
+as a separate, disabled-by-default extension. Review, activation, and a fresh
+owner build command remain distinct. The separately authorized
+[#75 run](https://github.com/microsoft/TypeChat/actions/runs/41559378978) created
+the App-authored [#513](https://github.com/microsoft/TypeChat/pull/513), followed
+by normal CI, Copilot review, human fixes, and owner approval and merge.
+Original automated evidence remains bound to the original commit, not the
+human follow-ups. The activation flag is again unset; no coding run or merge
+happens automatically.
 
 | Milestone | Implemented | Current status |
 | --- | --- | --- |
@@ -116,8 +146,11 @@ budget and separately budgeted detection, and does not enable acceptance or buil
 | Automatic Copilot PR reviews | 2026-10-30 | [Active review rule](https://github.com/microsoft/TypeChat/rules/26174313) for ready PRs targeting `main` and subsequent pushes; drafts are skipped. Configuration and the review on [#491](https://github.com/microsoft/TypeChat/pull/491) were verified. |
 | Stricter human-review enforcement | Not enabled | Existing branch-review protections are retained at the owner's request. Copilot reviews do not replace human approval. |
 | Owner-approved issue and Discussion drafts | 2026-10-30 | Merged through [#495](https://github.com/microsoft/TypeChat/pull/495); [run 41147057482](https://github.com/microsoft/TypeChat/actions/runs/41147057482) verified the Issue draft-only path. Publication and Discussion-path verification remain separate. |
-| Owner-commanded direct replies | 2026-10-31 | `/typechat reply` and conversational previews prepared for review. One checked response per owner command; no work acceptance or autonomous follow-up. Merge and live verification pending. |
-| Acceptance and agent implementation | Not yet | Separate human decisions. A future 1,000-credit implementation allowance is documented, not enabled. |
+| Owner-commanded direct replies | 2026-10-31 | Merged through [#498](https://github.com/microsoft/TypeChat/pull/498). [Attempt 1](https://github.com/microsoft/TypeChat/actions/runs/41226698016/attempts/1) posted one Issue reply; [attempt 2](https://github.com/microsoft/TypeChat/actions/runs/41226698016/attempts/2) skipped inference and posting, preserving the original comment. Other paths remain unverified live. |
+| Exact owner work acceptance | 2026-10-31 | Merged through [#503](https://github.com/microsoft/TypeChat/pull/503). [Attempt 1](https://github.com/microsoft/TypeChat/actions/runs/41339605658/attempts/1) recorded the approved Issue scope; [attempt 2](https://github.com/microsoft/TypeChat/actions/runs/41339605658/attempts/2) preserved one unchanged record. Those acceptance commands did not start coding or activate spending; Discussion acceptance remains unverified live. |
+| Completion receipts | 2026-11-02 | Merged through [#506](https://github.com/microsoft/TypeChat/pull/506). [Selected Issue/Discussion outcomes and controller retries](https://github.com/microsoft/TypeChat/discussions/508#discussioncomment-19342916) are live-verified; other outcomes remain unverified live. |
+| Acceptance and build acknowledgments | 2026-11-02 | Merged through [#510](https://github.com/microsoft/TypeChat/pull/510). Issue #75 received a thumbs-up confirming exact acceptance and a rocket acknowledging build startup; Discussion acknowledgment remains unverified live. |
+| Owner-triggered Issue implementation | 2026-11-02 | Merged through [#507](https://github.com/microsoft/TypeChat/pull/507), default-off. The [#75 run](https://github.com/microsoft/TypeChat/actions/runs/41559378978) published [#513](https://github.com/microsoft/TypeChat/pull/513) on 2026-11-03 (UTC); normal CI and Copilot reviews ran, human fixes were verified, and the owner approved and merged it. Original automated evidence and later human verification remain distinct; activation is again unset. |
 | Selective automatic adoption of community proposals | Not yet | Future work, subject to public criteria and maintainer approval. |
 
 Implementation dates do not mean a feature is enabled on GitHub. Existing
