@@ -1,6 +1,14 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createTypeScriptJsonValidator } from "../dist/ts/index.js";
+import {
+    createJsonTranslator,
+    typeChatSchemaValidation,
+    type TypeChatJsonValidator
+} from "../dist/index.js";
+import {
+    createTypeScriptJsonValidator,
+    type TypeScriptJsonValidator
+} from "../dist/ts/index.js";
 
 // ---------------------------------------------------------------------------
 // Shared schemas
@@ -60,6 +68,187 @@ describe("createTypeScriptJsonValidator", () => {
         for (const validator of openValidators.splice(0)) {
             validator.close();
         }
+    });
+
+    describe("schema-only validation", () => {
+        const invalidSchemas = [
+            {
+                name: "unsupported built-in types",
+                schema: "export interface Event { dateTime?: Date; }",
+                typeName: "Event",
+                diagnostic: /Date/
+            },
+            {
+                name: "unsupported library generics",
+                schema: "export interface Event { values: Set<string>; }",
+                typeName: "Event",
+                diagnostic: /Set/
+            },
+            {
+                name: "syntax errors",
+                schema: "export interface Event { dateTime: string;",
+                typeName: "Event",
+                diagnostic: /schema\.ts\(\d+,\d+\):/
+            },
+            {
+                name: "unresolved references",
+                schema: "export interface Event { dateTime: MissingType; }",
+                typeName: "Event",
+                diagnostic: /MissingType/
+            },
+            {
+                name: "references to the internal probe name",
+                schema: "export interface Event { next?: __TypeChatSchemaTarget; }",
+                typeName: "Event",
+                diagnostic: /__TypeChatSchemaTarget/
+            },
+            {
+                name: "missing target exports",
+                schema: "export interface Event { dateTime: string; }",
+                typeName: "MissingEvent",
+                diagnostic: /MissingEvent/
+            }
+        ];
+
+        for (const { name, schema, typeName, diagnostic } of invalidSchemas) {
+            for (const attemptRepair of [true, false]) {
+                it(`rejects ${name} before a model call when repair is ${attemptRepair ? "enabled" : "disabled"}`, async () => {
+                    const validator = validatorFor(schema, typeName);
+                    let modelCalls = 0;
+                    const translator = createJsonTranslator({
+                        async complete() {
+                            modelCalls++;
+                            return { success: true as const, data: "{}" };
+                        }
+                    }, validator);
+                    translator.attemptRepair = attemptRepair;
+
+                    try {
+                        const result = await translator.translate("test request");
+                        assert.equal(modelCalls, 0);
+                        assert.equal(result.success, false);
+                        assert.match(result.message, /schema validation failed before model request/i);
+                        assert.match(result.message, diagnostic);
+                    } finally {
+                        validator.close();
+                    }
+                });
+            }
+        }
+
+        it("does not conflict with a global interface named like the probe", () => {
+            const validator = validatorFor(
+                "declare global { interface __TypeChatSchemaTarget { value: string; } }\nexport interface Event { value: string; }",
+                "Event"
+            );
+            try {
+                assert.ok(validator[typeChatSchemaValidation]().success);
+                assert.ok(validator.validate({ value: "ok" }).success);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("accepts a valid schema with required properties and caches the result", () => {
+            const validator = validatorFor(
+                "export interface Event { required: string; }",
+                "Event"
+            );
+            try {
+                const firstResult = validator[typeChatSchemaValidation]();
+                assert.ok(firstResult.success, "schema validation must not require a JSON instance");
+                assert.strictEqual(validator[typeChatSchemaValidation](), firstResult);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("keeps response repair for a valid schema", async () => {
+            const validator = validatorFor(smallSchema, "Point");
+            let modelCalls = 0;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return {
+                        success: true as const,
+                        data: modelCalls === 1
+                            ? '{"x":"not-a-number","y":2}'
+                            : '{"x":1,"y":2}'
+                    };
+                }
+            }, validator);
+
+            try {
+                const result = await translator.translate("point");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { x: 1, y: 2 });
+                assert.equal(modelCalls, 2);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("does not let a previous invalid instance poison schema preflight", async () => {
+            const validator = validatorFor(smallSchema, "Point");
+            let modelCalls = 0;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return { success: true as const, data: '{"x":1,"y":2}' };
+                }
+            }, validator);
+
+            try {
+                assert.equal(validator.validate({ x: 1, y: "invalid" }).success, false);
+                const result = await translator.translate("point");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { x: 1, y: 2 });
+                assert.equal(modelCalls, 1);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("preserves legacy validator contracts and ignores validateSchema name collisions", async () => {
+            type Point = { x: number };
+            const backing = validatorFor<Point>("export interface Point { x: number; }", "Point");
+            let schemaValidationCalls = 0;
+            let modelCalls = 0;
+
+            const legacyTypeScriptValidator: TypeScriptJsonValidator<Point> = {
+                getSchemaText: backing.getSchemaText,
+                getTypeName: backing.getTypeName,
+                createModuleTextFromJson: backing.createModuleTextFromJson,
+                validate: backing.validate,
+                close: backing.close
+            };
+            const legacyCustomValidator = {
+                getSchemaText: legacyTypeScriptValidator.getSchemaText,
+                getTypeName: legacyTypeScriptValidator.getTypeName,
+                validate: legacyTypeScriptValidator.validate,
+                validateSchema: () => {
+                    schemaValidationCalls++;
+                    return true;
+                }
+            };
+            const validator: TypeChatJsonValidator<Point> = legacyCustomValidator;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return { success: true as const, data: '{"x":1}' };
+                }
+            }, validator);
+
+            try {
+                const result = await translator.translate("point");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { x: 1 });
+                assert.equal(modelCalls, 1);
+                assert.equal(schemaValidationCalls, 0);
+            } finally {
+                legacyTypeScriptValidator.close();
+            }
+        });
     });
 
     describe("valid objects", () => {
