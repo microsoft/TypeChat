@@ -1,5 +1,8 @@
 import { Result, success, error, withResponseMetadata, TypeChatResponseMetadata, Error as TypeChatError } from "./result.js";
 import { TypeChatLanguageModel, PromptSection, PromptContent } from "./model.js";
+import { typeChatSchemaValidation } from "./schemaValidation.js";
+
+export { typeChatSchemaValidation } from "./schemaValidation.js";
 
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
@@ -87,11 +90,6 @@ export interface TypeChatJsonValidator<T extends object> {
      */
     validate(jsonObject: object): Result<T>;
 }
-
-/**
- * Optional capability for validators that can check schema configuration without an instance.
- */
-export const typeChatSchemaValidation: unique symbol = Symbol.for("typechat.schemaValidation");
 
 export interface TypeChatJsonValidatorWithSchemaValidation<T extends object> extends TypeChatJsonValidator<T> {
     [typeChatSchemaValidation](): Result<void>;

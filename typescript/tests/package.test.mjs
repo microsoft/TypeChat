@@ -261,12 +261,13 @@ describe("published package", () => {
         test(`resolves format-specific declarations using ${module}`, () => {
             const source = `
                 import {
-                    createJsonTranslator, success, type Result, type Success,
-                    type TypeChatLanguageModel, type TypeChatJsonTranslator
+                    createJsonTranslator, success, typeChatSchemaValidation, type Result, type Success,
+                    type TypeChatLanguageModel, type TypeChatJsonTranslator,
+                    type TypeChatJsonValidatorWithSchemaValidation
                 } from "typechat";
                 import {
                     createTypeScriptJsonValidator, evaluateJsonProgram,
-                    type TypeScriptJsonValidator, type Program
+                    type TypeScriptJsonValidator, type TypeScriptJsonValidatorWithSchemaValidation, type Program
                 } from "typechat/ts";
                 import { createZodJsonValidator } from "typechat/zod";
                 import { processRequests } from "typechat/interactive";
@@ -308,10 +309,45 @@ describe("published package", () => {
                 // @ts-expect-error Default imports must preserve callback types.
                 interactive.processRequests("> ", undefined, () => 1);
             `;
+            const capabilitySource = `
+                import type { TypeChatJsonValidatorWithSchemaValidation } from "typechat";
+                import { createTypeScriptJsonValidator } from "typechat/ts";
+                export { typeChatSchemaValidation } from "typechat";
+                export const validator = createTypeScriptJsonValidator<{ value: string }>(
+                    "export interface Value { value: string; }", "Value"
+                );
+                export const capability: TypeChatJsonValidatorWithSchemaValidation<{ value: string }> = validator;
+            `;
+            const mixedSource = `
+                const sharedSymbol: typeof typeChatSchemaValidation = other.typeChatSchemaValidation;
+                const mixedValidator: TypeScriptJsonValidatorWithSchemaValidation<Value> = other.validator;
+                const mixedCapability: TypeChatJsonValidatorWithSchemaValidation<Value> = other.capability;
+                const validatorResult: Result<void> = other.validator[typeChatSchemaValidation]();
+                const capabilityResult: Result<void> = other.capability[typeChatSchemaValidation]();
+                // @ts-expect-error Mixed-format capabilities must preserve their instance type.
+                const invalidCapability: TypeChatJsonValidatorWithSchemaValidation<{ value: number }> = other.capability;
+                // @ts-expect-error Schema validation does not return a validated instance.
+                const invalidResult: Result<Value> = other.validator[typeChatSchemaValidation]();
+                const unrelatedSymbol = Symbol("unrelated");
+                // @ts-expect-error Only the capability symbol identifies schema validation.
+                other.validator[unrelatedSymbol]();
+            `;
             for (const extension of ["cts", "mts"]) {
+                writeFileSync(join(withPeers, `capability.${extension}`), capabilitySource);
+                const mixedFormatSource = extension === "mts"
+                    ? `
+                        import * as other from "./capability.cjs";
+                        ${mixedSource}
+                    `
+                    : `
+                        async function checkEsmCapability() {
+                            const other = await import("./capability.mjs");
+                            ${mixedSource}
+                        }
+                    `;
                 writeFileSync(
                     join(withPeers, `consumer.${extension}`),
-                    extension === "mts" ? source + defaultImportSource : source
+                    source + (extension === "mts" ? defaultImportSource : "") + mixedFormatSource
                 );
             }
             writeFileSync(join(withPeers, "tsconfig.json"), JSON.stringify({
