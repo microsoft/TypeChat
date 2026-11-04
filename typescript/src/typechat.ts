@@ -91,7 +91,7 @@ export interface TypeChatJsonValidator<T extends object> {
 /**
  * Optional capability for validators that can check schema configuration without an instance.
  */
-export const typeChatSchemaValidation: unique symbol = Symbol("TypeChat schema validation");
+export const typeChatSchemaValidation: unique symbol = Symbol.for("typechat.schemaValidation");
 
 export interface TypeChatJsonValidatorWithSchemaValidation<T extends object> extends TypeChatJsonValidator<T> {
     [typeChatSchemaValidation](): Result<void>;

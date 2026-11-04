@@ -88,6 +88,8 @@ validation and repair flow. Zod and custom validators without schema-only checks
 their existing instance-validation behavior. The `TypeChatJsonValidator` contract is
 unchanged; custom validators can opt in through the exported `typeChatSchemaValidation`
 symbol, so existing string-named `validateSchema` methods are not invoked as preflight.
+The symbol is shared across the ESM and CommonJS builds, so schema preflight also runs
+when a validator and translator come from different module formats.
 
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 

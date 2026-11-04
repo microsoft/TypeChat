@@ -215,21 +215,61 @@ describe("published package", () => {
                 })().catch(error => { console.error(error); process.exitCode = 1; });
             `);
         });
+
+        test(`${format} translators preflight validators from the other module format`, () => {
+            runConsumer(withPeers, `mixed-${format}.mjs`, `
+                import assert from "node:assert/strict";
+                import { createRequire } from "node:module";
+                const require = createRequire(import.meta.url);
+                const core = ${format === "esm" ? 'await import("typechat")' : 'require("typechat")'};
+                const { createTypeScriptJsonValidator } = ${format === "esm" ? 'require("typechat/ts")' : 'await import("typechat/ts")'};
+                let modelCalls = 0;
+                const model = {
+                    complete: async () => {
+                        modelCalls++;
+                        return core.success(JSON.stringify({ value: modelCalls === 1 ? 1 : "ok" }));
+                    }
+                };
+                const invalidValidator = createTypeScriptJsonValidator(
+                    "export interface Value { value: MissingType; }", "Value"
+                );
+                try {
+                    const translator = core.createJsonTranslator(model, invalidValidator);
+                    const result = await translator.translate("test");
+                    assert.equal(result.success, false);
+                    assert.equal(modelCalls, 0);
+                    assert.match(result.message, /^Schema validation failed before model request:/);
+                    assert.match(result.message, /Cannot find name 'MissingType'/);
+                } finally {
+                    invalidValidator.close();
+                }
+                const validValidator = createTypeScriptJsonValidator(
+                    "export interface Value { value: string; }", "Value"
+                );
+                try {
+                    const translator = core.createJsonTranslator(model, validValidator);
+                    assert.deepEqual(await translator.translate("test"), core.success({ value: "ok" }));
+                    assert.equal(modelCalls, 2);
+                } finally {
+                    validValidator.close();
+                }
+            `);
+        });
     }
 
     for (const module of ["node16", "nodenext"]) {
         test(`resolves format-specific declarations using ${module}`, () => {
             const source = `
-                import core, {
+                import {
                     createJsonTranslator, success, type Result, type Success,
                     type TypeChatLanguageModel, type TypeChatJsonTranslator
                 } from "typechat";
-                import ts, {
+                import {
                     createTypeScriptJsonValidator, evaluateJsonProgram,
                     type TypeScriptJsonValidator, type Program
                 } from "typechat/ts";
-                import adapter, { createZodJsonValidator } from "typechat/zod";
-                import interactive, { processRequests } from "typechat/interactive";
+                import { createZodJsonValidator } from "typechat/zod";
+                import { processRequests } from "typechat/interactive";
                 import { z } from "zod";
                 interface Value { value: string; }
                 const model: TypeChatLanguageModel = { complete: async () => success('{"value":"ok"}') };
@@ -243,6 +283,16 @@ describe("published package", () => {
                 const program: Program = { "@steps": [] };
                 evaluateJsonProgram(program, async () => "ok");
                 processRequests("> ", undefined, async request => { const text: string = request; });
+                // @ts-expect-error The result must preserve its data type.
+                const invalid: Success<number> = success("ok");
+                // @ts-expect-error Request callbacks must return a promise.
+                processRequests("> ", undefined, () => 1);
+            `;
+            const defaultImportSource = `
+                import core from "typechat";
+                import ts from "typechat/ts";
+                import adapter from "typechat/zod";
+                import interactive from "typechat/interactive";
                 const defaultValidator: ts.TypeScriptJsonValidator<Value> = ts.createTypeScriptJsonValidator<Value>(
                     validator.getSchemaText(), validator.getTypeName()
                 );
@@ -253,17 +303,16 @@ describe("published package", () => {
                 const defaultProgram: ts.Program = program;
                 ts.evaluateJsonProgram(defaultProgram, async () => "ok");
                 interactive.processRequests("> ", undefined, async request => { const text: string = request; });
-                // @ts-expect-error The result must preserve its data type.
-                const invalid: Success<number> = success("ok");
-                // @ts-expect-error Request callbacks must return a promise.
-                processRequests("> ", undefined, () => 1);
                 // @ts-expect-error Default imports must preserve their result types.
                 const invalidDefault: core.Success<number> = core.success("ok");
                 // @ts-expect-error Default imports must preserve callback types.
                 interactive.processRequests("> ", undefined, () => 1);
             `;
             for (const extension of ["cts", "mts"]) {
-                writeFileSync(join(withPeers, `consumer.${extension}`), source);
+                writeFileSync(
+                    join(withPeers, `consumer.${extension}`),
+                    extension === "mts" ? source + defaultImportSource : source
+                );
             }
             writeFileSync(join(withPeers, "tsconfig.json"), JSON.stringify({
                 compilerOptions: {
