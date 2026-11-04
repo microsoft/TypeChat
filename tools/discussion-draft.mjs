@@ -1392,7 +1392,7 @@ export async function identifyStatus(github, context, env, clock = () => new Dat
     requireValue(Date.parse(comment.createdAt) <= created, "The source run predates this owner command.");
     const prefix = /^\/typechat (draft|reply|propose)/.exec(comment.body);
     if (!prefix) {
-        return { eligible: false, reason: "The source comment is not a discussion draft/reply request." };
+        return { eligible: false, reason: "The source comment is not a discussion draft/reply/propose request." };
     }
     const valid = comment.body.length <= 2000 && /^\/typechat (draft|reply|propose)\s*$/.test(comment.body);
     const request = {
