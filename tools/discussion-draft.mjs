@@ -1010,7 +1010,7 @@ function validateSealedDraft(bundle, evidence) {
     exactKeys(bundle.request, ["commentId", "commandBody", "commandCreatedAt"], "Missing original draft request.");
     identifier(bundle.request.commentId, "Missing original request ID.");
     requireValue(["draft", "reply", "propose"].includes(parseCommand(bundle.request.commandBody).action),
-        "The source request is not a draft or reply command.");
+        "The source request is not a draft, reply, or propose command.");
     timestamp(bundle.request.commandCreatedAt, "Missing original request time.");
     const createdAt = Date.parse(bundle.createdAt);
     // GitHub artifact creation timestamps have only whole-second precision.
