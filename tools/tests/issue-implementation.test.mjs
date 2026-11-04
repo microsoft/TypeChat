@@ -233,6 +233,83 @@ test("friendly build commands bind one explicitly accepted public proposal witho
     assert.equal(f.state.writes.length, 0);
 });
 
+for (const [name, reformat] of [
+    ["extra blank lines", body => body.replace(/\n\n/g, "\n\n\n")
+        .replace("### Goal\n", "### Goal\n\n").replace("### Scope\n", "### Scope\n\n")],
+    ["alternative list markers", body => body.replace(/^- /gm, "* ")],
+    ["wrapped goal and criteria", body => body.replace("Preserve correct values\\.", "Preserve correct\nvalues\\.")
+        .replace("- A deterministic test verifies the value\\.", "- A deterministic test\n  verifies the value\\.")],
+    ["heading presentation", body => body.replace("### Goal\n", "#### goal ###\n")
+        .replace("### Scope\n", "#### SCOPE ###\n")],
+    ["non-term fenced examples", body => body.replace("### Goal\n",
+        "```html\n<!-- literal example inside code\n```\n\n### Goal\n")],
+    ["reordered sections", body => body.replace(
+        "### Goal\nPreserve correct values\\.\n\n### Scope\n- Fix the agreed value\\.",
+        "### Scope\n- Fix the agreed value\\.\n\n### Goal\nPreserve correct values\\.")],
+]) {
+    test(`public term comparison tolerates ${name} without changing accepted meaning`, async () => {
+        const f = versionedFixture();
+        const proposal = f.state.comments.find(comment => comment.id === "IC_39");
+        const originalBody = proposal.body;
+        proposal.body = reformat(originalBody);
+        assert.notEqual(proposal.body, originalBody, "The fixture must exercise a presentation change");
+        const accepted = f.state.comments.find(comment => comment.id === "IC_41");
+        const expected = parseAcceptedWork(accepted.body, target).terms;
+        const plan = await prepareBuild(f.github, f.context, f.env, clock);
+        assert.deepEqual(plan.acceptance.terms, expected);
+        assert.equal(f.state.writes.length, 0);
+    });
+}
+
+test("semantic term comparison preserves multi-item lists across blank lines", async () => {
+    const f = versionedFixture();
+    const accepted = f.state.comments.find(comment => comment.id === "IC_41");
+    const originalBody = accepted.body;
+    const parsed = parseAcceptedWork(originalBody, target);
+    parsed.terms.scope.push("Preserve existing behavior.");
+    accepted.body = renderAcceptance({
+        target, producer: { runId: 50, attempt: 1, commit: POLICY }, marker: parsed.proposalMarker, proposalVersion: 2,
+        draft: { proposal: { goal: parsed.terms.goal, scope: parsed.terms.scope, nonGoals: parsed.terms.nonGoals },
+            suggestedCriteria: parsed.terms.criteria, pullRequests: [] },
+    });
+    const proposal = f.state.comments.find(comment => comment.id === "IC_39");
+    proposal.body = proposal.body.replace("### Scope\n- Fix the agreed value\\.",
+        "### Scope\n\n- Fix the agreed value\\.\n\n- Preserve existing behavior\\.")
+        .replace(digest(originalBody), digest(accepted.body));
+    const plan = await prepareBuild(f.github, f.context, f.env, clock);
+    assert.deepEqual(plan.acceptance.terms, parsed.terms);
+});
+
+for (const [name, change] of [
+    ["scope", body => body.replace("Fix the agreed value\\.", "Broaden the agreed change\\.")],
+    ["non-goals", body => body.replace("No other behavior changes\\.", "Remove compatibility guarantees\\.")],
+    ["criteria", body => body.replace("A deterministic test verifies the value\\.", "No regression test is required\\.")],
+    ["missing scope", body => body.replace("### Scope\n- Fix the agreed value\\.\n\n", "")],
+    ["duplicate goal", body => body.replace("### Scope\n", "### Goal\nPreserve correct values\\.\n\n### Scope\n")],
+    ["extra scope item", body => body.replace("### Scope\n- Fix the agreed value\\.",
+        "### Scope\n- Fix the agreed value\\.\n- Include unrelated work\\.")],
+    ["fenced-only goal", body => body.replace("### Goal\nPreserve correct values\\.",
+        "```text\n### Goal\nPreserve correct values\\.\n```")],
+    ["commented-only goal", body => body.replace("### Goal\nPreserve correct values\\.",
+        "<!--\n### Goal\nPreserve correct values\\.\n-->")],
+]) {
+    test(`semantic term comparison rejects ${name}`, async () => {
+        const f = versionedFixture();
+        const proposal = f.state.comments.find(comment => comment.id === "IC_39");
+        const originalBody = proposal.body;
+        proposal.body = change(originalBody);
+        assert.notEqual(proposal.body, originalBody, "The fixture must exercise changed or ambiguous terms");
+        await assert.rejects(prepareBuild(f.github, f.context, f.env, clock));
+        assert.equal(f.state.writes.length, 0);
+    });
+}
+
+test("semantic comparison does not relax canonical accepted-record validation", () => {
+    const f = versionedFixture();
+    const accepted = f.state.comments.find(comment => comment.id === "IC_41").body;
+    assert.throws(() => parseAcceptedWork(accepted.replace(/\n\n/g, "\n\n\n"), target));
+});
+
 test("a checked friendly-version build creates a PR from exactly the accepted agreement", async () => {
     const f = await preparedFixture([], versionedFixture);
     const result = await f.publish();

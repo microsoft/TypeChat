@@ -490,19 +490,87 @@ function publicProposals(thread) {
     return proposals;
 }
 
-export function findPublicProposal(thread, version, acceptedBody) {
+function visibleProposalTerms(body) {
+    const names = new Map([["goal", "goal"], ["scope", "scope"], ["non-goals", "nonGoals"],
+        ["acceptance criteria", "criteria"], ["open questions", "questions"]]);
+    const sections = new Map();
+    let current;
+    let fence = null;
+    let comment = false;
+    for (const line of lf(body).split("\n")) {
+        if (comment) {
+            comment = !line.includes("-->");
+            continue;
+        }
+        const fenced = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+        if (fence) {
+            if (fenced && fenced[1][0] === fence[0] && fenced[1].length >= fence.length && !fenced[2].trim()) fence = null;
+            continue;
+        }
+        if (/^ {0,3}<!--/.test(line)) {
+            comment = !line.includes("-->");
+            continue;
+        }
+        if (fenced) {
+            fence = fenced[1];
+            continue;
+        }
+        const heading = /^ {0,3}#{1,6}[ \t]+(.+?)(?:[ \t]+#+)?[ \t]*$/.exec(line);
+        if (heading) {
+            current = names.get(heading[1].trim().replace(/[ \t]+/g, " ").toLowerCase());
+            if (current) {
+                requireValue(!sections.has(current), `Duplicate public proposal section: ${current}.`);
+                sections.set(current, []);
+            }
+        } else if (current) {
+            sections.get(current).push(line);
+        }
+    }
+    requireValue(!sections.has("questions"), "The public proposal still has unresolved questions.");
+    function content(field) {
+        requireValue(sections.has(field), `The public proposal is missing ${field}.`);
+        return sections.get(field);
+    }
+    const goal = [];
+    for (const line of content("goal")) {
+        if (line.trim()) goal.push(line.trim());
+        else if (goal.length) break;
+    }
+    function list(field) {
+        const items = [];
+        let separated = true;
+        for (const line of content(field)) {
+            if (!line.trim()) {
+                separated = true;
+                continue;
+            }
+            const item = /^ {0,3}[-*+][ \t]+(.+)$/.exec(line);
+            if (item) {
+                requireValue(items.length < 12, `Too many public proposal ${field} items.`);
+                items.push(item[1].trim());
+                separated = false;
+            } else if (items.length && !separated && /^[ \t]{2,}\S/.test(line)) {
+                items[items.length - 1] += " " + line.trim();
+            } else {
+                requireValue(separated || items.length === 0, `Malformed public proposal ${field} item.`);
+                break;
+            }
+        }
+        requireValue(items.length > 0, `The public proposal needs nonempty ${field}.`);
+        return textList(items.map(decodeMarkdown), `proposal.${field}`, 12);
+    }
+    return { goal: plain(decodeMarkdown(goal.join(" ")), "proposal.goal", 2000),
+        scope: list("scope"), nonGoals: list("nonGoals"), criteria: list("criteria") };
+}
+
+export function findPublicProposal(thread, version, acceptedTerms) {
     integer(version, "Invalid proposal version.");
     const proposal = publicProposals(thread).find(value => value.proposalVersion === version);
     requireValue(proposal, `Public proposal P${version} is unavailable. Request /typechat propose.`);
-    if (acceptedBody !== undefined) {
-        const sections = proposal.comment.body.split("\n\n");
-        for (const section of acceptedBody.split("\n\n").slice(2, 6)) {
-            const heading = section.split("\n")[0] + "\n";
-            requireValue(sections.filter(value => value.startsWith(heading)).length === 1 && sections.includes(section),
-                "The accepted terms differ from the visible public proposal.");
-        }
-        requireValue(!sections.some(section => section.startsWith("### Open questions\n")),
-            "The public proposal still has unresolved questions.");
+    if (acceptedTerms !== undefined) {
+        exactKeys(acceptedTerms, ["goal", "scope", "nonGoals", "criteria"], "Malformed accepted semantic terms.");
+        requireValue(equal(visibleProposalTerms(proposal.comment.body), acceptedTerms),
+            "The accepted terms differ from the visible public proposal.");
     }
     return proposal;
 }
@@ -636,6 +704,12 @@ function markdown(text) {
     return text.replace(/&/g, "&amp;")
         .replace(/[<>]/g, character => character === "<" ? "&lt;" : "&gt;")
         .replace(/[\\`*_{}\[\]()#+\-.!|~@]/g, "\\$&");
+}
+
+export function decodeMarkdown(value) {
+    string(value, "Invalid Markdown term.", MAX_COMMENT_BYTES);
+    return value.replace(/\\([\\`*_{}\[\]()#+\-.!|~@])/g, "$1")
+        .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
 
 export function renderDraft(bundle) {

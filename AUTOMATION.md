@@ -714,7 +714,10 @@ a new round rather than risking duplicate version numbers. Keep durable intents
 and inspect uncertain outcomes; never delete them to retry.
 
 The exact acceptance remains a separate public record. The selected version's
-visible goal, scope, non-goals, and criteria must match that record. Build resolves
+visible goal, scope, non-goals, and criteria must match that record. This check
+compares decoded semantic fields by section name, not Markdown section positions
+or presentation; canonical accepted-record, hash, and provenance checks stay strict.
+Build resolves
 only that version's unambiguous owner-approved record, then retains all existing
 activation, reservation, budget, source-pin, competing-contribution, isolated-test,
 scan, and publication checks. It does not rerun or guess acceptance. Material

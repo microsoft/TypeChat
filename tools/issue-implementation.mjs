@@ -9,7 +9,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
     ACTIONS_BOT_ID, CONTROL_PATHS, MAX_COMMENT_BYTES, MAX_CONTEXT_BYTES, OWNER, REPOSITORY,
-    digest, findPublicProposal, parseCommand, priorIntent, readControls, readJson, readThread, renderAcceptance, snapshotHash, stageDetectionContent, writeJson,
+    decodeMarkdown, digest, findPublicProposal, parseCommand, priorIntent, readControls, readJson, readThread, renderAcceptance, snapshotHash, stageDetectionContent, writeJson,
 } from "./discussion-draft.mjs";
 import { IMPLEMENTATION_APP, IMPLEMENTATION_PERMISSIONS } from "./implementation-app.mjs";
 
@@ -80,11 +80,6 @@ export function parseBuildCommand(body) {
     const match = /^\/typechat build ([1-9][0-9]*):([a-fA-F0-9]{64})\s*$/.exec(body);
     requireValue(match, "Use /typechat build P<number> or /typechat build <acceptance-comment-id>:<sha256> without inline notes.");
     return { acceptanceId: integer(Number(match[1]), "Invalid acceptance comment identifier."), bodyHash: match[2].toLowerCase() };
-}
-
-function decodeMarkdown(value) {
-    return value.replace(/\\([\\`*_{}\[\]()#+\-.!|~@])/g, "$1")
-        .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
 }
 
 export function parseAcceptedWork(body, target) {
@@ -205,7 +200,7 @@ async function acceptanceRecord(github, thread, acceptanceId, expectedHash, curr
     const bodyHash = digest(comment.body);
     requireValue(expectedHash === undefined || bodyHash === expectedHash, "The accepted-work hash does not match.");
     const parsed = parseAcceptedWork(comment.body, thread.target);
-    const proposal = parsed.proposalVersion ? findPublicProposal(thread, parsed.proposalVersion, comment.body) : null;
+    const proposal = parsed.proposalVersion ? findPublicProposal(thread, parsed.proposalVersion, parsed.terms) : null;
     requireValue(!proposal || proposal.bodyHash === bodyHash && proposal.marker === parsed.proposalMarker,
         "The accepted terms do not match the immutable public proposal.");
     const approvals = thread.comments.filter(value => value.author?.type === "User" && value.author.login === OWNER.login &&
