@@ -89,6 +89,15 @@ export interface TypeChatJsonValidator<T extends object> {
 }
 
 /**
+ * Optional capability for validators that can check schema configuration without an instance.
+ */
+export const typeChatSchemaValidation: unique symbol = Symbol("TypeChat schema validation");
+
+export interface TypeChatJsonValidatorWithSchemaValidation<T extends object> extends TypeChatJsonValidator<T> {
+    [typeChatSchemaValidation](): Result<void>;
+}
+
+/**
  * Creates an object that can translate natural language requests into JSON objects of the given type.
  * The specified type argument `T` must be the same type as `typeName` in the given `schema`. The function
  * creates a `TypeChatJsonValidator<T>` and stores it in the `validator` property of the returned instance.
@@ -125,6 +134,12 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
     }
 
     async function translate(request: string, promptPreamble?: string | PromptSection[]): Promise<Result<T>> {
+        const schemaValidator = validator as TypeChatJsonValidator<T> &
+            Partial<Pick<TypeChatJsonValidatorWithSchemaValidation<T>, typeof typeChatSchemaValidation>>;
+        const preflight = schemaValidator[typeChatSchemaValidation]?.();
+        if (preflight && !preflight.success) {
+            return error(`Schema validation failed before model request: ${preflight.message}`);
+        }
         const preamble: PromptSection[] = typeof promptPreamble === "string" ? [{ role: "user", content: promptPreamble }] : promptPreamble ?? [];
         let prompt: PromptSection[] = [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }];
         let attemptRepair = typeChat.attemptRepair;

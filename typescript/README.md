@@ -79,6 +79,16 @@ for syntax errors and unresolved type references.
 Node.js CI runs this suite across its Node.js matrix after a clean dependency
 installation and workspace build.
 
+The TypeScript-backed JSON validator checks its schema and target export before a
+translator makes its first model request. Schema configuration errors are returned
+without asking the model to repair them. This preflight uses the same minimal
+TypeScript library as response validation and is cached for the validator's lifetime.
+Once a schema passes preflight, invalid model responses continue through the normal
+validation and repair flow. Zod and custom validators without schema-only checks keep
+their existing instance-validation behavior. The `TypeChatJsonValidator` contract is
+unchanged; custom validators can opt in through the exported `typeChatSchemaValidation`
+symbol, so existing string-named `validateSchema` methods are not invoked as preflight.
+
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.

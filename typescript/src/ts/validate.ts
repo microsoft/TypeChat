@@ -4,7 +4,7 @@ import { createVirtualFileSystem } from 'typescript/unstable/fs';
 import type { SourceFile } from 'typescript/unstable/ast';
 import { isTypeReferenceNode, isVariableStatement } from 'typescript/unstable/ast/is';
 import { Result, success, error } from '../result.js';
-import { TypeChatJsonValidator } from "../typechat.js";
+import { typeChatSchemaValidation, type TypeChatJsonValidator } from "../typechat.js";
 
 const libText = `interface Array<T> { length: number, [n: number]: T }
 interface Object { toString(): string }
@@ -38,6 +38,7 @@ const configFileName = "/tsconfig.json";
 const libFileName = "/lib.d.ts";
 const schemaFileName = "/schema.ts";
 const jsonFileName = "/json.ts";
+const schemaValidationFileName = "/schema-validation.ts";
 
 /**
  * Represents an object that can validate JSON strings according to a given TypeScript schema.
@@ -57,14 +58,23 @@ export interface TypeScriptJsonValidator<T extends object> extends TypeChatJsonV
     close(): void;
 }
 
+export interface TypeScriptJsonValidatorWithSchemaValidation<T extends object> extends TypeScriptJsonValidator<T> {
+    [typeChatSchemaValidation](): Result<void>;
+}
+
 /**
  * Returns a JSON validator for a given TypeScript schema. Validation is performed by an in-memory instance of
  * the TypeScript compiler. The specified type argument `T` must be the same type as `typeName` in the given `schema`.
  * @param schema A string containing the TypeScript source code for the JSON schema.
  * @param typeName The name of the JSON target type in the schema.
- * @returns A `TypeChatJsonValidator<T>` instance.
+ * @param schemaValidationTypeName The exported schema type to check before translation. Defaults to `typeName`.
+ * @returns A `TypeScriptJsonValidatorWithSchemaValidation<T>` instance.
  */
-export function createTypeScriptJsonValidator<T extends object = object>(schema: string, typeName: string): TypeScriptJsonValidator<T> {
+export function createTypeScriptJsonValidator<T extends object = object>(
+    schema: string,
+    typeName: string,
+    schemaValidationTypeName: string = typeName
+): TypeScriptJsonValidatorWithSchemaValidation<T> {
     const fileSystem = createVirtualFileSystem({
         [configFileName]: JSON.stringify({
             compilerOptions: {
@@ -73,26 +83,78 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
                 noLib: true,
                 types: []
             },
-            files: [libFileName, schemaFileName, jsonFileName]
+            files: [libFileName, schemaFileName, jsonFileName, schemaValidationFileName]
         }),
         [libFileName]: libText,
         [schemaFileName]: schema,
-        [jsonFileName]: ""
+        [jsonFileName]: "",
+        [schemaValidationFileName]: ""
     });
     const api = new API({ fs: fileSystem, cwd: "/" });
     api.updateSnapshot({ openProjects: [configFileName] });
     if (!fileSystem.writeFile) {
         throw new Error("The TypeScript virtual file system doesn't support writing files.");
     }
-    const writeJsonFile = fileSystem.writeFile;
-    const validator: TypeScriptJsonValidator<T> = {
+    const writeFile = fileSystem.writeFile;
+    let schemaValidationResult: Result<void> | undefined;
+    const validator: TypeScriptJsonValidatorWithSchemaValidation<T> = {
         getSchemaText: () => schema,
         getTypeName: () => typeName,
+        [typeChatSchemaValidation]: validateSchema,
         createModuleTextFromJson,
         validate,
         close: () => api.close()
     };
     return validator;
+
+    function validateSchema(): Result<void> {
+        if (schemaValidationResult) {
+            return schemaValidationResult;
+        }
+
+        writeFile(
+            schemaValidationFileName,
+            `export type __TypeChatSchemaTarget = import('./schema').${schemaValidationTypeName};\n`
+        );
+        const snapshot = api.updateSnapshot({
+            fileChanges: { changed: [schemaValidationFileName] }
+        });
+        const project = snapshot.getProject(configFileName);
+        if (!project) {
+            schemaValidationResult = error(
+                `The TypeScript schema project '${configFileName}' couldn't be loaded.`
+            );
+            return schemaValidationResult;
+        }
+
+        const program = project.program;
+        const schemaFiles = [schemaFileName, schemaValidationFileName]
+            .map(fileName => program.getSourceFile(fileName))
+            .filter((sourceFile): sourceFile is SourceFile => sourceFile !== undefined);
+        if (schemaFiles.length !== 2) {
+            schemaValidationResult = error("The TypeScript schema preflight files couldn't be loaded.");
+            return schemaValidationResult;
+        }
+        const diagnostics = schemaFiles.flatMap(sourceFile => [
+            ...program.getSyntacticDiagnostics(sourceFile.fileName),
+            ...program.getSemanticDiagnostics(sourceFile.fileName)
+        ]);
+        schemaValidationResult = diagnostics.length
+            ? error(
+                diagnostics
+                    .map(diagnostic =>
+                        formatSchemaDiagnostic(
+                            diagnostic,
+                            diagnostic.fileName === undefined
+                                ? undefined
+                                : program.getSourceFile(diagnostic.fileName)
+                        )
+                    )
+                    .join("\n")
+            )
+            : success(undefined);
+        return schemaValidationResult;
+    }
 
     function validate(jsonObject: object): Result<T> {
         const moduleResult = validator.createModuleTextFromJson(jsonObject);
@@ -104,7 +166,7 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
                 data: jsonObject
             };
         }
-        writeJsonFile(jsonFileName, moduleResult.data);
+        writeFile(jsonFileName, moduleResult.data);
         const snapshot = api.updateSnapshot({ fileChanges: { changed: [jsonFileName] } });
         const project = snapshot.getProject(configFileName);
         if (!project) {
@@ -144,6 +206,25 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
                 appendMessages(child, indent + 1);
             }
         }
+    }
+
+    function formatSchemaDiagnostic(
+        diagnostic: Diagnostic,
+        sourceFile: SourceFile | undefined
+    ): string {
+        const message = flattenDiagnosticMessageText(diagnostic, "\n");
+        if (!sourceFile || diagnostic.pos < 0) {
+            return message;
+        }
+        const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+            diagnostic.pos
+        );
+        const fileName = sourceFile.fileName === schemaFileName
+            ? "schema.ts"
+            : sourceFile.fileName === schemaValidationFileName
+                ? "schema validation"
+                : sourceFile.fileName;
+        return `${fileName}(${line + 1},${character + 1}): ${message}`;
     }
 
     /**
