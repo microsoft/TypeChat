@@ -1,7 +1,7 @@
 {
   "name": "typechat",
   "author": "Microsoft",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "license": "MIT",
   "description": "TypeChat is an experimental library that makes it easy to build natural language interfaces using types.",
   "keywords": [
@@ -20,7 +20,9 @@
     "url": "https://github.com/microsoft/TypeChat/issues"
   },
   "scripts": {
-    "build": "tsc -p src",
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "tsc -p src",
+    "build:esm": "tsc -p src/tsconfig.esm.json && node -e \"const fs = require('fs'); fs.writeFileSync('dist/esm/package.json', JSON.stringify({ type: 'module' })); fs.copyFileSync('dist/esm/schemaValidation.d.ts', 'dist/schemaValidation.d.ts'); fs.writeFileSync('dist/esm/schemaValidation.d.ts', 'export { typeChatSchemaValidation } from \\'../schemaValidation.js\\';\\n')\"",
     "test": "npm run build && tsc -p test && node --test \"out/**/*.test.js\" \"tests/**/*.test.mjs\"",
     "build-all": "npm run build && npm run build --workspaces",
     "prepare": "npm run build-all",
@@ -29,13 +31,55 @@
     "publish-package": "npm publish",
     "publish-package:dry-run": "npm publish --dry-run"
   },
+  "type": "commonjs",
   "main": "./dist/index.js",
+  "module": "./dist/esm/index.mjs",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
-    "./ts": "./dist/ts/index.js",
-    "./zod": "./dist/zod/index.js",
-    "./interactive": "./dist/interactive/index.js"
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.mts",
+        "default": "./dist/esm/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "default": "./dist/index.js"
+    },
+    "./ts": {
+      "import": {
+        "types": "./dist/esm/ts/index.d.mts",
+        "default": "./dist/esm/ts/index.mjs"
+      },
+      "require": {
+        "types": "./dist/ts/index.d.ts",
+        "default": "./dist/ts/index.js"
+      },
+      "default": "./dist/ts/index.js"
+    },
+    "./zod": {
+      "import": {
+        "types": "./dist/esm/zod/index.d.mts",
+        "default": "./dist/esm/zod/index.mjs"
+      },
+      "require": {
+        "types": "./dist/zod/index.d.ts",
+        "default": "./dist/zod/index.js"
+      },
+      "default": "./dist/zod/index.js"
+    },
+    "./interactive": {
+      "import": {
+        "types": "./dist/esm/interactive/index.d.mts",
+        "default": "./dist/esm/interactive/index.mjs"
+      },
+      "require": {
+        "types": "./dist/interactive/index.d.ts",
+        "default": "./dist/interactive/index.js"
+      },
+      "default": "./dist/interactive/index.js"
+    }
   },
   "engines": {
     "node": ">=24.22.1"

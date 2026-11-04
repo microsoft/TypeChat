@@ -27,6 +27,30 @@ Install TypeChat:
 npm install typechat
 ```
 
+TypeChat supports both native ECMAScript modules (ESM) and CommonJS. Use `import`
+in an ESM application:
+
+```js
+import { createJsonTranslator } from "typechat";
+import { createTypeScriptJsonValidator } from "typechat/ts";
+```
+
+Or use `require` in a CommonJS application:
+
+```js
+const { createJsonTranslator } = require("typechat");
+const { createTypeScriptJsonValidator } = require("typechat/ts");
+```
+
+The `typechat`, `typechat/ts`, `typechat/zod`, and `typechat/interactive` entry points
+select the matching JavaScript build and TypeScript declarations automatically.
+Both builds target ES2021 and require Node.js 24.22.1 or newer.
+
+For compatibility with earlier CommonJS-only releases, native ESM default imports
+(`import typechat from "typechat"`) and dynamic imports' `.default` properties remain
+supported for all four entry points. Default imports also preserve the exported
+TypeScript types, such as `typechat.Result<T>`.
+
 You can also build TypeChat from source:
 
 ```sh
@@ -36,9 +60,14 @@ npm install
 npm run build
 ```
 
-Run the test suite with `npm test`. It builds the library, compiles TypeScript tests,
-and recursively discovers compiled `*.test.js` suites under `out/` and runtime
-`*.test.mjs` suites under `tests/`. Add TypeScript tests under
+The build emits CommonJS JavaScript and declarations in `dist`, and native ESM
+JavaScript and declarations in `dist/esm`.
+
+Run the test suite with `npm test`. Package tests verify named and default imports,
+both module formats, and their declaration resolution using only the files included
+in the npm package.
+The test command recursively discovers compiled `*.test.js` suites under `out/`
+and runtime `*.test.mjs` suites under `tests/`. Add TypeScript tests under
 [test/](https://github.com/microsoft/TypeChat/tree/main/typescript/test) or runtime
 tests under [tests/](https://github.com/microsoft/TypeChat/tree/main/typescript/tests);
 no manual suite-list update is needed.
@@ -59,6 +88,9 @@ validation and repair flow. Zod and custom validators without schema-only checks
 their existing instance-validation behavior. The `TypeChatJsonValidator` contract is
 unchanged; custom validators can opt in through the exported `typeChatSchemaValidation`
 symbol, so existing string-named `validateSchema` methods are not invoked as preflight.
+The symbol's runtime value and canonical declaration are shared across the ESM and
+CommonJS builds, so validators remain type-compatible and schema preflight also runs
+when a validator and translator come from different module formats.
 
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 

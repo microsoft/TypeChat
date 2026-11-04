@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "es2021",
     "lib": ["es2021"],
-    "module": "node16",
+    "module": "node20",
     "types": ["node"],
     "esModuleInterop": true,
     "outDir": "../dist",
@@ -10,5 +10,6 @@
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "declaration": true
-  }
+  },
+  "include": ["./**/*.ts"]
 }
