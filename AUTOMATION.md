@@ -1099,6 +1099,10 @@ short-lived App-access proof are frozen. An immutable spending reservation
 precedes inference. The model-start guard repeats authorization and rejects App
 preflight older than 15 minutes. A build command expires after 24 hours.
 
+The sparse coding checkout includes the root [`.gitignore`](./.gitignore).
+This keeps the collector's standard Git ignore checks offline in a partial clone,
+instead of requiring a lazy fetch from inside the sandbox.
+
 Detection is eligible only after successful preparation and successful, sole-`noop`
 agent completion. Its inference credential is released only after the trusted
 authorization and exact-patch staging step succeeds and preceding job steps

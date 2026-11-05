@@ -489,6 +489,7 @@ steps:
         /AUTOMATION.md
         /README.md
         /.nvmrc
+        /.gitignore
         /.github/copilot-instructions.md
         /typescript/
         /python/
