@@ -2,11 +2,15 @@
 // Licensed under the MIT License.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+import { pathToFileURL } from "node:url";
 import { runInNewContext } from "node:vm";
 import { parse } from "yaml";
-import { BUILD_LIMITS } from "../issue-implementation.mjs";
+import { BUILD_LIMITS, blobHash, collectCandidate } from "../issue-implementation.mjs";
 
 const workflows = new URL("../../.github/workflows/", import.meta.url);
 const markdown = fs.readFileSync(new URL("issue-implementation.md", workflows), "utf8");
@@ -25,6 +29,48 @@ test("coding is inactive by default and only an owner Issue comment can activate
     assert.ok(compiled.jobs.agent.if.includes("needs.prepare.outputs.should_build == 'true'"));
     assert.equal(source.concurrency["cancel-in-progress"], false);
     assert.equal(source.concurrency["job-discriminator"], "${{ github.run_id }}");
+});
+
+test("sparse coding checkouts collect complete candidates offline with ignore rules", t => {
+    const checkout = source.steps.find(step => step.uses?.startsWith("actions/checkout@"));
+    const compiledCheckout = compiled.jobs.agent.steps.find(step => step.uses?.startsWith("actions/checkout@"));
+    assert.equal(checkout.with["sparse-checkout-cone-mode"], false);
+    assert.equal(compiledCheckout.with["sparse-checkout"], checkout.with["sparse-checkout"]);
+
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-sparse-collector-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const origin = path.join(directory, "origin");
+    const coding = path.join(directory, "coding");
+    const git = (cwd, args, options = {}) => execFileSync("git", ["-C", cwd, ...args],
+        { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"], ...options });
+    git(directory, ["init", "--quiet", origin]);
+    git(origin, ["config", "core.autocrlf", "false"]);
+    git(origin, ["config", "uploadpack.allowFilter", "true"]);
+    fs.writeFileSync(path.join(origin, ".gitignore"), "node_modules/\n");
+    fs.mkdirSync(path.join(origin, "python"), { recursive: true });
+    const original = "value = 1\n";
+    fs.writeFileSync(path.join(origin, "python", "value.py"), original);
+    git(origin, ["add", "--all"]);
+    git(origin, ["-c", "user.name=TypeChat Test", "-c", "user.email=typechat-test@example.invalid", "-c", "commit.gpgsign=false",
+        "commit", "--quiet", "-m", "Sparse checkout fixture", "-m", "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"]);
+    const prepared = { source: { commit: git(origin, ["rev-parse", "HEAD"]).trim() } };
+    git(directory, ["clone", "--quiet", "--no-checkout", "--filter=blob:none", pathToFileURL(origin).href, coding]);
+    assert.equal(git(coding, ["config", "--get", "remote.origin.promisor"]).trim(), "true");
+    git(coding, ["config", "core.autocrlf", "false"]);
+    git(coding, ["sparse-checkout", "set", "--no-cone", "--stdin"], { input: checkout.with["sparse-checkout"] });
+    git(coding, ["checkout", "--quiet", prepared.source.commit]);
+    git(coding, ["remote", "set-url", "origin", pathToFileURL(path.join(directory, "unavailable-origin")).href]);
+    fs.writeFileSync(path.join(coding, "python", "value.py"), "value = 2\n");
+    fs.writeFileSync(path.join(coding, "python", "added.py"), "added = True\n");
+    fs.mkdirSync(path.join(coding, "python", "node_modules"));
+    fs.writeFileSync(path.join(coding, "python", "node_modules", "ignored.py"), "not part of the candidate\n");
+
+    const candidate = collectCandidate(prepared, coding, "Collect the complete offline patch.");
+    assert.equal(candidate.baseSha, prepared.source.commit);
+    assert.deepEqual(candidate.files, [
+        { path: "python/added.py", previousSha: null, content: "added = True\n" },
+        { path: "python/value.py", previousSha: blobHash(original), content: "value = 2\n" },
+    ]);
 });
 
 test("native budgets, execution limits, exact completion, and separate usage are enforced", () => {

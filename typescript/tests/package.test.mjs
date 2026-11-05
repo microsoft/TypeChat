@@ -24,7 +24,21 @@ const childEnv = { ...process.env, NODE_OPTIONS: "", VSCODE_INSPECTOR_OPTIONS: "
 let packedFiles;
 
 before(() => {
-    const options = { cwd: packageRoot, encoding: "utf8", env: childEnv, timeout: 30000 };
+    const packageSource = join(directory, "package-source");
+    cpSync(packageRoot, packageSource, {
+        recursive: true,
+        filter: source => {
+            const relativePath = path.relative(packageRoot, source);
+            return !relativePath
+                .split(path.sep)
+                .some(segment => ["node_modules", "out", ".git"].includes(segment));
+        },
+    });
+    const packageManifestPath = join(packageSource, "package.json");
+    const packageManifest = JSON.parse(readFileSync(packageManifestPath, "utf8"));
+    delete packageManifest.scripts.prepare;
+    writeFileSync(packageManifestPath, JSON.stringify(packageManifest, null, 2));
+    const options = { cwd: packageSource, encoding: "utf8", env: childEnv, timeout: 30000 };
     const packed = process.platform === "win32"
         ? spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", "npm pack --ignore-scripts --dry-run --json"], options)
         : spawnSync("npm", ["pack", "--ignore-scripts", "--dry-run", "--json"], options);
