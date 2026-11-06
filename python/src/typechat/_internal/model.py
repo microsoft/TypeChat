@@ -2,13 +2,31 @@ import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable, Sequence
+from copy import deepcopy
 from inspect import isawaitable
 from types import TracebackType
-from typing_extensions import AsyncContextManager, Literal, Protocol, Self, TypedDict, cast, override
+from typing_extensions import (
+    AsyncContextManager, Literal, NotRequired, Protocol, Self, TypeAlias, TypedDict, cast, override,
+)
 
 from typechat._internal.result import Failure, Result, Success
 
 import httpx
+
+class TextPromptContent(TypedDict):
+    type: Literal["text"]
+    text: str
+
+class ImageUrl(TypedDict):
+    """A hosted image or data URL; image contents and provider limits are caller-owned."""
+    url: str
+    detail: NotRequired[Literal["auto", "low", "high"]]
+
+class ImagePromptContent(TypedDict):
+    type: Literal["image_url"]
+    image_url: ImageUrl
+
+PromptContent: TypeAlias = str | list[TextPromptContent | ImagePromptContent]
 
 class PromptSection(TypedDict):
     """
@@ -17,7 +35,57 @@ class PromptSection(TypedDict):
     the prompt in repair attempts). TypeChat currently doesn't use the "system" role.
     """
     role: Literal["system", "user", "assistant"]
-    content: str
+    content: PromptContent
+
+def _normalize_prompt(prompt: object) -> Result[list[PromptSection]]:
+    if isinstance(prompt, str):
+        return Success([{"role": "user", "content": prompt}])
+    if not isinstance(prompt, list):
+        return Failure("Prompt must be a string or a list of prompt sections.")
+
+    for section_index, section in enumerate(cast(list[object], prompt)):
+        location = f"Prompt section {section_index}"
+        if not isinstance(section, dict):
+            return Failure(f"{location} must be a prompt-section dictionary.")
+        fields = cast(dict[object, object], section)
+        role = fields.get("role")
+        if not isinstance(role, str) or role not in ("system", "user", "assistant"):
+            return Failure(f"{location} must have a supported role.")
+        content = fields.get("content")
+        if isinstance(content, str):
+            continue
+        if not isinstance(content, list):
+            return Failure(f"{location} content must be a string or a list of tagged parts.")
+
+        for part_index, part in enumerate(cast(list[object], content)):
+            part_location = f"{location}, part {part_index}"
+            if not isinstance(part, dict):
+                return Failure(f"{part_location} must be a tagged text or image_url dictionary.")
+            part_fields = cast(dict[object, object], part)
+            part_type = part_fields.get("type")
+            if not isinstance(part_type, str):
+                return Failure(f"{part_location} must have a supported type tag.")
+            if part_type == "text":
+                if not isinstance(part_fields.get("text"), str):
+                    return Failure(f"{part_location} text must be a string.")
+            elif part_type == "image_url":
+                if role != "user":
+                    return Failure(f"{part_location}: images are only supported in user messages.")
+                image = part_fields.get("image_url")
+                if not isinstance(image, dict):
+                    return Failure(f"{part_location} image_url must be a dictionary.")
+                image_fields = cast(dict[object, object], image)
+                url = image_fields.get("url")
+                if not isinstance(url, str) or not url:
+                    return Failure(f"{part_location} image_url.url must be a nonempty string.")
+                if "detail" in image_fields:
+                    detail = image_fields["detail"]
+                    if not isinstance(detail, str) or detail not in ("auto", "low", "high"):
+                        return Failure(f"{part_location} image_url.detail must be auto, low, or high.")
+            else:
+                return Failure(f"{part_location} must have a supported type tag.")
+
+    return Success(deepcopy(cast(list[PromptSection], prompt)))
 
 TokenProvider = Callable[[], str | Awaitable[str]]
 
@@ -63,19 +131,24 @@ class ChatCompletionClient(Protocol):
 class _ClientLanguageModel(TypeChatLanguageModel):
     _client: ChatCompletionClient
     _model: str
+    _temperature: float | None
 
-    def __init__(self, client: ChatCompletionClient, model: str):
+    def __init__(self, client: ChatCompletionClient, model: str, temperature: float | None):
         super().__init__()
         self._client = client
         self._model = model
+        self._temperature = temperature
 
     @override
     async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
-        messages = [{"role": "user", "content": prompt}] if isinstance(prompt, str) else prompt
+        normalized = _normalize_prompt(prompt)
+        if isinstance(normalized, Failure):
+            return normalized
+        temperature_options = {"temperature": self._temperature} if self._temperature is not None else {}
         completion = await self._client.chat.completions.create(
             model=self._model,
-            messages=messages,
-            temperature=0.0,
+            messages=normalized.value,
+            **temperature_options,
             n=1,
             stream=False,
         )
@@ -86,17 +159,23 @@ class _ClientLanguageModel(TypeChatLanguageModel):
             return Failure("Client completion returned no text content.")
         return Success(content)
 
-def create_openai_language_model_from_client(client: ChatCompletionClient, model: str) -> TypeChatLanguageModel:
+def create_openai_language_model_from_client(
+    client: ChatCompletionClient,
+    model: str,
+    *,
+    temperature: float | None = 0.0,
+) -> TypeChatLanguageModel:
     """
     Adapts an already configured asynchronous OpenAI-compatible Chat Completions client.
 
     TypeChat does not import an SDK, reconfigure or close the client, or add retries or timeouts.
     Exceptions raised by the client propagate unchanged. The caller supplies the model name,
     or the deployment name for Azure OpenAI.
+    Temperature defaults to 0.0; pass None to omit it and use the client's or service's default.
     """
     if not model.strip():
         raise ValueError("The client model or deployment name must not be empty.")
-    return _ClientLanguageModel(client, model)
+    return _ClientLanguageModel(client, model, temperature)
 
 _TRANSIENT_ERROR_CODES = [
     429,
@@ -111,10 +190,14 @@ class _ResponseTooLargeError(Exception):
     def __init__(self, max_bytes: int):
         super().__init__(f"REST API response exceeded the maximum allowed size of {max_bytes} bytes")
 
+class _HttpResponseMessage(TypedDict):
+    content: object
+
 class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
     url: str
     headers: dict[str, str]
     default_params: dict[str, str]
+    temperature: float | None
     # Specifies the maximum number of retry attempts.
     max_retry_attempts: int = 3
     # Specifies the delay before retrying in milliseconds.
@@ -137,30 +220,34 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         default_params: dict[str, str],
         *,
         token_provider: TokenProvider | None = None,
+        temperature: float | None = 0.0,
     ):
         super().__init__()
         self.url = url
         self.headers = headers
         self.default_params = default_params
         self._token_provider = token_provider
+        self.temperature = temperature
         self._async_client = httpx.AsyncClient()
 
     @override
     async def complete(self, prompt: str | list[PromptSection]) -> Success[str] | Failure:
+        normalized = _normalize_prompt(prompt)
+        if isinstance(normalized, Failure):
+            return normalized
         headers = {
             "Content-Type": "application/json",
             **self.headers,
         }
 
-        if isinstance(prompt, str):
-            prompt = [{"role": "user", "content": prompt}]
-
         body = {
             **self.default_params,
-            "messages": prompt,
-            "temperature": 0.0,
+            "messages": normalized.value,
+            "temperature": self.temperature,
             "n": 1,
         }
+        if self.temperature is None:
+            del body["temperature"]
         retry_count = 0
         while True:
             try:
@@ -182,10 +269,15 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                     if response.is_success:
                         raw = await self._read_capped(response)
                         json_result = cast(
-                            dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
+                            dict[Literal["choices"], list[dict[Literal["message"], _HttpResponseMessage]]],
                             json.loads(raw)
                         )
-                        return Success(json_result["choices"][0]["message"]["content"] or "")
+                        content = json_result["choices"][0]["message"]["content"]
+                        if content is None:
+                            return Success("")
+                        if not isinstance(content, str):
+                            return Failure("REST API completion returned non-text content.")
+                        return Success(content)
 
                     if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
                         return Failure(f"REST API error {response.status_code}: {response.reason_phrase}")
@@ -239,7 +331,11 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         except Exception:
             pass
 
-def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
+def create_language_model(
+    vals: dict[str, str | None],
+    *,
+    temperature: float | None = 0.0,
+) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
     chosen by a dictionary of variables (typically just `os.environ`).
@@ -255,6 +351,7 @@ def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
 
     Args:
         vals: A dictionary of variables. Typically just `os.environ`.
+        temperature: Sampling temperature, defaulting to 0.0. None omits the request parameter.
     """
     
     def required_var(name: str) -> str:
@@ -268,16 +365,23 @@ def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
         model = required_var("OPENAI_MODEL")
         endpoint = vals.get("OPENAI_ENDPOINT", None) or "https://api.openai.com/v1/chat/completions"
         org = vals.get("OPENAI_ORGANIZATION", None) or vals.get("OPENAI_ORG", None) or ""
-        return create_openai_language_model(api_key, model, endpoint, org)
+        return create_openai_language_model(api_key, model, endpoint, org, temperature=temperature)
 
     elif "AZURE_OPENAI_API_KEY" in vals:
         api_key=required_var("AZURE_OPENAI_API_KEY")
         endpoint=required_var("AZURE_OPENAI_ENDPOINT")
-        return create_azure_openai_language_model(api_key, endpoint)
+        return create_azure_openai_language_model(api_key, endpoint, temperature=temperature)
     else:
         raise ValueError("Missing environment variables for OPENAI_API_KEY or AZURE_OPENAI_API_KEY.")
 
-def create_openai_language_model(api_key: str, model: str, endpoint: str = "https://api.openai.com/v1/chat/completions", org: str = "") -> HttpxLanguageModel:
+def create_openai_language_model(
+    api_key: str,
+    model: str,
+    endpoint: str = "https://api.openai.com/v1/chat/completions",
+    org: str = "",
+    *,
+    temperature: float | None = 0.0,
+) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI REST API endpoint.
 
@@ -286,6 +390,7 @@ def create_openai_language_model(api_key: str, model: str, endpoint: str = "http
         model: The OpenAI model name.
         endpoint: The OpenAI REST API endpoint.
         org: The OpenAI organization.
+        temperature: Sampling temperature, defaulting to 0.0. None omits the request parameter.
     """
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -294,13 +399,16 @@ def create_openai_language_model(api_key: str, model: str, endpoint: str = "http
     default_params = {
         "model": model,
     }
-    return HttpxLanguageModel(url=endpoint, headers=headers, default_params=default_params)
+    return HttpxLanguageModel(
+        url=endpoint, headers=headers, default_params=default_params, temperature=temperature,
+    )
 
 def create_azure_openai_language_model(
     api_key: str | None,
     endpoint: str,
     *,
     token_provider: TokenProvider | None = None,
+    temperature: float | None = 0.0,
 ) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an Azure OpenAI REST API endpoint.
@@ -310,11 +418,14 @@ def create_azure_openai_language_model(
         endpoint: The Azure OpenAI REST API endpoint.
         token_provider: An optional synchronous or asynchronous bearer-token provider.
             Invoked for each request attempt; the provider is responsible for caching and renewal.
+        temperature: Sampling temperature, defaulting to 0.0. None omits the request parameter.
     """
     if token_provider is not None:
         if api_key is not None:
             raise ValueError("Specify either an API key or a token provider, not both.")
-        return HttpxLanguageModel(url=endpoint, headers={}, default_params={}, token_provider=token_provider)
+        return HttpxLanguageModel(
+            url=endpoint, headers={}, default_params={}, token_provider=token_provider, temperature=temperature,
+        )
     if api_key is None:
         raise ValueError("Specify an API key or a token provider.")
     headers = {
@@ -323,4 +434,4 @@ def create_azure_openai_language_model(
         # Needed when using regular API key
         "api-key": api_key,
     }
-    return HttpxLanguageModel(url=endpoint, headers=headers, default_params={})
+    return HttpxLanguageModel(url=endpoint, headers=headers, default_params={}, temperature=temperature)

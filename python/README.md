@@ -68,6 +68,77 @@ Existing API-key and environment-based calls are unchanged. See the
 and [configured-client example](../site/src/docs/python/basic-usage.md#reusing-an-already-configured-client)
 for ownership, retry, and error behavior.
 
+All four model factories accept a keyword-only `temperature` option. It defaults
+to `0.0`, preserving existing behavior. Pass `temperature=None` to omit the
+parameter entirely and use the configured client's or service's default, for
+example with reasoning models that reject explicit sampling parameters. This
+does not disable reasoning, change authentication, or select a different API.
+
+## Text and image prompts
+
+Both built-in Chat Completions models and the configured-client adapter accept
+typed text/image parts in `PromptSection.content`. Existing whole-string prompts
+remain supported without migration.
+
+The following example demonstrates both `model.complete` and translator context;
+applications can use either call independently. Supply your own hosted image URL
+and already-base64-encoded image data:
+
+```python
+from typing_extensions import TypedDict
+
+from typechat import (
+    PromptSection,
+    Result,
+    TypeChatJsonTranslator,
+    TypeChatLanguageModel,
+    TypeChatValidator,
+)
+
+
+class ImageDescription(TypedDict):
+    description: str
+
+
+async def inspect_images(
+    model: TypeChatLanguageModel, image_base64: str
+) -> tuple[Result[str], Result[ImageDescription]]:
+    context: list[PromptSection] = [
+        {"role": "user", "content": [
+            {"type": "text", "text": "Use these images as context."},
+            {"type": "image_url", "image_url": {"url": "https://example.com/photo.png"}},
+            {"type": "image_url", "image_url": {
+                "url": f"data:image/png;base64,{image_base64}",
+                "detail": "low",
+            }},
+        ]},
+    ]
+    text = await model.complete(context)
+    translator = TypeChatJsonTranslator(model, TypeChatValidator(ImageDescription), ImageDescription)
+    data = await translator.translate("Describe the images.", prompt_preamble=context)
+    return text, data
+```
+
+The public dictionary types are `TextPromptContent` (`{"type": "text", "text": str}`),
+`ImagePromptContent` (`{"type": "image_url", "image_url": ImageUrl}`), and `ImageUrl`
+with a required nonempty `url: str` and optional `detail: "auto" | "low" | "high"`.
+`PromptContent` is a string or an ordered list of these tagged parts, not a list of
+bare strings. Text works in system, user, and assistant messages; images are
+supported only in user messages. Malformed input produces a content-free `Failure`
+locating the section or part before authentication or dispatch.
+
+`translate` still takes a string request. Its preamble stays before the generated
+schema/request message, and image context is preserved during validation and repair.
+Successful model completions remain text-only. Authentication, HTTP controls, and
+configured-client ownership remain unchanged.
+
+TypeChat only forwards image references: it does not fetch, decode, resize, or
+validate image contents. Supported formats (such as PNG, JPEG, or WebP), URL
+accessibility, image counts, detail support, and size/resolution limits depend on
+your provider and model. No image-processing or provider SDK dependency is added.
+See [text and image usage](../site/src/docs/python/basic-usage.md#text-and-image-prompts)
+for the complete prompt type definitions and limitations.
+
 ## Documenting schema fields
 
 Trailing Python comments on directly declared `TypedDict` and dataclass fields become

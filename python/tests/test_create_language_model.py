@@ -4,8 +4,11 @@ Tests for create_language_model's handling of the OpenAI organization variables.
 These only inspect the constructed model, so no request is sent.
 """
 
+import asyncio
+
 import pytest
 import typechat
+from typechat._internal.model import HttpxLanguageModel
 
 def test_openai_organization_is_sent_as_organization_header():
     model = typechat.create_language_model(
@@ -93,3 +96,31 @@ def test_azure_rejects_ambiguous_authentication():
 def test_azure_requires_authentication():
     with pytest.raises(ValueError, match="API key or a token provider"):
         typechat.create_azure_openai_language_model(None, "https://example.invalid/chat/completions")
+
+
+@pytest.mark.parametrize("kind", ["direct", "openai", "azure-key", "azure-token", "env-openai", "env-azure"])
+@pytest.mark.parametrize("temperature", [0.0, 1.0, None])
+def test_http_factories_forward_optional_temperature(kind: str, temperature: float | None):
+    endpoint = "https://example.invalid/chat/completions"
+    if kind == "direct":
+        model = HttpxLanguageModel(endpoint, {}, {}, temperature=temperature)
+    elif kind == "openai":
+        model = typechat.create_openai_language_model("test-key", "test-model", temperature=temperature)
+    elif kind == "azure-key":
+        model = typechat.create_azure_openai_language_model("test-key", endpoint, temperature=temperature)
+    elif kind == "azure-token":
+        model = typechat.create_azure_openai_language_model(
+            None, endpoint, token_provider=lambda: "test-token", temperature=temperature,
+        )
+    elif kind == "env-openai":
+        model = typechat.create_language_model(
+            {"OPENAI_API_KEY": "test-key", "OPENAI_MODEL": "test-model"}, temperature=temperature,
+        )
+    elif kind == "env-azure":
+        model = typechat.create_language_model(
+            {"AZURE_OPENAI_API_KEY": "test-key", "AZURE_OPENAI_ENDPOINT": endpoint}, temperature=temperature,
+        )
+    else:
+        pytest.fail("Unexpected factory case.")
+    assert model.temperature == temperature
+    asyncio.run(model.__aexit__(None, None, None))

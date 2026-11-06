@@ -4,7 +4,11 @@
 
 from typechat._internal.model import (
     ChatCompletionClient,
+    ImagePromptContent,
+    ImageUrl,
+    PromptContent,
     PromptSection,
+    TextPromptContent,
     TokenProvider,
     TypeChatLanguageModel,
     create_language_model,
@@ -26,7 +30,11 @@ __all__ = [
     "Failure",
     "Result",
     "python_type_to_typescript_schema",
+    "PromptContent",
     "PromptSection",
+    "TextPromptContent",
+    "ImagePromptContent",
+    "ImageUrl",
     "TokenProvider",
     "ChatCompletionClient",
     "create_language_model",
