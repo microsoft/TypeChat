@@ -75,9 +75,10 @@ You can call these directly.
 def create_openai_language_model(
     api_key: str,
     model: str,
-    endpoint: str = "https://api.openai.com/v1/chat/completions",
+    endpoint: str | None = None,
     org: str = "",
     *,
+    use_responses_api: bool = False,
     temperature: float | None = 0.0,
 ):
     ...
@@ -87,6 +88,8 @@ def create_azure_openai_language_model(
     endpoint: str,
     *,
     token_provider: TokenProvider | None = None,
+    use_responses_api: bool = False,
+    model: str | None = None,
     temperature: float | None = 0.0,
 ): ...
 ```
@@ -98,6 +101,8 @@ you're using OpenAI or Azure OpenAI.
 def create_language_model(
     vals: dict[str, str | None],
     *,
+    use_responses_api: bool = False,
+    model: str | None = None,
     temperature: float | None = 0.0,
 ) -> TypeChatLanguageModel: ...
 ```
@@ -183,17 +188,110 @@ Your client's endpoint, API version, authentication, retries, and timeouts
 remain configured by your application. TypeChat does not reconfigure or close
 the client, or add another retry/timeout layer. Client exceptions and
 cancellation propagate unchanged. Missing choices or text produce a `Failure`.
-The adapter is for Chat Completions, not the Responses API.
+These are the default Chat Completions settings. To use the client's Responses
+API instead, select it explicitly as shown below.
 
 Pass either model to `TypeChatJsonTranslator` as usual. Schema generation,
 validation, and repair behavior remain unchanged.
 
+#### Using the Responses API
+
+For new text and image integrations, select Responses explicitly with
+`use_responses_api=True`. All existing calls still default to Chat Completions;
+the OpenAI factory's omitted endpoint still resolves to
+`https://api.openai.com/v1/chat/completions`. No API is inferred from a URL.
+
+The HTTP path requires the **complete Responses destination** and an explicit
+model or deployment name:
+
+```py
+from typechat import create_openai_language_model
+
+async with create_openai_language_model(
+    api_key,
+    model="my-model",
+    endpoint="https://api.openai.com/v1/responses",
+    use_responses_api=True,
+) as model:
+    translator = TypeChatJsonTranslator(model, validator, target_type)
+    result = await translator.translate("Classify this request")
+```
+
+For Azure, use `create_azure_openai_language_model` with
+`use_responses_api=True` and `model="my-deployment"`. Either an API key or the
+existing `api_key=None, token_provider=token_provider` authentication works.
+Supply the exact Responses URL supported by your Azure resource and API
+version. OpenAI-compatible routes, Azure deployment-scoped/query-versioned
+routes, and opaque proxy destinations are passed through without rewriting
+paths, queries, or model names. Not every provider or Azure API version
+supports Responses; TypeChat does not probe endpoint capabilities.
+
+`create_language_model(settings, use_responses_api=True)` uses the existing
+`OPENAI_ENDPOINT`, `OPENAI_MODEL`, and API-key/organization settings.
+For Azure, use the existing `AZURE_OPENAI_ENDPOINT` and API key and pass
+`model="my-deployment"` explicitly. The optional `model` keyword also overrides
+`OPENAI_MODEL`; no new environment-variable names are required.
+
+To reuse a configured asynchronous Responses client:
+
+```py
+from typechat import create_openai_language_model_from_client
+
+model = create_openai_language_model_from_client(
+    openai_client,
+    model="my-model-or-azure-deployment",
+    use_responses_api=True,
+)
+translator = TypeChatJsonTranslator(model, validator, target_type)
+result = await translator.translate("Classify this request")
+```
+
+The exported structural `ResponsesClient` protocol requires only
+`client.responses.create`; a Chat-only client still needs only the unchanged
+`ChatCompletionClient` contract in default mode. No SDK import or TypeChat
+environment configuration is needed. The supplied instance owns authentication,
+base URL, API version, transport limits, retries, and cleanup. Exceptions and
+cancellation propagate unchanged; TypeChat adds no client retries or timeouts.
+
+Both paths send `input`, `model`, and `stream=False`, not Chat Completions'
+`messages`, `temperature`, or `n`. String prompts and tagged text parts work in
+system/user/assistant sections; image parts work only in user sections. Use the
+same public `text` and `image_url` prompt types shown in
+[text and image prompts](#text-and-image-prompts). Responses models map user/system
+text to `input_text`, assistant text to `output_text`, and images to `input_image`,
+flattening the image reference to `image_url` and preserving optional `detail`,
+message/part order, and caller-owned data. They validate prompts before
+authentication or dispatch. Tools, streaming, and remote conversation-state
+management remain outside this integration.
+
+Responses must have a completed canonical envelope and completed assistant
+messages. Ordered `output_text` parts are concatenated; known reasoning items
+do not contribute text. An explicitly empty text string is allowed, but missing
+or malformed content, refusals/blocking, incomplete/failed/nonterminal responses,
+and unsupported output (including tool calls) return a fixed, payload-free
+`Failure`, even alongside partial text. A client's convenience `output_text`
+property cannot bypass these checks. A successful model completion still goes
+through TypeChat's normal JSON/schema validation and bounded repair.
+
+HTTP models retain three retries, a one-second retry pause, a ten-second timeout,
+and a 100 MiB response limit by default, including incremental response-size
+checks. These controls remain configurable. Token providers run afresh on each
+attempt; cancellation propagates. HTTP failures do not expose raw provider
+payloads, and malformed Responses output does not cause a retry.
+
+Automatic Responses-to-Chat fallback is deferred: there is no switch, URL
+inference, capability cache, or extra fallback request. Keep using default Chat
+Completions mode for services that do not support Responses.
+
+See the [runnable Responses example](https://github.com/microsoft/TypeChat/blob/main/python/examples/responses/demo.py)
+for a standalone HTTP call and a function accepting an application-owned client.
+
 #### Configuring temperature
 
 All four model factories accept a keyword-only `temperature: float | None`
-option. Leaving it unspecified retains the existing `0.0` setting. Pass a number
-to configure it, or `None` to omit the field entirely (not send JSON `null`) and
-use the configured client's or service's default:
+option for Chat Completions. Leaving it unspecified retains the existing `0.0`
+setting. Pass a number to configure it, or `None` to omit the field entirely
+(not send JSON `null`) and use the configured client's or service's default:
 
 ```py
 model = create_azure_openai_language_model(
@@ -214,6 +312,7 @@ Omission supports reasoning models that reject explicit sampling parameters,
 including models that do not support disabling reasoning. It does not set a
 reasoning effort, infer model capabilities, change authentication, or switch APIs.
 Other client settings, ownership, retries, and timeouts are unchanged.
+Responses requests always omit temperature, regardless of this option.
 
 #### Using OpenAI-compatible gateways
 
@@ -245,6 +344,7 @@ few writable attributes you might find useful:
 - `max_retry_attempts`
 - `retry_pause_seconds`
 - `timeout_seconds`
+- `max_response_bytes`
 
 Though note that these are unstable.
 
@@ -264,9 +364,10 @@ model = typechat.create_language_model(os.environ)
 
 ## Text and image prompts
 
-The HTTP Chat Completions models and configured-client adapter accept image
-references alongside text. Use `model.complete` for text output, or supply image
-context through the translator's existing `prompt_preamble` for validated data.
+The HTTP models and configured-client adapters accept image references alongside
+text in both Chat Completions and explicitly selected Responses mode. Use
+`model.complete` for text output, or supply image context through the translator's
+existing `prompt_preamble` for validated data.
 The calls below demonstrate both interfaces; an application can use either
 independently. Replace the hosted URL with your own and pass already-base64-encoded
 image data:
@@ -340,6 +441,13 @@ ordering, exact URL/data-URL strings, and caller-owned dictionaries. Malformed
 or unsupported input returns a `Failure` identifying the section or part without
 echoing its content, before resolving a token or dispatching a request.
 
+These public types are shared by both APIs; callers do not construct Responses
+wire-format parts. In Responses mode, tagged `text` becomes `input_text` for
+user/system messages or `output_text` for assistant messages. Tagged `image_url`
+becomes `input_image` with the original reference in a flat
+`image_url` field. Supplied `detail` moves alongside it; omitted detail remains
+omitted. Images are never flattened into text, including during translator repair.
+
 The translator's current request remains a string, and ordinary `translate(str)`
 calls need no changes. Preamble messages remain before the combined schema/request
 message; validation and repair keep the original context and append rejected
@@ -352,7 +460,7 @@ Supply a provider/model that supports images and follow its supported file forma
 (for example PNG, JPEG, or WebP), accessible-URL requirements, image-count limits,
 and encoded-payload, resolution, and size limits. TypeChat validates reference
 structure only. It never fetches, decodes, resizes, or validates image bytes and
-does not add image generation, audio/video, streaming, or Responses API support.
+does not add image generation, audio/video, or streaming.
 No new dependency is required. Existing API-key/token-provider authentication,
 HTTP retries/timeouts/response-size limits, and caller-owned SDK configuration and
 lifecycle remain unchanged. Custom models must handle the prompt parts they accept.

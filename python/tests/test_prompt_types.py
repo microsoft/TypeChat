@@ -10,6 +10,7 @@ from typechat import (
     ImageUrl,
     PromptContent,
     PromptSection,
+    ResponsesClient,
     Result,
     TextPromptContent,
     TypeChatJsonTranslator,
@@ -84,10 +85,15 @@ if TYPE_CHECKING:
         model: TypeChatLanguageModel,
         translator: TypeChatJsonTranslator[ImageDescription],
         client: ChatCompletionClient,
+        responses_client: ResponsesClient,
     ) -> None:
         sections: list[PromptSection] = [{"role": "user", "content": "existing text"}]
         assert_type(await model.complete("existing text"), Result[str])
         assert_type(await model.complete(sections), Result[str])
+        responses_model = create_openai_language_model_from_client(
+            responses_client, "model", use_responses_api=True,
+        )
+        assert_type(await inspect_images(responses_model, "aW1hZ2U="), tuple[Result[str], Result[ImageDescription]])
         assert_type(await translator.translate("existing text"), Result[ImageDescription])
         assert_type(
             await translator.translate("existing text", prompt_preamble="context"),

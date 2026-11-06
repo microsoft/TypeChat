@@ -240,7 +240,7 @@ def _assert_invalid_prompt(
         harness.client.chat.completions.create.assert_not_called()
 
 
-_MALFORMED_PROMPTS: list[tuple[object, str]] = [
+MALFORMED_PROMPTS: list[tuple[object, str]] = [
     (None, "Prompt"),
     (42, "Prompt"),
     (b"text", "Prompt"),
@@ -261,7 +261,7 @@ _MALFORMED_PROMPTS: list[tuple[object, str]] = [
 ]
 
 
-@pytest.mark.parametrize("prompt, location", _MALFORMED_PROMPTS)
+@pytest.mark.parametrize("prompt, location", MALFORMED_PROMPTS)
 def test_rejects_malformed_sections_before_authentication_or_dispatch(
     model_factory: ModelFactory,
     prompt: object,
@@ -272,7 +272,7 @@ def test_rejects_malformed_sections_before_authentication_or_dispatch(
     _assert_invalid_prompt(harness, result, location)
 
 
-@pytest.mark.parametrize("part", [
+MALFORMED_PARTS: list[object] = [
     _PRIVATE_TEXT,
     None,
     42,
@@ -298,7 +298,10 @@ def test_rejects_malformed_sections_before_authentication_or_dispatch(
     {"type": "image_url", "image_url": {"url": _DATA_IMAGE, "detail": None}},
     {"type": "image_url", "image_url": {"url": _HOSTED_IMAGE, "detail": []}},
     {"type": "image_url", "image_url": {"url": _HOSTED_IMAGE, "detail": 42}},
-])
+]
+
+
+@pytest.mark.parametrize("part", MALFORMED_PARTS)
 def test_rejects_malformed_parts_without_exposing_content(model_factory: ModelFactory, part: object):
     prompt = [
         {"role": "system", "content": "Instructions"},
