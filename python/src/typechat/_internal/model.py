@@ -1,7 +1,7 @@
 import asyncio
 import json
 import re
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from inspect import isawaitable
 from types import TracebackType
 from typing_extensions import AsyncContextManager, Literal, Protocol, Self, TypedDict, cast, override
@@ -60,6 +60,59 @@ class ChatCompletionClient(Protocol):
     @property
     def chat(self) -> _ClientChat: ...
 
+class _ClientResponses(Protocol):
+    @property
+    def create(self) -> Callable[..., Awaitable[object]]:
+        # Validate canonical envelopes at runtime, whether mappings or SDK objects.
+        ...
+
+class ResponsesClient(Protocol):
+    """An asynchronous OpenAI-compatible Responses client supplied by the caller."""
+    @property
+    def responses(self) -> _ClientResponses: ...
+
+def _response_field(value: object, name: str) -> object:
+    if isinstance(value, Mapping):
+        return cast(Mapping[str, object], value).get(name)
+    return getattr(value, name, None)
+
+def _responses_completion_result(response: object) -> Result[str]:
+    if _response_field(response, "status") != "completed":
+        return Failure("Responses API returned a response that was not completed.")
+    if _response_field(response, "error") is not None or _response_field(response, "incomplete_details") is not None:
+        return Failure("Responses API returned an error or incomplete response.")
+    output = _response_field(response, "output")
+    if not isinstance(output, list):
+        return Failure("Responses API returned a missing or malformed output list.")
+
+    text_parts: list[str] = []
+    for item in cast(list[object], output):
+        item_type = _response_field(item, "type")
+        if item_type == "reasoning":
+            if _response_field(item, "status") not in (None, "completed"):
+                return Failure("Responses API returned output that was not completed.")
+            continue
+        if item_type != "message" or _response_field(item, "role") != "assistant":
+            return Failure("Responses API returned unsupported output.")
+        if _response_field(item, "status") != "completed":
+            return Failure("Responses API returned output that was not completed.")
+        content = _response_field(item, "content")
+        if not isinstance(content, list) or not content:
+            return Failure("Responses API returned missing or malformed message content.")
+        for part in cast(list[object], content):
+            part_type = _response_field(part, "type")
+            if part_type in ("refusal", "blocked"):
+                return Failure("Responses API refused or blocked the request.")
+            if part_type != "output_text":
+                return Failure("Responses API returned unsupported message content.")
+            text = _response_field(part, "text")
+            if not isinstance(text, str):
+                return Failure("Responses API returned missing or malformed text content.")
+            text_parts.append(text)
+    if not text_parts:
+        return Failure("Responses API returned no text content.")
+    return Success("".join(text_parts))
+
 class _ClientLanguageModel(TypeChatLanguageModel):
     _client: ChatCompletionClient
     _model: str
@@ -86,17 +139,44 @@ class _ClientLanguageModel(TypeChatLanguageModel):
             return Failure("Client completion returned no text content.")
         return Success(content)
 
-def create_openai_language_model_from_client(client: ChatCompletionClient, model: str) -> TypeChatLanguageModel:
+class _ResponsesClientLanguageModel(TypeChatLanguageModel):
+    _client: ResponsesClient
+    _model: str
+
+    def __init__(self, client: ResponsesClient, model: str):
+        super().__init__()
+        self._client = client
+        self._model = model
+
+    @override
+    async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
+        messages = [{"role": "user", "content": prompt}] if isinstance(prompt, str) else prompt
+        response = await self._client.responses.create(model=self._model, input=messages, stream=False)
+        return _responses_completion_result(response)
+
+def create_openai_language_model_from_client(
+    client: ChatCompletionClient | ResponsesClient,
+    model: str,
+    *,
+    use_responses_api: bool = False,
+) -> TypeChatLanguageModel:
     """
-    Adapts an already configured asynchronous OpenAI-compatible Chat Completions client.
+    Adapts an already configured asynchronous OpenAI-compatible client.
 
     TypeChat does not import an SDK, reconfigure or close the client, or add retries or timeouts.
     Exceptions raised by the client propagate unchanged. The caller supplies the model name,
-    or the deployment name for Azure OpenAI.
+    or the deployment name for Azure OpenAI. Set use_responses_api=True to call responses.create
+    instead of chat.completions.create. Only the selected API member is required.
     """
     if not model.strip():
         raise ValueError("The client model or deployment name must not be empty.")
-    return _ClientLanguageModel(client, model)
+    if use_responses_api:
+        if not callable(_response_field(_response_field(client, "responses"), "create")):
+            raise ValueError("The configured client must provide responses.create.")
+        return _ResponsesClientLanguageModel(cast(ResponsesClient, client), model)
+    if not callable(_response_field(_response_field(_response_field(client, "chat"), "completions"), "create")):
+        raise ValueError("The configured client must provide chat.completions.create.")
+    return _ClientLanguageModel(cast(ChatCompletionClient, client), model)
 
 _TRANSIENT_ERROR_CODES = [
     429,
@@ -129,6 +209,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
     max_response_bytes: int = 100 * 1024 * 1024
     _async_client: httpx.AsyncClient
     _token_provider: TokenProvider | None
+    _use_responses_api: bool
 
     def __init__(
         self,
@@ -137,12 +218,24 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         default_params: dict[str, str],
         *,
         token_provider: TokenProvider | None = None,
+        use_responses_api: bool = False,
     ):
         super().__init__()
+        if use_responses_api:
+            try:
+                endpoint = httpx.URL(url)
+            except httpx.InvalidURL:
+                raise ValueError("Responses API requires a complete HTTP or HTTPS endpoint.") from None
+            if not endpoint.is_absolute_url or endpoint.scheme not in ("http", "https"):
+                raise ValueError("Responses API requires a complete HTTP or HTTPS endpoint.")
+            model = default_params.get("model")
+            if model is None or not model.strip():
+                raise ValueError("Responses API requires a nonempty model or deployment name.")
         self.url = url
         self.headers = headers
         self.default_params = default_params
         self._token_provider = token_provider
+        self._use_responses_api = use_responses_api
         self._async_client = httpx.AsyncClient()
 
     @override
@@ -155,12 +248,11 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         if isinstance(prompt, str):
             prompt = [{"role": "user", "content": prompt}]
 
-        body = {
-            **self.default_params,
-            "messages": prompt,
-            "temperature": 0.0,
-            "n": 1,
-        }
+        body = (
+            {"model": self.default_params["model"], "input": prompt, "stream": False}
+            if self._use_responses_api else
+            {**self.default_params, "messages": prompt, "temperature": 0.0, "n": 1}
+        )
         retry_count = 0
         while True:
             try:
@@ -181,6 +273,12 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                 ) as response:
                     if response.is_success:
                         raw = await self._read_capped(response)
+                        if self._use_responses_api:
+                            try:
+                                response_body: object = json.loads(raw)
+                            except ValueError:
+                                return Failure("Responses API returned malformed JSON.")
+                            return _responses_completion_result(response_body)
                         json_result = cast(
                             dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
                             json.loads(raw)
@@ -188,11 +286,15 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                         return Success(json_result["choices"][0]["message"]["content"] or "")
 
                     if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
+                        if self._use_responses_api:
+                            return Failure(f"Responses API request failed with HTTP status {response.status_code}.")
                         return Failure(f"REST API error {response.status_code}: {response.reason_phrase}")
             except _ResponseTooLargeError as e:
                 return Failure(str(e))
             except Exception as e:
                 if retry_count >= self.max_retry_attempts:
+                    if self._use_responses_api:
+                        return Failure("Responses API request failed.")
                     return Failure(str(e) or f"{repr(e)} raised from within internal TypeChat language model.")
 
             await asyncio.sleep(self.retry_pause_seconds)
@@ -239,22 +341,31 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         except Exception:
             pass
 
-def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
+def create_language_model(
+    vals: dict[str, str | None],
+    *,
+    use_responses_api: bool = False,
+    model: str | None = None,
+) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
     chosen by a dictionary of variables (typically just `os.environ`).
 
     If an `OPENAI_API_KEY` environment variable exists, an OpenAI model is constructed.
-    The `OPENAI_ENDPOINT` and `OPENAI_MODEL` environment variables must also be defined or an error will be raised.
+    OPENAI_MODEL is required unless model is supplied explicitly. OPENAI_ENDPOINT defaults to
+    the Chat Completions endpoint, but must be supplied in Responses mode.
 
     If an `AZURE_OPENAI_API_KEY` environment variable exists, an Azure OpenAI model is constructed.
-    The `AZURE_OPENAI_ENDPOINT` environment variable must also be defined or an exception will be thrown.
+    AZURE_OPENAI_ENDPOINT is required. Responses mode also requires an explicit model/deployment name.
 
     If none of these key variables are defined, an exception is thrown.
     @returns An instance of `TypeChatLanguageModel`.
 
     Args:
         vals: A dictionary of variables. Typically just `os.environ`.
+        use_responses_api: Use Responses instead of Chat Completions. Requires a complete endpoint.
+        model: An optional explicit model or Azure deployment name. Required for Azure Responses;
+            otherwise OpenAI uses OPENAI_MODEL and legacy Azure requests omit the model.
     """
     
     def required_var(name: str) -> str:
@@ -265,28 +376,41 @@ def create_language_model(vals: dict[str, str | None]) -> HttpxLanguageModel:
 
     if "OPENAI_API_KEY" in vals:
         api_key = required_var("OPENAI_API_KEY")
-        model = required_var("OPENAI_MODEL")
-        endpoint = vals.get("OPENAI_ENDPOINT", None) or "https://api.openai.com/v1/chat/completions"
+        model_name = model if model is not None else required_var("OPENAI_MODEL")
+        endpoint = vals.get("OPENAI_ENDPOINT", None) or None
         org = vals.get("OPENAI_ORGANIZATION", None) or vals.get("OPENAI_ORG", None) or ""
-        return create_openai_language_model(api_key, model, endpoint, org)
+        return create_openai_language_model(api_key, model_name, endpoint, org, use_responses_api=use_responses_api)
 
     elif "AZURE_OPENAI_API_KEY" in vals:
         api_key=required_var("AZURE_OPENAI_API_KEY")
         endpoint=required_var("AZURE_OPENAI_ENDPOINT")
-        return create_azure_openai_language_model(api_key, endpoint)
+        return create_azure_openai_language_model(api_key, endpoint, model=model, use_responses_api=use_responses_api)
     else:
         raise ValueError("Missing environment variables for OPENAI_API_KEY or AZURE_OPENAI_API_KEY.")
 
-def create_openai_language_model(api_key: str, model: str, endpoint: str = "https://api.openai.com/v1/chat/completions", org: str = "") -> HttpxLanguageModel:
+def create_openai_language_model(
+    api_key: str,
+    model: str,
+    endpoint: str | None = None,
+    org: str = "",
+    *,
+    use_responses_api: bool = False,
+) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI REST API endpoint.
 
     Args:
         api_key: The OpenAI API key.
         model: The OpenAI model name.
-        endpoint: The OpenAI REST API endpoint.
+        endpoint: The complete OpenAI REST API endpoint. Required in Responses mode;
+            otherwise defaults to https://api.openai.com/v1/chat/completions.
         org: The OpenAI organization.
+        use_responses_api: Use Responses instead of Chat Completions, without endpoint inference or fallback.
     """
+    if endpoint is None:
+        if use_responses_api:
+            raise ValueError("Responses API requires an explicit endpoint.")
+        endpoint = "https://api.openai.com/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "OpenAI-Organization": org,
@@ -294,13 +418,17 @@ def create_openai_language_model(api_key: str, model: str, endpoint: str = "http
     default_params = {
         "model": model,
     }
-    return HttpxLanguageModel(url=endpoint, headers=headers, default_params=default_params)
+    return HttpxLanguageModel(
+        url=endpoint, headers=headers, default_params=default_params, use_responses_api=use_responses_api,
+    )
 
 def create_azure_openai_language_model(
     api_key: str | None,
     endpoint: str,
     *,
     token_provider: TokenProvider | None = None,
+    use_responses_api: bool = False,
+    model: str | None = None,
 ) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an Azure OpenAI REST API endpoint.
@@ -310,11 +438,17 @@ def create_azure_openai_language_model(
         endpoint: The Azure OpenAI REST API endpoint.
         token_provider: An optional synchronous or asynchronous bearer-token provider.
             Invoked for each request attempt; the provider is responsible for caching and renewal.
+        use_responses_api: Use Responses instead of Chat Completions, without endpoint inference or fallback.
+        model: The model or deployment name. Required in Responses mode; omitted from legacy Azure bodies.
     """
+    default_params = {"model": model} if model is not None else {}
     if token_provider is not None:
         if api_key is not None:
             raise ValueError("Specify either an API key or a token provider, not both.")
-        return HttpxLanguageModel(url=endpoint, headers={}, default_params={}, token_provider=token_provider)
+        return HttpxLanguageModel(
+            url=endpoint, headers={}, default_params=default_params,
+            token_provider=token_provider, use_responses_api=use_responses_api,
+        )
     if api_key is None:
         raise ValueError("Specify an API key or a token provider.")
     headers = {
@@ -323,4 +457,6 @@ def create_azure_openai_language_model(
         # Needed when using regular API key
         "api-key": api_key,
     }
-    return HttpxLanguageModel(url=endpoint, headers=headers, default_params={})
+    return HttpxLanguageModel(
+        url=endpoint, headers=headers, default_params=default_params, use_responses_api=use_responses_api,
+    )

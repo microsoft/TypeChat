@@ -68,6 +68,22 @@ Existing API-key and environment-based calls are unchanged. See the
 and [configured-client example](../site/src/docs/python/basic-usage.md#reusing-an-already-configured-client)
 for ownership, retry, and error behavior.
 
+## Using the Responses API
+
+For new text-only integrations, pass `use_responses_api=True` to any model
+factory or to `create_openai_language_model_from_client`. HTTP factories need
+the complete Responses endpoint and a model/deployment name; Azure callers
+supply that name with the `model` keyword. Configured clients need only
+`responses.create` and remain application-owned, without a required SDK
+dependency.
+
+Existing calls still use Chat Completions. Endpoint paths do not select an API,
+and automatic Responses-to-Chat fallback is deferred. Both APIs preserve
+TypeChat's schema validation and bounded repair.
+
+See the [Responses API guide](../site/src/docs/python/basic-usage.md#using-the-responses-api)
+and [minimal HTTP/client example](./examples/responses/demo.py).
+
 ## Documenting schema fields
 
 Trailing Python comments on directly declared `TypedDict` and dataclass fields become

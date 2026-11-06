@@ -75,8 +75,10 @@ You can call these directly.
 def create_openai_language_model(
     api_key: str,
     model: str,
-    endpoint: str = "https://api.openai.com/v1/chat/completions",
-    org: str = ""
+    endpoint: str | None = None,
+    org: str = "",
+    *,
+    use_responses_api: bool = False,
 ):
     ...
 
@@ -84,7 +86,9 @@ def create_azure_openai_language_model(
     api_key: str | None,
     endpoint: str,
     *,
-    token_provider: TokenProvider | None = None
+    token_provider: TokenProvider | None = None,
+    use_responses_api: bool = False,
+    model: str | None = None,
 ): ...
 ```
 
@@ -93,7 +97,10 @@ you're using OpenAI or Azure OpenAI.
 
 ```py
 def create_language_model(
-    vals: dict[str, str | None]
+    vals: dict[str, str | None],
+    *,
+    use_responses_api: bool = False,
+    model: str | None = None,
 ) -> TypeChatLanguageModel: ...
 ```
 
@@ -178,10 +185,97 @@ Your client's endpoint, API version, authentication, retries, and timeouts
 remain configured by your application. TypeChat does not reconfigure or close
 the client, or add another retry/timeout layer. Client exceptions and
 cancellation propagate unchanged. Missing choices or text produce a `Failure`.
-The adapter is for Chat Completions, not the Responses API.
+These are the default Chat Completions settings. To use the client's Responses
+API instead, select it explicitly as shown below.
 
 Pass either model to `TypeChatJsonTranslator` as usual. Schema generation,
 validation, and repair behavior remain unchanged.
+
+#### Using the Responses API
+
+For new text-only integrations, select Responses explicitly with
+`use_responses_api=True`. All existing calls still default to Chat Completions;
+the OpenAI factory's omitted endpoint still resolves to
+`https://api.openai.com/v1/chat/completions`. No API is inferred from a URL.
+
+The HTTP path requires the **complete Responses destination** and an explicit
+model or deployment name:
+
+```py
+from typechat import create_openai_language_model
+
+async with create_openai_language_model(
+    api_key,
+    model="my-model",
+    endpoint="https://api.openai.com/v1/responses",
+    use_responses_api=True,
+) as model:
+    translator = TypeChatJsonTranslator(model, validator, target_type)
+    result = await translator.translate("Classify this request")
+```
+
+For Azure, use `create_azure_openai_language_model` with
+`use_responses_api=True` and `model="my-deployment"`. Either an API key or the
+existing `api_key=None, token_provider=token_provider` authentication works.
+Supply the exact Responses URL supported by your Azure resource and API
+version. OpenAI-compatible routes, Azure deployment-scoped/query-versioned
+routes, and opaque proxy destinations are passed through without rewriting
+paths, queries, or model names. Not every provider or Azure API version
+supports Responses; TypeChat does not probe endpoint capabilities.
+
+`create_language_model(settings, use_responses_api=True)` uses the existing
+`OPENAI_ENDPOINT`, `OPENAI_MODEL`, and API-key/organization settings.
+For Azure, use the existing `AZURE_OPENAI_ENDPOINT` and API key and pass
+`model="my-deployment"` explicitly. The optional `model` keyword also overrides
+`OPENAI_MODEL`; no new environment-variable names are required.
+
+To reuse a configured asynchronous Responses client:
+
+```py
+from typechat import create_openai_language_model_from_client
+
+model = create_openai_language_model_from_client(
+    openai_client,
+    model="my-model-or-azure-deployment",
+    use_responses_api=True,
+)
+translator = TypeChatJsonTranslator(model, validator, target_type)
+result = await translator.translate("Classify this request")
+```
+
+The exported structural `ResponsesClient` protocol requires only
+`client.responses.create`; a Chat-only client still needs only the unchanged
+`ChatCompletionClient` contract in default mode. No SDK import or TypeChat
+environment configuration is needed. The supplied instance owns authentication,
+base URL, API version, transport limits, retries, and cleanup. Exceptions and
+cancellation propagate unchanged; TypeChat adds no client retries or timeouts.
+
+Both paths send `input`, `model`, and `stream=False`, not Chat Completions'
+`messages`, `temperature`, or `n`. String prompts and ordered text-only
+system/user/assistant sections are supported. Images, tools, streaming, and
+remote conversation-state management are outside this integration.
+
+Responses must have a completed canonical envelope and completed assistant
+messages. Ordered `output_text` parts are concatenated; known reasoning items
+do not contribute text. An explicitly empty text string is allowed, but missing
+or malformed content, refusals/blocking, incomplete/failed/nonterminal responses,
+and unsupported output (including tool calls) return a fixed, payload-free
+`Failure`, even alongside partial text. A client's convenience `output_text`
+property cannot bypass these checks. A successful model completion still goes
+through TypeChat's normal JSON/schema validation and bounded repair.
+
+HTTP models retain three retries, a one-second retry pause, a ten-second timeout,
+and a 100 MiB response limit by default, including incremental response-size
+checks. These controls remain configurable. Token providers run afresh on each
+attempt; cancellation propagates. HTTP failures do not expose raw provider
+payloads, and malformed Responses output does not cause a retry.
+
+Automatic Responses-to-Chat fallback is deferred: there is no switch, URL
+inference, capability cache, or extra fallback request. Keep using default Chat
+Completions mode for services that do not support Responses.
+
+See the [runnable Responses example](https://github.com/microsoft/TypeChat/blob/main/python/examples/responses/demo.py)
+for a standalone HTTP call and a function accepting an application-owned client.
 
 #### Using OpenAI-compatible gateways
 
@@ -213,6 +307,7 @@ few writable attributes you might find useful:
 - `max_retry_attempts`
 - `retry_pause_seconds`
 - `timeout_seconds`
+- `max_response_bytes`
 
 Though note that these are unstable.
 

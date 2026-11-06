@@ -4,6 +4,7 @@
 
 from typechat._internal.model import (
     ChatCompletionClient,
+    ResponsesClient,
     PromptSection,
     TokenProvider,
     TypeChatLanguageModel,
@@ -29,6 +30,7 @@ __all__ = [
     "PromptSection",
     "TokenProvider",
     "ChatCompletionClient",
+    "ResponsesClient",
     "create_language_model",
     "create_openai_language_model",
     "create_azure_openai_language_model",

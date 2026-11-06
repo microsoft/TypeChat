@@ -11,6 +11,7 @@ We recommend reading each example in the following order.
 | Name | Description |
 | ---- | ----------- |
 | [Sentiment](https://github.com/microsoft/TypeChat/tree/main/python/examples/sentiment) | A sentiment classifier which categorizes user input as negative, neutral, or positive. This is TypeChat's "hello world!" |
+| [Responses](./responses/demo.py) | Explicit Responses API selection for a one-shot HTTP request or an application-owned asynchronous client. |
 | [Coffee Shop](https://github.com/microsoft/TypeChat/tree/main/python/examples/coffeeShop) | An intelligent agent for a coffee shop. This sample translates user intent is translated to a list of coffee order items.
 | [Calendar](https://github.com/microsoft/TypeChat/tree/main/python/examples/calendar) | An intelligent scheduler. This sample translates user intent into a sequence of actions to modify a calendar. |
 | [HealthData](https://github.com/microsoft/TypeChat/tree/main/python/examples/healthData) | The Health Data Agent shows how strongly typed **agents with history** could interact with a user to collect information needed for one or more data types ("form filling"). |
@@ -117,6 +118,22 @@ python examples/sentiment/non_interactive.py "TypeChat is awesome!"
 
 For an explanation of how to call the same async function from an existing backend, see the
 [Python quickstart](../../site/src/docs/python/non-interactive.md).
+
+For a new text-only Responses integration, set `OPENAI_ENDPOINT` to the complete
+Responses URL (for example `https://api.openai.com/v1/responses`) in addition to
+`OPENAI_API_KEY` and `OPENAI_MODEL`, then run:
+
+```sh
+python examples/responses/demo.py "TypeChat is awesome!"
+```
+
+For Azure, use `AZURE_OPENAI_API_KEY`, the complete `AZURE_OPENAI_ENDPOINT` supported
+by your resource/API version, and `--model your-deployment`. The example also
+exports `classify_with_client` for an application-owned asynchronous Responses
+client, without requiring an SDK dependency. See the
+[Responses API guide](../../site/src/docs/python/basic-usage.md#using-the-responses-api)
+for supported text/output contracts, authentication, limits, and deferred fallback.
+The existing examples retain their Chat Completions defaults.
 
 To run an example interactively, type `python examples/<example_name>/demo.py` from the example's directory and enter requests when prompted. Type `quit` or `exit` to end the session. You can also open in VS Code the selected example's directory and press <kbd>F5</kbd> to launch it in debug mode.
 
