@@ -2,13 +2,31 @@ import asyncio
 import json
 import re
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from copy import deepcopy
 from inspect import isawaitable
 from types import TracebackType
-from typing_extensions import AsyncContextManager, Literal, Protocol, Self, TypedDict, cast, override
+from typing_extensions import (
+    AsyncContextManager, Literal, NotRequired, Protocol, Self, TypeAlias, TypedDict, cast, override,
+)
 
 from typechat._internal.result import Failure, Result, Success
 
 import httpx
+
+class TextPromptContent(TypedDict):
+    type: Literal["text"]
+    text: str
+
+class ImageUrl(TypedDict):
+    """A hosted image or data URL; image contents and provider limits are caller-owned."""
+    url: str
+    detail: NotRequired[Literal["auto", "low", "high"]]
+
+class ImagePromptContent(TypedDict):
+    type: Literal["image_url"]
+    image_url: ImageUrl
+
+PromptContent: TypeAlias = str | list[TextPromptContent | ImagePromptContent]
 
 class PromptSection(TypedDict):
     """
@@ -17,7 +35,92 @@ class PromptSection(TypedDict):
     the prompt in repair attempts). TypeChat currently doesn't use the "system" role.
     """
     role: Literal["system", "user", "assistant"]
-    content: str
+    content: PromptContent
+
+def _normalize_prompt(prompt: object) -> Result[list[PromptSection]]:
+    if isinstance(prompt, str):
+        return Success([{"role": "user", "content": prompt}])
+    if not isinstance(prompt, list):
+        return Failure("Prompt must be a string or a list of prompt sections.")
+
+    for section_index, section in enumerate(cast(list[object], prompt)):
+        location = f"Prompt section {section_index}"
+        if not isinstance(section, dict):
+            return Failure(f"{location} must be a prompt-section dictionary.")
+        fields = cast(dict[object, object], section)
+        role = fields.get("role")
+        if not isinstance(role, str) or role not in ("system", "user", "assistant"):
+            return Failure(f"{location} must have a supported role.")
+        content = fields.get("content")
+        if isinstance(content, str):
+            continue
+        if not isinstance(content, list):
+            return Failure(f"{location} content must be a string or a list of tagged parts.")
+
+        for part_index, part in enumerate(cast(list[object], content)):
+            part_location = f"{location}, part {part_index}"
+            if not isinstance(part, dict):
+                return Failure(f"{part_location} must be a tagged text or image_url dictionary.")
+            part_fields = cast(dict[object, object], part)
+            part_type = part_fields.get("type")
+            if not isinstance(part_type, str):
+                return Failure(f"{part_location} must have a supported type tag.")
+            if part_type == "text":
+                if not isinstance(part_fields.get("text"), str):
+                    return Failure(f"{part_location} text must be a string.")
+            elif part_type == "image_url":
+                if role != "user":
+                    return Failure(f"{part_location}: images are only supported in user messages.")
+                image = part_fields.get("image_url")
+                if not isinstance(image, dict):
+                    return Failure(f"{part_location} image_url must be a dictionary.")
+                image_fields = cast(dict[object, object], image)
+                url = image_fields.get("url")
+                if not isinstance(url, str) or not url:
+                    return Failure(f"{part_location} image_url.url must be a nonempty string.")
+                if "detail" in image_fields:
+                    detail = image_fields["detail"]
+                    if not isinstance(detail, str) or detail not in ("auto", "low", "high"):
+                        return Failure(f"{part_location} image_url.detail must be auto, low, or high.")
+            else:
+                return Failure(f"{part_location} must have a supported type tag.")
+
+    return Success(deepcopy(cast(list[PromptSection], prompt)))
+
+class _ResponsesTextContent(TypedDict):
+    type: Literal["input_text", "output_text"]
+    text: str
+
+class _ResponsesImageContent(TypedDict):
+    type: Literal["input_image"]
+    image_url: str
+    detail: NotRequired[Literal["auto", "low", "high"]]
+
+class _ResponsesPromptSection(TypedDict):
+    role: Literal["system", "user", "assistant"]
+    content: str | list[_ResponsesTextContent | _ResponsesImageContent]
+
+def _responses_input(prompt: list[PromptSection]) -> list[_ResponsesPromptSection]:
+    messages: list[_ResponsesPromptSection] = []
+    for section in prompt:
+        content = section["content"]
+        if isinstance(content, str):
+            messages.append({"role": section["role"], "content": content})
+            continue
+        parts: list[_ResponsesTextContent | _ResponsesImageContent] = []
+        for part in content:
+            if part["type"] == "text":
+                parts.append({
+                    "type": "output_text" if section["role"] == "assistant" else "input_text",
+                    "text": part["text"],
+                })
+            else:
+                image: _ResponsesImageContent = {"type": "input_image", "image_url": part["image_url"]["url"]}
+                if "detail" in part["image_url"]:
+                    image["detail"] = part["image_url"]["detail"]
+                parts.append(image)
+        messages.append({"role": section["role"], "content": parts})
+    return messages
 
 TokenProvider = Callable[[], str | Awaitable[str]]
 
@@ -116,19 +219,24 @@ def _responses_completion_result(response: object) -> Result[str]:
 class _ClientLanguageModel(TypeChatLanguageModel):
     _client: ChatCompletionClient
     _model: str
+    _temperature: float | None
 
-    def __init__(self, client: ChatCompletionClient, model: str):
+    def __init__(self, client: ChatCompletionClient, model: str, temperature: float | None):
         super().__init__()
         self._client = client
         self._model = model
+        self._temperature = temperature
 
     @override
     async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
-        messages = [{"role": "user", "content": prompt}] if isinstance(prompt, str) else prompt
+        normalized = _normalize_prompt(prompt)
+        if isinstance(normalized, Failure):
+            return normalized
+        temperature_options = {"temperature": self._temperature} if self._temperature is not None else {}
         completion = await self._client.chat.completions.create(
             model=self._model,
-            messages=messages,
-            temperature=0.0,
+            messages=normalized.value,
+            **temperature_options,
             n=1,
             stream=False,
         )
@@ -150,8 +258,12 @@ class _ResponsesClientLanguageModel(TypeChatLanguageModel):
 
     @override
     async def complete(self, prompt: str | list[PromptSection]) -> Result[str]:
-        messages = [{"role": "user", "content": prompt}] if isinstance(prompt, str) else prompt
-        response = await self._client.responses.create(model=self._model, input=messages, stream=False)
+        normalized = _normalize_prompt(prompt)
+        if isinstance(normalized, Failure):
+            return normalized
+        response = await self._client.responses.create(
+            model=self._model, input=_responses_input(normalized.value), stream=False,
+        )
         return _responses_completion_result(response)
 
 def create_openai_language_model_from_client(
@@ -159,6 +271,7 @@ def create_openai_language_model_from_client(
     model: str,
     *,
     use_responses_api: bool = False,
+    temperature: float | None = 0.0,
 ) -> TypeChatLanguageModel:
     """
     Adapts an already configured asynchronous OpenAI-compatible client.
@@ -167,6 +280,8 @@ def create_openai_language_model_from_client(
     Exceptions raised by the client propagate unchanged. The caller supplies the model name,
     or the deployment name for Azure OpenAI. Set use_responses_api=True to call responses.create
     instead of chat.completions.create. Only the selected API member is required.
+    Chat Completions temperature defaults to 0.0; pass None to omit it.
+    Responses requests omit temperature regardless of this option.
     """
     if not model.strip():
         raise ValueError("The client model or deployment name must not be empty.")
@@ -176,7 +291,7 @@ def create_openai_language_model_from_client(
         return _ResponsesClientLanguageModel(cast(ResponsesClient, client), model)
     if not callable(_response_field(_response_field(_response_field(client, "chat"), "completions"), "create")):
         raise ValueError("The configured client must provide chat.completions.create.")
-    return _ClientLanguageModel(cast(ChatCompletionClient, client), model)
+    return _ClientLanguageModel(cast(ChatCompletionClient, client), model, temperature)
 
 _TRANSIENT_ERROR_CODES = [
     429,
@@ -191,10 +306,14 @@ class _ResponseTooLargeError(Exception):
     def __init__(self, max_bytes: int):
         super().__init__(f"REST API response exceeded the maximum allowed size of {max_bytes} bytes")
 
+class _HttpResponseMessage(TypedDict):
+    content: object
+
 class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
     url: str
     headers: dict[str, str]
     default_params: dict[str, str]
+    temperature: float | None
     # Specifies the maximum number of retry attempts.
     max_retry_attempts: int = 3
     # Specifies the delay before retrying in milliseconds.
@@ -219,6 +338,7 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         *,
         token_provider: TokenProvider | None = None,
         use_responses_api: bool = False,
+        temperature: float | None = 0.0,
     ):
         super().__init__()
         if use_responses_api:
@@ -236,23 +356,31 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
         self.default_params = default_params
         self._token_provider = token_provider
         self._use_responses_api = use_responses_api
+        self.temperature = temperature
         self._async_client = httpx.AsyncClient()
 
     @override
     async def complete(self, prompt: str | list[PromptSection]) -> Success[str] | Failure:
+        normalized = _normalize_prompt(prompt)
+        if isinstance(normalized, Failure):
+            return normalized
         headers = {
             "Content-Type": "application/json",
             **self.headers,
         }
 
-        if isinstance(prompt, str):
-            prompt = [{"role": "user", "content": prompt}]
-
-        body = (
-            {"model": self.default_params["model"], "input": prompt, "stream": False}
-            if self._use_responses_api else
-            {**self.default_params, "messages": prompt, "temperature": 0.0, "n": 1}
-        )
+        body: dict[str, object]
+        if self._use_responses_api:
+            body = {"model": self.default_params["model"], "input": _responses_input(normalized.value), "stream": False}
+        else:
+            body = {
+                **self.default_params,
+                "messages": normalized.value,
+                "temperature": self.temperature,
+                "n": 1,
+            }
+            if self.temperature is None:
+                del body["temperature"]
         retry_count = 0
         while True:
             try:
@@ -280,10 +408,15 @@ class HttpxLanguageModel(TypeChatLanguageModel, AsyncContextManager):
                                 return Failure("Responses API returned malformed JSON.")
                             return _responses_completion_result(response_body)
                         json_result = cast(
-                            dict[Literal["choices"], list[dict[Literal["message"], PromptSection]]],
+                            dict[Literal["choices"], list[dict[Literal["message"], _HttpResponseMessage]]],
                             json.loads(raw)
                         )
-                        return Success(json_result["choices"][0]["message"]["content"] or "")
+                        content = json_result["choices"][0]["message"]["content"]
+                        if content is None:
+                            return Success("")
+                        if not isinstance(content, str):
+                            return Failure("REST API completion returned non-text content.")
+                        return Success(content)
 
                     if response.status_code not in _TRANSIENT_ERROR_CODES or retry_count >= self.max_retry_attempts:
                         if self._use_responses_api:
@@ -346,6 +479,7 @@ def create_language_model(
     *,
     use_responses_api: bool = False,
     model: str | None = None,
+    temperature: float | None = 0.0,
 ) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI or Azure OpenAI REST API endpoint
@@ -366,6 +500,8 @@ def create_language_model(
         use_responses_api: Use Responses instead of Chat Completions. Requires a complete endpoint.
         model: An optional explicit model or Azure deployment name. Required for Azure Responses;
             otherwise OpenAI uses OPENAI_MODEL and legacy Azure requests omit the model.
+        temperature: Chat Completions sampling temperature, defaulting to 0.0. None omits it.
+            Responses requests always omit this parameter.
     """
     
     def required_var(name: str) -> str:
@@ -379,12 +515,16 @@ def create_language_model(
         model_name = model if model is not None else required_var("OPENAI_MODEL")
         endpoint = vals.get("OPENAI_ENDPOINT", None) or None
         org = vals.get("OPENAI_ORGANIZATION", None) or vals.get("OPENAI_ORG", None) or ""
-        return create_openai_language_model(api_key, model_name, endpoint, org, use_responses_api=use_responses_api)
+        return create_openai_language_model(
+            api_key, model_name, endpoint, org, use_responses_api=use_responses_api, temperature=temperature,
+        )
 
     elif "AZURE_OPENAI_API_KEY" in vals:
         api_key=required_var("AZURE_OPENAI_API_KEY")
         endpoint=required_var("AZURE_OPENAI_ENDPOINT")
-        return create_azure_openai_language_model(api_key, endpoint, model=model, use_responses_api=use_responses_api)
+        return create_azure_openai_language_model(
+            api_key, endpoint, model=model, use_responses_api=use_responses_api, temperature=temperature,
+        )
     else:
         raise ValueError("Missing environment variables for OPENAI_API_KEY or AZURE_OPENAI_API_KEY.")
 
@@ -395,6 +535,7 @@ def create_openai_language_model(
     org: str = "",
     *,
     use_responses_api: bool = False,
+    temperature: float | None = 0.0,
 ) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an OpenAI REST API endpoint.
@@ -406,6 +547,8 @@ def create_openai_language_model(
             otherwise defaults to https://api.openai.com/v1/chat/completions.
         org: The OpenAI organization.
         use_responses_api: Use Responses instead of Chat Completions, without endpoint inference or fallback.
+        temperature: Chat Completions sampling temperature, defaulting to 0.0. None omits it.
+            Responses requests always omit this parameter.
     """
     if endpoint is None:
         if use_responses_api:
@@ -420,6 +563,7 @@ def create_openai_language_model(
     }
     return HttpxLanguageModel(
         url=endpoint, headers=headers, default_params=default_params, use_responses_api=use_responses_api,
+        temperature=temperature,
     )
 
 def create_azure_openai_language_model(
@@ -429,6 +573,7 @@ def create_azure_openai_language_model(
     token_provider: TokenProvider | None = None,
     use_responses_api: bool = False,
     model: str | None = None,
+    temperature: float | None = 0.0,
 ) -> HttpxLanguageModel:
     """
     Creates a language model encapsulation of an Azure OpenAI REST API endpoint.
@@ -440,6 +585,8 @@ def create_azure_openai_language_model(
             Invoked for each request attempt; the provider is responsible for caching and renewal.
         use_responses_api: Use Responses instead of Chat Completions, without endpoint inference or fallback.
         model: The model or deployment name. Required in Responses mode; omitted from legacy Azure bodies.
+        temperature: Chat Completions sampling temperature, defaulting to 0.0. None omits it.
+            Responses requests always omit this parameter.
     """
     default_params = {"model": model} if model is not None else {}
     if token_provider is not None:
@@ -447,7 +594,7 @@ def create_azure_openai_language_model(
             raise ValueError("Specify either an API key or a token provider, not both.")
         return HttpxLanguageModel(
             url=endpoint, headers={}, default_params=default_params,
-            token_provider=token_provider, use_responses_api=use_responses_api,
+            token_provider=token_provider, use_responses_api=use_responses_api, temperature=temperature,
         )
     if api_key is None:
         raise ValueError("Specify an API key or a token provider.")
@@ -459,4 +606,5 @@ def create_azure_openai_language_model(
     }
     return HttpxLanguageModel(
         url=endpoint, headers=headers, default_params=default_params, use_responses_api=use_responses_api,
+        temperature=temperature,
     )

@@ -4,15 +4,19 @@ import subprocess
 import sys
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
 from contextlib import asynccontextmanager
+from copy import deepcopy
 from dataclasses import dataclass
 from inspect import Parameter, signature
 from types import SimpleNamespace
-from typing_extensions import Literal, TypedDict, cast
+from unittest.mock import AsyncMock, Mock
+from typing_extensions import Literal, NotRequired, TypedDict, cast
 
 import httpx
 import pytest
 import typechat
 from typechat._internal.model import HttpxLanguageModel
+
+from .test_multimodal_model import MALFORMED_PARTS, MALFORMED_PROMPTS
 
 
 Handler = Callable[[httpx.Request], httpx.Response]
@@ -31,9 +35,25 @@ def mock_client(monkeypatch: pytest.MonkeyPatch) -> MockClient:
     return create
 
 
+class _InputText(TypedDict):
+    type: Literal["input_text", "output_text"]
+    text: str
+
+
+class _InputImage(TypedDict):
+    type: Literal["input_image"]
+    image_url: str
+    detail: NotRequired[Literal["auto", "low", "high"]]
+
+
+class _InputSection(TypedDict):
+    role: Literal["system", "user", "assistant"]
+    content: str | list[_InputText | _InputImage]
+
+
 class _Request(TypedDict):
     model: str
-    input: list[typechat.PromptSection]
+    input: list[_InputSection]
     stream: Literal[False]
 
 
@@ -47,9 +67,9 @@ class _Responses:
         self._outputs = iter(outputs)
 
     async def create(
-        self, *, model: str, input: list[typechat.PromptSection], stream: Literal[False],
+        self, *, model: str, input: list[_InputSection], stream: Literal[False],
     ) -> object:
-        self.requests.append({"model": model, "input": [message.copy() for message in input], "stream": stream})
+        self.requests.append({"model": model, "input": deepcopy(input), "stream": stream})
         output = next(self._outputs)
         if isinstance(output, BaseException):
             raise output
@@ -93,12 +113,15 @@ def _sdk_object(value: object) -> object:
 
 def _model(
     outputs: Sequence[object], use_client: bool, mock_client: MockClient,
+    *, temperature: float | None = 0.0, token_provider: typechat.TokenProvider | None = None,
 ) -> tuple[typechat.TypeChatLanguageModel, list[_Request]]:
     if use_client:
         client = _Client(_Responses([_sdk_object(output) for output in outputs]))
         configured: typechat.ResponsesClient = client
         return (
-            typechat.create_openai_language_model_from_client(configured, "my-deployment", use_responses_api=True),
+            typechat.create_openai_language_model_from_client(
+                configured, "my-deployment", use_responses_api=True, temperature=temperature,
+            ),
             client.responses.requests,
         )
     remaining = iter(outputs)
@@ -109,8 +132,16 @@ def _model(
         return httpx.Response(200, json=next(remaining))
 
     mock_client(handler)
-    model = typechat.create_openai_language_model(
-        "test-key", "my-deployment", "https://example.invalid/opaque?api-version=test", use_responses_api=True,
+    endpoint = "https://example.invalid/opaque?api-version=test"
+    model = (
+        typechat.create_azure_openai_language_model(
+            None, endpoint, model="my-deployment", use_responses_api=True,
+            token_provider=token_provider, temperature=temperature,
+        )
+        if token_provider is not None else
+        typechat.create_openai_language_model(
+            "test-key", "my-deployment", endpoint, use_responses_api=True, temperature=temperature,
+        )
     )
     model.retry_pause_seconds = 0
     return model, requests
@@ -134,9 +165,46 @@ def _complete(
     return asyncio.run(run())
 
 
+def _image_prompts(
+    url: str = "https://images.example.invalid/photo.png?ref=exact%2Fvalue",
+    detail: Literal["auto", "low", "high"] | None = None,
+) -> tuple[list[typechat.PromptSection], list[_InputSection]]:
+    image: typechat.ImageUrl = {"url": url}
+    expected_image: _InputImage = {"type": "input_image", "image_url": url}
+    if detail is not None:
+        image["detail"] = detail
+        expected_image["detail"] = detail
+    data_url = "data:image/png;base64,aW1hZ2U="
+    return (
+        [
+            {"role": "system", "content": [{"type": "text", "text": "Follow the schema."}]},
+            {"role": "user", "content": [
+                {"type": "text", "text": "First image:"},
+                {"type": "image_url", "image_url": image},
+                {"type": "text", "text": "Second image:"},
+                {"type": "image_url", "image_url": {"url": data_url, "detail": "high"}},
+            ]},
+            {"role": "assistant", "content": [{"type": "text", "text": "Ready."}]},
+        ],
+        [
+            {"role": "system", "content": [{"type": "input_text", "text": "Follow the schema."}]},
+            {"role": "user", "content": [
+                {"type": "input_text", "text": "First image:"},
+                expected_image,
+                {"type": "input_text", "text": "Second image:"},
+                {"type": "input_image", "image_url": data_url, "detail": "high"},
+            ]},
+            {"role": "assistant", "content": [{"type": "output_text", "text": "Ready."}]},
+        ],
+    )
+
+
 @pytest.mark.parametrize("use_client", [False, True])
-def test_responses_preserve_text_roles_and_send_only_responses_fields(use_client: bool, mock_client: MockClient):
-    model, requests = _model([_response()], use_client, mock_client)
+@pytest.mark.parametrize("temperature", [0.0, 1.0, None])
+def test_responses_preserve_text_roles_and_send_only_responses_fields(
+    use_client: bool, temperature: float | None, mock_client: MockClient,
+):
+    model, requests = _model([_response()], use_client, mock_client, temperature=temperature)
     prompt: list[typechat.PromptSection] = [
         {"role": "system", "content": "instructions"},
         {"role": "user", "content": "question"},
@@ -146,6 +214,97 @@ def test_responses_preserve_text_roles_and_send_only_responses_fields(use_client
     assert _complete(model, prompt) == typechat.Success("Hello!")
     assert requests == [{"model": "my-deployment", "input": original, "stream": False}]
     assert prompt == original
+
+
+@pytest.mark.parametrize("use_client", [False, True])
+@pytest.mark.parametrize("detail", [None, "auto", "low", "high"])
+@pytest.mark.parametrize("url", [
+    "https://images.example.invalid/photo.png?ref=exact%2Fvalue",
+    "data:image/png;base64,aW1hZ2U=",
+])
+def test_responses_maps_mixed_parts_and_preserves_images_and_optional_detail(
+    use_client: bool, detail: Literal["auto", "low", "high"] | None, url: str, mock_client: MockClient,
+):
+    model, requests = _model([_response()], use_client, mock_client)
+    prompt, expected = _image_prompts(url, detail)
+    original = deepcopy(prompt)
+    assert _complete(model, prompt) == typechat.Success("Hello!")
+    assert requests == [{"model": "my-deployment", "input": expected, "stream": False}]
+    assert prompt == original
+
+
+@pytest.mark.parametrize("use_client", [False, True])
+@pytest.mark.parametrize("role, tag", [
+    ("system", "input_text"), ("user", "input_text"), ("assistant", "output_text"),
+])
+def test_responses_tagged_text_uses_role_specific_parts(
+    use_client: bool, role: Literal["system", "user", "assistant"],
+    tag: Literal["input_text", "output_text"], mock_client: MockClient,
+):
+    model, requests = _model([_response()], use_client, mock_client)
+    prompt: list[typechat.PromptSection] = [
+        {"role": role, "content": [{"type": "text", "text": ""}, {"type": "text", "text": " Exact text "}]},
+    ]
+    original = deepcopy(prompt)
+    assert _complete(model, prompt) == typechat.Success("Hello!")
+    assert requests[0]["input"] == [
+        {"role": role, "content": [{"type": tag, "text": ""}, {"type": tag, "text": " Exact text "}]},
+    ]
+    assert prompt == original
+
+
+def test_responses_client_cannot_mutate_caller_owned_image_prompts(monkeypatch: pytest.MonkeyPatch):
+    client = _Client(_Responses([]))
+    prompt, expected = _image_prompts()
+    original = deepcopy(prompt)
+
+    async def create(*, model: str, input: list[_InputSection], stream: Literal[False]) -> object:
+        assert model == "my-deployment" and stream is False
+        assert input == expected
+        content = input[1]["content"]
+        assert isinstance(content, list)
+        part = content[1]
+        assert part["type"] == "input_image"
+        part["image_url"] = "changed by the configured client"
+        content.clear()
+        input.clear()
+        return _response()
+
+    monkeypatch.setattr(client.responses, "create", create)
+    model = typechat.create_openai_language_model_from_client(client, "my-deployment", use_responses_api=True)
+    assert _complete(model, prompt) == typechat.Success("Hello!")
+    assert prompt == original
+    assert not client.closed
+
+
+@pytest.mark.parametrize("use_client", [False, True])
+@pytest.mark.parametrize("prompt, location", [
+    *MALFORMED_PROMPTS,
+    *[
+        ([{"role": "user", "content": [part]}], "section 0, part 0")
+        for part in MALFORMED_PARTS
+    ],
+    *[
+        ([{"role": role, "content": [{"type": "image_url", "image_url": {"url": "private-image"}}]}],
+         "section 0, part 0")
+        for role in ("system", "assistant")
+    ],
+])
+def test_responses_rejects_invalid_prompts_before_authentication_or_dispatch(
+    use_client: bool, prompt: object, location: str, mock_client: MockClient,
+):
+    provider = Mock(return_value="test-token")
+    model, requests = _model([], use_client, mock_client, token_provider=provider)
+    result = _complete(model, cast(str | list[typechat.PromptSection], prompt))
+    assert isinstance(result, typechat.Failure)
+    assert location in result.message
+    assert "private" not in result.message
+    assert "prompt-data-must-not-leak" not in result.message
+    assert "data:image" not in result.message
+    assert "https://" not in result.message
+    assert not result.has_value and result.response_text is None
+    assert requests == []
+    provider.assert_not_called()
 
 
 @pytest.mark.parametrize("use_client", [False, True])
@@ -301,8 +460,9 @@ def test_client_requires_a_nonempty_model(model_name: str):
     "https://example.invalid/opaque/chat/completions?route=responses&version=test",
 ])
 @pytest.mark.parametrize("azure", [False, True])
+@pytest.mark.parametrize("temperature", [0.0, 1.0, None])
 def test_http_factories_preserve_complete_destinations_and_model_placement(
-    endpoint: str, azure: bool, mock_client: MockClient,
+    endpoint: str, azure: bool, temperature: float | None, mock_client: MockClient,
 ):
     requests: list[httpx.Request] = []
 
@@ -312,9 +472,13 @@ def test_http_factories_preserve_complete_destinations_and_model_placement(
 
     mock_client(handler)
     model = (
-        typechat.create_azure_openai_language_model("literal-key", endpoint, model="deployment", use_responses_api=True)
+        typechat.create_azure_openai_language_model(
+            "literal-key", endpoint, model="deployment", use_responses_api=True, temperature=temperature,
+        )
         if azure else
-        typechat.create_openai_language_model("literal-key", "deployment", endpoint, "org", use_responses_api=True)
+        typechat.create_openai_language_model(
+            "literal-key", "deployment", endpoint, "org", use_responses_api=True, temperature=temperature,
+        )
     )
     assert _complete(model) == typechat.Success("Hello!")
     assert str(requests[0].url) == endpoint
@@ -367,7 +531,10 @@ def test_openai_responses_requires_a_nonempty_model(model_name: str):
 
 
 @pytest.mark.parametrize("azure", [False, True])
-def test_dictionary_factory_supports_responses_without_new_environment_names(azure: bool, mock_client: MockClient):
+@pytest.mark.parametrize("temperature", [0.0, 1.0, None])
+def test_dictionary_factory_supports_responses_without_new_environment_names(
+    azure: bool, temperature: float | None, mock_client: MockClient,
+):
     requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -383,9 +550,12 @@ def test_dictionary_factory_supports_responses_without_new_environment_names(azu
             "OPENAI_ORGANIZATION": "preferred-org", "OPENAI_ORG": "legacy-org", "AZURE_OPENAI_API_KEY": "ignored",
         }
     )
-    model = typechat.create_language_model(settings, model="deployment" if azure else None, use_responses_api=True)
+    model = typechat.create_language_model(
+        settings, model="deployment" if azure else None, use_responses_api=True, temperature=temperature,
+    )
     assert _complete(model) == typechat.Success("Hello!")
     assert json.loads(requests[0].content)["model"] == ("deployment" if azure else "model")
+    assert "temperature" not in json.loads(requests[0].content)
     if azure:
         assert requests[0].headers["api-key"] == "identity"
     else:
@@ -419,7 +589,10 @@ def test_endpoint_spelling_does_not_change_legacy_chat_mode(mock_client: MockCli
 
 
 @pytest.mark.parametrize("provider_kind", ["sync", "async", "awaitable"])
-def test_tokens_resolve_afresh_for_responses_retries_and_completion(provider_kind: str, mock_client: MockClient):
+@pytest.mark.parametrize("with_images", [False, True])
+def test_tokens_resolve_afresh_for_responses_retries_and_completion(
+    provider_kind: str, with_images: bool, mock_client: MockClient,
+):
     requests: list[httpx.Request] = []
     statuses = iter([429, 500, 503, 200, 200])
     token_count = 0
@@ -455,11 +628,12 @@ def test_tokens_resolve_afresh_for_responses_retries_and_completion(provider_kin
     )
     model.retry_pause_seconds = 0
     model.timeout_seconds = 7
+    image_prompt, expected_images = _image_prompts()
 
     async def run() -> None:
         async with model:
-            assert await model.complete("first") == typechat.Success("Hello!")
-            assert await model.complete("second") == typechat.Success("Hello!")
+            assert await model.complete(image_prompt if with_images else "first") == typechat.Success("Hello!")
+            assert await model.complete(image_prompt if with_images else "second") == typechat.Success("Hello!")
 
     asyncio.run(run())
     assert token_count == len(requests) == 5
@@ -467,6 +641,9 @@ def test_tokens_resolve_afresh_for_responses_retries_and_completion(provider_kin
         f"token-{number}" for number in range(1, 6)
     ]
     assert all("api-key" not in request.headers for request in requests)
+    if with_images:
+        assert all(json.loads(request.content)["input"] == expected_images for request in requests)
+        assert image_prompt == _image_prompts()[0]
     assert requests[0].extensions["timeout"] == {"connect": 7, "read": 7, "write": 7, "pool": 7}
 
 
@@ -622,26 +799,38 @@ class _Value:
 
 
 @pytest.mark.parametrize("use_client", [False, True])
-def test_translator_accepts_valid_responses_without_repair(use_client: bool, mock_client: MockClient):
+@pytest.mark.parametrize("with_images", [False, True])
+def test_translator_accepts_valid_responses_without_repair(
+    use_client: bool, with_images: bool, mock_client: MockClient,
+):
     model, requests = _model([_response('{"value": "validated"}')], use_client, mock_client)
     translator = typechat.TypeChatJsonTranslator(model, typechat.TypeChatValidator(_Value), _Value)
+    preamble, expected = _image_prompts() if with_images else ([], [])
+    original = deepcopy(preamble)
 
     async def run() -> typechat.Result[_Value]:
         async with _open_model(model):
-            return await translator.translate("get value")
+            return await translator.translate("get value", prompt_preamble=preamble)
 
     assert asyncio.run(run()) == typechat.Success(_Value("validated"))
     assert len(requests) == 1
+    assert requests[0]["input"][:-1] == expected
+    assert preamble == original
 
 
 @pytest.mark.parametrize("use_client", [False, True])
+@pytest.mark.parametrize("with_images", [False, True])
 @pytest.mark.parametrize("initial", ['{"wrong": "field"}', '{"value":', "not JSON"])
 def test_translator_validates_and_repairs_responses_without_changing_mode(
-    initial: str, use_client: bool, mock_client: MockClient,
+    initial: str, use_client: bool, with_images: bool, mock_client: MockClient,
 ):
     model, requests = _model([_response(initial), _response('{"value": "repaired"}')], use_client, mock_client)
     translator = typechat.TypeChatJsonTranslator(model, typechat.TypeChatValidator(_Value), _Value)
     preamble: list[typechat.PromptSection] = [{"role": "system", "content": "context"}]
+    expected: list[_InputSection] = [{"role": "system", "content": "context"}]
+    if with_images:
+        preamble, expected = _image_prompts()
+    original = deepcopy(preamble)
 
     async def run() -> None:
         async with _open_model(model):
@@ -649,50 +838,90 @@ def test_translator_validates_and_repairs_responses_without_changing_mode(
 
     asyncio.run(run())
     assert len(requests) == 2
-    assert [message["role"] for message in requests[0]["input"]] == ["system", "user"]
-    assert [message["role"] for message in requests[1]["input"]] == ["system", "user", "assistant", "user"]
-    assert requests[1]["input"][2]["content"] == initial
-    assert preamble == [{"role": "system", "content": "context"}]
+    assert requests[0]["input"][:-1] == expected
+    assert requests[0]["input"][-1]["role"] == "user"
+    assert requests[1]["input"][:-2] == requests[0]["input"]
+    assert requests[1]["input"][-2] == {"role": "assistant", "content": initial}
+    assert requests[1]["input"][-1]["role"] == "user"
+    assert preamble == original
 
 
 @pytest.mark.parametrize("use_client", [False, True])
-def test_translator_preserves_final_failure_values_and_one_repair_default(use_client: bool, mock_client: MockClient):
+@pytest.mark.parametrize("with_images", [False, True])
+def test_translator_preserves_final_failure_values_and_one_repair_default(
+    use_client: bool, with_images: bool, mock_client: MockClient,
+):
     model, requests = _model([_response('{"value": 123}'), _response("not JSON")], use_client, mock_client)
     translator = typechat.TypeChatJsonTranslator(model, typechat.TypeChatValidator(_Value), _Value)
+    preamble, expected = _image_prompts() if with_images else ([], [])
+    original = deepcopy(preamble)
 
     async def run() -> typechat.Result[_Value]:
         async with _open_model(model):
-            return await translator.translate("get value")
+            return await translator.translate("get value", prompt_preamble=preamble)
 
     result = asyncio.run(run())
     assert isinstance(result, typechat.Failure)
     assert result.has_value and result.value == {"value": 123}
     assert result.response_text == "not JSON"
     assert len(requests) == 2
+    assert all(request["input"][:len(expected)] == expected for request in requests)
+    assert preamble == original
 
 
 @pytest.mark.parametrize("use_client", [False, True])
 @pytest.mark.parametrize("after_repair", [False, True])
+@pytest.mark.parametrize("with_images", [False, True])
 def test_model_output_failure_stops_translation_without_an_additional_repair(
-    use_client: bool, after_repair: bool, mock_client: MockClient,
+    use_client: bool, after_repair: bool, with_images: bool, mock_client: MockClient,
 ):
     outputs = [_response('{"value": 123}')] if after_repair else []
     outputs.append({**_response(), "status": "incomplete"})
     model, requests = _model(outputs, use_client, mock_client)
     translator = typechat.TypeChatJsonTranslator(model, typechat.TypeChatValidator(_Value), _Value)
+    preamble, expected = _image_prompts() if with_images else ([], [])
+    original = deepcopy(preamble)
 
     async def run() -> typechat.Result[_Value]:
         async with _open_model(model):
-            return await translator.translate("get value")
+            return await translator.translate("get value", prompt_preamble=preamble)
 
     result = asyncio.run(run())
     assert isinstance(result, typechat.Failure)
     assert len(requests) == (2 if after_repair else 1)
+    assert all(request["input"][:len(expected)] == expected for request in requests)
+    assert preamble == original
     if after_repair:
         assert result.has_value and result.value == {"value": 123}
         assert result.response_text == '{"value": 123}'
     else:
         assert not result.has_value and result.response_text is None
+
+
+@pytest.mark.parametrize("use_client", [False, True])
+def test_responses_rejects_malformed_image_preambles_without_repair(
+    use_client: bool, mock_client: MockClient, monkeypatch: pytest.MonkeyPatch,
+):
+    provider = Mock(return_value="test-token")
+    model, requests = _model([], use_client, mock_client, token_provider=provider)
+    complete = AsyncMock(wraps=model.complete)
+    monkeypatch.setattr(model, "complete", complete)
+    translator = typechat.TypeChatJsonTranslator(model, typechat.TypeChatValidator(_Value), _Value)
+    preamble = cast(list[typechat.PromptSection], [
+        {"role": "user", "content": [{"type": "image_url", "image_url": {"url": ""}}]},
+    ])
+
+    async def run() -> typechat.Result[_Value]:
+        async with _open_model(model):
+            return await translator.translate("get value", prompt_preamble=preamble)
+
+    result = asyncio.run(run())
+    assert isinstance(result, typechat.Failure)
+    assert "section 0, part 0" in result.message
+    assert not result.has_value and result.response_text is None
+    assert requests == []
+    provider.assert_not_called()
+    complete.assert_awaited_once()
 
 
 def test_responses_import_and_protocol_need_no_provider_sdk():
