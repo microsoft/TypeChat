@@ -216,8 +216,8 @@ function stripNulls(obj: any) {
                     obj[k] = value.filter(x => x !== null);
                 }
             }
-            if (typeof value === "object") {
-                stripNulls(value);
+            if (typeof obj[k] === "object") {
+                stripNulls(obj[k]);
             }
         }
     }
