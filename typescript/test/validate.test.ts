@@ -103,6 +103,33 @@ export interface Order {
     currency: Currency;
 }`;
 
+const callableSchema = `
+export interface Response {
+    callback: () => string;
+    factory: new () => { ok: boolean };
+}`;
+
+const promiseLikeSchema = `
+interface PromiseLike<T> {
+    then(onFulfilled: (value: T) => unknown): unknown;
+    catch(onRejected: (reason: unknown) => unknown): unknown;
+}
+export interface Response {
+    value: PromiseLike<string>;
+}`;
+
+const genericWrapperSchema = `
+export interface Metadata {
+    m1: string; m2: string; m3: string; m4: string;
+    m5: string; m6: string; m7: string;
+}
+export interface Wrapper<T> {
+    a: string; b: string; c: string; d: string;
+    e: string; f: string; g: string; payload: T;
+}
+export type Response = Wrapper<Metadata>;
+`;
+
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
@@ -219,6 +246,24 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(!invalid.success, "expected a value not produced by the computed member to fail");
             assert.match(invalid.message, /not assignable/);
         });
+
+        it("preserves rejection of call and construct signatures", () => {
+            const v = validatorFor(callableSchema, "Response");
+            const callback = v.validate({ callback: {}, factory: { ok: true } });
+            assert.ok(!callback.success, "expected an empty object not to satisfy a call signature");
+            assert.match(callback.message, /not assignable/);
+
+            const factory = v.validate({ callback: () => "ok", factory: {} });
+            assert.ok(!factory.success, "expected an empty object not to satisfy a construct signature");
+            assert.match(factory.message, /not assignable/);
+        });
+
+        it("preserves rejection of Promise-shaped objects with non-callable methods", () => {
+            const v = validatorFor(promiseLikeSchema, "Response");
+            const result = v.validate({ value: { then: {}, catch: {} } });
+            assert.ok(!result.success, "expected non-callable then/catch methods to fail");
+            assert.match(result.message, /not assignable/);
+        });
     });
 
     describe("type mismatch errors (backward-compatible: unchanged code path)", () => {
@@ -331,6 +376,30 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(result.data.includes("import { Point } from './schema'"));
             assert.ok(result.data.includes("type __TypeChatJsonWire<T> = T extends string"));
             assert.ok(result.data.includes("const json: __TypeChatJsonWire<Point> ="));
+        });
+    });
+
+    describe("missing-property diagnostics with custom module text", () => {
+        it("keeps a custom generic annotation as the diagnostic target", () => {
+            const v = validatorFor<Record<string, unknown>>(genericWrapperSchema, "Response");
+            v.createModuleTextFromJson = value => ({
+                success: true,
+                data: `import { Wrapper, Metadata } from './schema';\n` +
+                    `const json: Wrapper<Metadata> = ${JSON.stringify(value)};`
+            });
+            const result = v.validate({
+                payload: { m1: "", m2: "", m3: "", m4: "", m5: "", m6: "", m7: "" }
+            });
+            assert.ok(!result.success, "expected the missing wrapper fields to fail validation");
+            assert.match(result.message, /Wrapper<Metadata>/);
+            assert.ok(
+                result.message.includes(": a, b, c, d, e, f, g"),
+                `expected all missing wrapper properties, got: ${result.message}`
+            );
+            assert.ok(
+                !result.message.includes("from type 'Metadata'"),
+                `diagnostic must not target the unwrapped Metadata type, got: ${result.message}`
+            );
         });
     });
 });
