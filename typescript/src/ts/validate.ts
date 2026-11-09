@@ -1,23 +1,10 @@
-import { createRequire } from 'node:module';
-import { Result, success, error } from '../result';
-import { TypeChatJsonValidator } from "../typechat";
-
-// TypeScript 7 ships as an ES module, while this package is emitted as CommonJS. Node's
-// `require(esm)` support (Node >=22.12) lets us load it synchronously, and `resolution-mode`
-// makes the TypeScript compiler resolve the ESM-only types from a CommonJS file.
 // TODO: Revisit these `typescript/unstable/*` imports once a stable API is available.
-type SyncModule = typeof import('typescript/unstable/sync', { with: { 'resolution-mode': 'import' } });
-type FileSystemModule = typeof import('typescript/unstable/fs', { with: { 'resolution-mode': 'import' } });
-type AstIsModule = typeof import('typescript/unstable/ast/is', { with: { 'resolution-mode': 'import' } });
-
-type Checker = InstanceType<SyncModule['Checker']>;
-type Diagnostic = import('typescript/unstable/sync', { with: { 'resolution-mode': 'import' } }).Diagnostic;
-type SourceFile = import('typescript/unstable/ast', { with: { 'resolution-mode': 'import' } }).SourceFile;
-
-const requireEsm = createRequire(__filename);
-const { API, NodeBuilderFlags, SymbolFlags }: SyncModule = requireEsm('typescript/unstable/sync');
-const { createVirtualFileSystem }: FileSystemModule = requireEsm('typescript/unstable/fs');
-const { isTypeReferenceNode, isVariableStatement }: AstIsModule = requireEsm('typescript/unstable/ast/is');
+import { API, NodeBuilderFlags, SymbolFlags, type Checker, type Diagnostic } from 'typescript/unstable/sync';
+import { createVirtualFileSystem } from 'typescript/unstable/fs';
+import type { SourceFile } from 'typescript/unstable/ast';
+import { isTypeReferenceNode, isVariableStatement } from 'typescript/unstable/ast/is';
+import { Result, success, error } from '../result.js';
+import { typeChatSchemaValidation, type TypeChatJsonValidator } from "../typechat.js";
 
 const libText = `interface Array<T> { length: number, [n: number]: T }
 interface Object { toString(): string }
@@ -27,12 +14,31 @@ interface NewableFunction extends Function {}
 interface String { readonly length: number }
 interface Boolean { valueOf(): boolean }
 interface Number { valueOf(): number }
-interface RegExp { test(string: string): boolean }`;
+interface RegExp { test(string: string): boolean }
+interface ReadonlyArray<T> { readonly length: number, readonly [n: number]: T }
+type Partial<T> = { [P in keyof T]?: T[P] };
+type Required<T> = { [P in keyof T]-?: T[P] };
+type Readonly<T> = { readonly [P in keyof T]: T[P] };
+type Pick<T, K extends keyof T> = { [P in K]: T[P] };
+type Record<K extends keyof any, T> = { [P in K]: T };
+type Exclude<T, U> = T extends U ? never : T;
+type Extract<T, U> = T extends U ? T : never;
+type Omit<T, K extends keyof any> = Pick<T, Exclude<keyof T, K>>;
+type NonNullable<T> = T & {};
+interface PromiseLike<T> { then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): PromiseLike<TResult1 | TResult2> }
+interface Promise<T> { then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): Promise<TResult1 | TResult2>; catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): Promise<T | TResult> }
+type ReturnType<T extends (...args: any) => any> = T extends (...args: any) => infer R ? R : any;
+type Awaited<T> = T extends null | undefined ? T : T extends object & { then(onfulfilled: infer F, ...args: infer _): any } ? F extends ((value: infer V, ...args: infer _) => any) ? Awaited<V> : never : T;
+type Uppercase<S extends string> = intrinsic;
+type Lowercase<S extends string> = intrinsic;
+type Capitalize<S extends string> = intrinsic;
+type Uncapitalize<S extends string> = intrinsic;`;
 
 const configFileName = "/tsconfig.json";
 const libFileName = "/lib.d.ts";
 const schemaFileName = "/schema.ts";
 const jsonFileName = "/json.ts";
+const schemaValidationFileName = "/schema-validation.ts";
 
 /**
  * Returns a type alias name that does not collide with identifiers in the schema.
@@ -74,14 +80,23 @@ export interface TypeScriptJsonValidator<T extends object> extends TypeChatJsonV
     close(): void;
 }
 
+export interface TypeScriptJsonValidatorWithSchemaValidation<T extends object> extends TypeScriptJsonValidator<T> {
+    [typeChatSchemaValidation](): Result<void>;
+}
+
 /**
  * Returns a JSON validator for a given TypeScript schema. Validation is performed by an in-memory instance of
  * the TypeScript compiler. The specified type argument `T` must be the same type as `typeName` in the given `schema`.
  * @param schema A string containing the TypeScript source code for the JSON schema.
  * @param typeName The name of the JSON target type in the schema.
- * @returns A `TypeChatJsonValidator<T>` instance.
+ * @param schemaValidationTypeName The exported schema type to check before translation. Defaults to `typeName`.
+ * @returns A `TypeScriptJsonValidatorWithSchemaValidation<T>` instance.
  */
-export function createTypeScriptJsonValidator<T extends object = object>(schema: string, typeName: string): TypeScriptJsonValidator<T> {
+export function createTypeScriptJsonValidator<T extends object = object>(
+    schema: string,
+    typeName: string,
+    schemaValidationTypeName: string = typeName
+): TypeScriptJsonValidatorWithSchemaValidation<T> {
     const fileSystem = createVirtualFileSystem({
         [configFileName]: JSON.stringify({
             compilerOptions: {
@@ -90,27 +105,79 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
                 noLib: true,
                 types: []
             },
-            files: [libFileName, schemaFileName, jsonFileName]
+            files: [libFileName, schemaFileName, jsonFileName, schemaValidationFileName]
         }),
         [libFileName]: libText,
         [schemaFileName]: schema,
-        [jsonFileName]: ""
+        [jsonFileName]: "",
+        [schemaValidationFileName]: ""
     });
     const api = new API({ fs: fileSystem, cwd: "/" });
     api.updateSnapshot({ openProjects: [configFileName] });
     if (!fileSystem.writeFile) {
         throw new Error("The TypeScript virtual file system doesn't support writing files.");
     }
-    const writeJsonFile = fileSystem.writeFile;
+    const writeFile = fileSystem.writeFile;
     const jsonWireTypeName = createUniqueJsonWireTypeName(schema);
-    const validator: TypeScriptJsonValidator<T> = {
+    let schemaValidationResult: Result<void> | undefined;
+    const validator: TypeScriptJsonValidatorWithSchemaValidation<T> = {
         getSchemaText: () => schema,
         getTypeName: () => typeName,
+        [typeChatSchemaValidation]: validateSchema,
         createModuleTextFromJson,
         validate,
         close: () => api.close()
     };
     return validator;
+
+    function validateSchema(): Result<void> {
+        if (schemaValidationResult) {
+            return schemaValidationResult;
+        }
+
+        writeFile(
+            schemaValidationFileName,
+            `export type __TypeChatSchemaTarget = import('./schema').${schemaValidationTypeName};\n`
+        );
+        const snapshot = api.updateSnapshot({
+            fileChanges: { changed: [schemaValidationFileName] }
+        });
+        const project = snapshot.getProject(configFileName);
+        if (!project) {
+            schemaValidationResult = error(
+                `The TypeScript schema project '${configFileName}' couldn't be loaded.`
+            );
+            return schemaValidationResult;
+        }
+
+        const program = project.program;
+        const schemaFiles = [schemaFileName, schemaValidationFileName]
+            .map(fileName => program.getSourceFile(fileName))
+            .filter((sourceFile): sourceFile is SourceFile => sourceFile !== undefined);
+        if (schemaFiles.length !== 2) {
+            schemaValidationResult = error("The TypeScript schema preflight files couldn't be loaded.");
+            return schemaValidationResult;
+        }
+        const diagnostics = schemaFiles.flatMap(sourceFile => [
+            ...program.getSyntacticDiagnostics(sourceFile.fileName),
+            ...program.getSemanticDiagnostics(sourceFile.fileName)
+        ]);
+        schemaValidationResult = diagnostics.length
+            ? error(
+                diagnostics
+                    .map(diagnostic =>
+                        formatSchemaDiagnostic(
+                            diagnostic,
+                            diagnostic.fileName === undefined
+                                ? undefined
+                                : program.getSourceFile(diagnostic.fileName)
+                        )
+                    )
+                    .join("\n")
+            )
+            : success(undefined);
+        return schemaValidationResult;
+    }
 
     function validate(jsonObject: object): Result<T> {
         const moduleResult = validator.createModuleTextFromJson(jsonObject);
@@ -122,7 +189,7 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
                 data: jsonObject
             };
         }
-        writeJsonFile(jsonFileName, moduleResult.data);
+        writeFile(jsonFileName, moduleResult.data);
         const snapshot = api.updateSnapshot({ fileChanges: { changed: [jsonFileName] } });
         const project = snapshot.getProject(configFileName);
         if (!project) {
@@ -162,6 +229,25 @@ export function createTypeScriptJsonValidator<T extends object = object>(schema:
                 appendMessages(child, indent + 1);
             }
         }
+    }
+
+    function formatSchemaDiagnostic(
+        diagnostic: Diagnostic,
+        sourceFile: SourceFile | undefined
+    ): string {
+        const message = flattenDiagnosticMessageText(diagnostic, "\n");
+        if (!sourceFile || diagnostic.pos < 0) {
+            return message;
+        }
+        const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+            diagnostic.pos
+        );
+        const fileName = sourceFile.fileName === schemaFileName
+            ? "schema.ts"
+            : sourceFile.fileName === schemaValidationFileName
+                ? "schema validation"
+                : sourceFile.fileName;
+        return `${fileName}(${line + 1},${character + 1}): ${message}`;
     }
 
     /**

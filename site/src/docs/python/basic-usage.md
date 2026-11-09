@@ -76,19 +76,29 @@ def create_openai_language_model(
     api_key: str,
     model: str,
     endpoint: str = "https://api.openai.com/v1/chat/completions",
-    org: str = ""
+    org: str = "",
+    *,
+    temperature: float | None = 0.0,
 ):
     ...
 
-def create_azure_openai_language_model(api_key: str, endpoint: str): ...
+def create_azure_openai_language_model(
+    api_key: str | None,
+    endpoint: str,
+    *,
+    token_provider: TokenProvider | None = None,
+    temperature: float | None = 0.0,
+): ...
 ```
 
 For even more convenience, TypeChat also provides a function to infer whether
 you're using OpenAI or Azure OpenAI.
 
-```ts
+```py
 def create_language_model(
-    vals: dict[str, str | None]
+    vals: dict[str, str | None],
+    *,
+    temperature: float | None = 0.0,
 ) -> TypeChatLanguageModel: ...
 ```
 
@@ -97,8 +107,140 @@ pass them in.
 Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get
 a model of the appropriate type.
 
-The `TypeChatLanguageModel` returned by these functions has a few writable
-attributes you might find useful:
+#### Using a bearer-token provider
+
+For keyless Azure OpenAI authentication, pass `api_key=None` and an existing
+token provider directly. `TokenProvider` is a callable returning either a token
+string or an awaitable token string, so both synchronous and asynchronous
+providers work:
+
+```py
+from typechat import create_azure_openai_language_model
+
+model = create_azure_openai_language_model(
+    api_key=None,
+    endpoint=chat_completions_endpoint,
+    token_provider=token_provider,
+)
+```
+
+The endpoint is the full deployment Chat Completions URL, including its
+`api-version` query parameter. The provider is called for every HTTP attempt,
+including retries, and this authentication path sends only an `Authorization:
+Bearer ...` header, not an `api-key` header. The provider owns credential
+acquisition, caching, renewal, and cleanup. TypeChat does not cache tokens or
+require an Azure Identity dependency.
+
+API keys and token providers are mutually exclusive. Return the raw token without
+a `Bearer ` prefix. Non-string/empty tokens and tokens containing whitespace,
+control characters, or non-ASCII characters produce a fixed, credential-free
+`Failure` before an authorization header is constructed or a request is sent. Provider exceptions use the
+existing HTTP model retry/failure behavior; cancellation propagates.
+
+Synchronous providers execute on the event-loop thread and should be nonblocking.
+Prefer an asynchronous provider for network I/O. For an existing thread-safe
+`blocking_token_provider` that returns a token string, offload it explicitly:
+
+```py
+import asyncio
+
+async def token_provider() -> str:
+    return await asyncio.to_thread(blocking_token_provider)
+```
+
+Pass this wrapper as `token_provider` to the factory. The blocking provider owns
+its I/O timeouts and thread safety; cancelling the wrapper does not forcibly stop
+work already running in the thread. The model's HTTP timeout does not bound token
+acquisition. Do not offload providers that create loop-bound futures or otherwise
+require the running event loop: pass those directly and return their awaitable.
+TypeChat does not automatically move synchronous providers to a worker thread.
+
+Existing API-key calls, positional arguments, environment-variable handling,
+and legacy headers are unchanged. In particular, setting
+`AZURE_OPENAI_API_KEY=identity` does not activate a credential provider.
+
+#### Reusing an already configured client
+
+If your application already has an `AsyncOpenAI`, `AsyncAzureOpenAI`, or
+compatible asynchronous Chat Completions client, adapt that instance directly:
+
+```py
+from typechat import create_openai_language_model_from_client
+
+model = create_openai_language_model_from_client(
+    openai_client,
+    model="my-model-or-azure-deployment",
+)
+```
+
+The adapter uses `client.chat.completions.create` and reads
+`choices[0].message.content`. It requires no environment variables and adds no
+SDK dependency to TypeChat. It sends TypeChat's prompt sections with
+`n=1` and `stream=False`; the caller supplies the model or Azure deployment name.
+Temperature defaults to `0.0` and can be configured or omitted as described below.
+
+Your client's endpoint, API version, authentication, retries, and timeouts
+remain configured by your application. TypeChat does not reconfigure or close
+the client, or add another retry/timeout layer. Client exceptions and
+cancellation propagate unchanged. Missing choices or text produce a `Failure`.
+The adapter is for Chat Completions, not the Responses API.
+
+Pass either model to `TypeChatJsonTranslator` as usual. Schema generation,
+validation, and repair behavior remain unchanged.
+
+#### Configuring temperature
+
+All four model factories accept a keyword-only `temperature: float | None`
+option. Leaving it unspecified retains the existing `0.0` setting. Pass a number
+to configure it, or `None` to omit the field entirely (not send JSON `null`) and
+use the configured client's or service's default:
+
+```py
+model = create_azure_openai_language_model(
+    api_key=None,
+    endpoint=chat_completions_endpoint,
+    token_provider=token_provider,
+    temperature=None,
+)
+
+model = create_openai_language_model_from_client(
+    openai_client,
+    model="my-model-or-azure-deployment",
+    temperature=None,
+)
+```
+
+Omission supports reasoning models that reject explicit sampling parameters,
+including models that do not support disabling reasoning. It does not set a
+reasoning effort, infer model capabilities, change authentication, or switch APIs.
+Other client settings, ownership, retries, and timeouts are unchanged.
+
+#### Using OpenAI-compatible gateways
+
+TypeChat works with any service that exposes the OpenAI Chat Completions API.
+To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
+point `create_openai_language_model` at the gateway's endpoint via the
+`endpoint` argument:
+
+```py
+model = create_openai_language_model(
+    api_key, model, endpoint="https://api.orcarouter.ai/v1/chat/completions"
+)
+```
+
+With `create_language_model`, set the `OPENAI_ENDPOINT` environment variable to
+the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
+`OPENAI_MODEL`:
+
+```
+OPENAI_API_KEY=<your API key>
+OPENAI_MODEL=<model name>
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+```
+
+The HTTP models returned by `create_language_model`,
+`create_openai_language_model`, and `create_azure_openai_language_model` have a
+few writable attributes you might find useful:
 
 - `max_retry_attempts`
 - `retry_pause_seconds`
@@ -119,6 +261,104 @@ load_dotenv()
 import typechat
 model = typechat.create_language_model(os.environ)
 ```
+
+## Text and image prompts
+
+The HTTP Chat Completions models and configured-client adapter accept image
+references alongside text. Use `model.complete` for text output, or supply image
+context through the translator's existing `prompt_preamble` for validated data.
+The calls below demonstrate both interfaces; an application can use either
+independently. Replace the hosted URL with your own and pass already-base64-encoded
+image data:
+
+```py
+from typing_extensions import TypedDict
+
+from typechat import (
+    PromptSection,
+    Result,
+    TypeChatJsonTranslator,
+    TypeChatLanguageModel,
+    TypeChatValidator,
+)
+
+
+class ImageDescription(TypedDict):
+    description: str
+
+
+async def inspect_images(
+    model: TypeChatLanguageModel, image_base64: str
+) -> tuple[Result[str], Result[ImageDescription]]:
+    context: list[PromptSection] = [
+        {"role": "user", "content": [
+            {"type": "text", "text": "Use these images as context."},
+            {"type": "image_url", "image_url": {"url": "https://example.com/photo.png"}},
+            {"type": "image_url", "image_url": {
+                "url": f"data:image/png;base64,{image_base64}",
+                "detail": "low",
+            }},
+        ]},
+    ]
+    text = await model.complete(context)
+    translator = TypeChatJsonTranslator(model, TypeChatValidator(ImageDescription), ImageDescription)
+    data = await translator.translate("Describe the images.", prompt_preamble=context)
+    return text, data
+```
+
+These are ordinary dictionaries, with the following public types exported by
+`typechat`:
+
+```py
+from typing_extensions import Literal, NotRequired, TypeAlias, TypedDict
+
+class TextPromptContent(TypedDict):
+    type: Literal["text"]
+    text: str
+
+class ImageUrl(TypedDict):
+    url: str
+    detail: NotRequired[Literal["auto", "low", "high"]]
+
+class ImagePromptContent(TypedDict):
+    type: Literal["image_url"]
+    image_url: ImageUrl
+
+PromptContent: TypeAlias = str | list[TextPromptContent | ImagePromptContent]
+
+class PromptSection(TypedDict):
+    role: Literal["system", "user", "assistant"]
+    content: PromptContent
+```
+
+Whole-string content still works in every role. Lists must contain tagged
+`text` or `image_url` dictionaries, not bare strings. Tagged text is supported
+in system, user, and assistant messages; images are supported only in user
+messages. Image references must be nonempty strings. Omit `detail` to leave it
+unspecified, or use `auto`, `low`, or `high`. The models preserve message and part
+ordering, exact URL/data-URL strings, and caller-owned dictionaries. Malformed
+or unsupported input returns a `Failure` identifying the section or part without
+echoing its content, before resolving a token or dispatching a request.
+
+The translator's current request remains a string, and ordinary `translate(str)`
+calls need no changes. Preamble messages remain before the combined schema/request
+message; validation and repair keep the original context and append rejected
+assistant text followed by user diagnostics. This does not adopt the alternative
+prompt layout proposed in [#241](https://github.com/microsoft/TypeChat/pull/241).
+Model completions remain text-only, and schema generation and strict result
+validation are unchanged.
+
+Supply a provider/model that supports images and follow its supported file formats
+(for example PNG, JPEG, or WebP), accessible-URL requirements, image-count limits,
+and encoded-payload, resolution, and size limits. TypeChat validates reference
+structure only. It never fetches, decodes, resizes, or validates image bytes and
+does not add image generation, audio/video, streaming, or Responses API support.
+No new dependency is required. Existing API-key/token-provider authentication,
+HTTP retries/timeouts/response-size limits, and caller-owned SDK configuration and
+lifecycle remain unchanged. Custom models must handle the prompt parts they accept.
+
+For a separate application example, see the
+[contributed TypeScript image example](https://github.com/microsoft/TypeChat/pull/258).
 
 ## Defining and Loading the Schema
 
@@ -146,8 +386,45 @@ We defined `Sentiment` as a `@dataclass` so we could have all of the convenience
 If we declared `Sentiment` as a `TypedDict`, TypeChat would provide us with a `dict`.
 That would mean that to access the value of `sentiment`, we would have to write `value["sentiment"]`.
 
-Note that while we used [the built-in `typing` module](https://docs.python.org/3/library/typing.html), [`typing_extensions`](https://pypi.org/project/typing-extensions/) is supported as well.
-TypeChat also understands constructs like `Annotated` and `Doc` to add comments to individual attributes.
+Both [the built-in `typing` module](https://docs.python.org/3/library/typing.html) and [`typing_extensions`](https://pypi.org/project/typing-extensions/) are supported.
+On Python 3.11, however, import `TypedDict` from `typing_extensions`: Pydantic requires it instead of `typing.TypedDict` on Python versions earlier than 3.12.
+`Annotated` and `Literal` can still be imported from `typing`.
+
+Here is a complete `TypedDict` version of `schema.py`, with a `Doc` description for the field:
+
+```py
+from typing import Annotated, Literal
+from typing_extensions import Doc, TypedDict
+
+class Sentiment(TypedDict):
+    sentiment: Annotated[
+        Literal["negative", "neutral", "positive"],
+        Doc("The sentiment of the user input."),
+    ]
+```
+
+Or use a plain string for the same field description:
+
+```py
+from typing import Annotated, Literal
+from typing_extensions import TypedDict
+
+class Sentiment(TypedDict):
+    sentiment: Annotated[
+        Literal["negative", "neutral", "positive"],
+        "The sentiment of the user input.",
+    ]
+```
+
+Either `Doc` or a plain string in `Annotated` supplies documentation to the generated TypeScript schema.
+Trailing inline comments on directly declared `TypedDict` and dataclass fields also supply schema documentation when their Python source is available.
+Explicit `Annotated` documentation takes precedence over inline comments, even when that explicit documentation is empty.
+If source is unavailable, conversion still uses the type annotations and explicit documentation, but cannot include inline comments.
+
+[`typing.NewType`](https://docs.python.org/3/library/typing.html#typing.NewType) (and `typing_extensions.NewType`) is also supported.
+TypeChat converts a NewType through its `__supertype__`, so the TypeScript schema uses the underlying JSON type: `NewType("UserId", str)` becomes `string`, and a NewType built on another NewType follows the chain.
+Runtime validation still uses the declared Python type; NewType itself does not add checks beyond that underlying type.
+
 
 ## Creating a Validator
 

@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { createJsonTranslator, typeChatSchemaValidation } from "../dist/index.js";
 import { createZodJsonValidator, getZodSchemaAsTypeScript } from "../dist/zod/index.js";
 
 // ---------------------------------------------------------------------------
@@ -135,6 +136,18 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(schemaOf("T", z.array(z.array(z.number()))), /type T = number\[\]\[\];/);
         });
 
+        it("parenthesizes a multi-value literal element type", () => {
+            assert.match(schemaOf("T", z.array(z.literal(["a", "b"]))), /type T = \("a" \| "b"\)\[\];/);
+        });
+
+        it("parenthesizes an optional element type", () => {
+            assert.match(schemaOf("T", z.array(z.string().optional())), /type T = \(string \| undefined\)\[\];/);
+        });
+
+        it("does not parenthesize a single-value literal element type", () => {
+            assert.match(schemaOf("T", z.array(z.literal("a"))), /type T = "a"\[\];/);
+        });
+
     });
 
     // -----------------------------------------------------------------------
@@ -195,6 +208,11 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(out, /string \| number \| boolean/);
         });
 
+        it("does not parenthesize optional or multi-value literal members", () => {
+            const out = schemaOf("T", z.union([z.string().optional(), z.literal(["a", "b"])]));
+            assert.match(out, /type T = string \| undefined \| "a" \| "b";/);
+        });
+
     });
 
     describe("z.discriminatedUnion()", () => {
@@ -224,6 +242,11 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(out, /\{[^}]*a: string[^}]*\} & \{[^}]*b: number[^}]*\}/s);
         });
 
+        it("parenthesizes optional and multi-value literal operands", () => {
+            const out = schemaOf("T", z.intersection(z.string().optional(), z.literal(["a", "b"])));
+            assert.match(out, /type T = \(string \| undefined\) & \("a" \| "b"\);/);
+        });
+
     });
 
     // -----------------------------------------------------------------------
@@ -248,6 +271,21 @@ describe("getZodSchemaAsTypeScript", () => {
         it("emits a tuple with an optional element", () => {
             const out = schemaOf("T", z.tuple([z.string(), z.number().optional()]));
             assert.match(out, /\[string, number\?\]/);
+        });
+
+        it("parenthesizes an optional rest element type", () => {
+            const out = schemaOf("T", z.tuple([z.string()]).rest(z.number().optional()));
+            assert.match(out, /\[string, \.\.\.\(number \| undefined\)\[\]\]/);
+        });
+
+        it("parenthesizes a multi-value literal rest element type", () => {
+            const out = schemaOf("T", z.tuple([z.string()]).rest(z.literal(["a", "b"])));
+            assert.match(out, /\[string, \.\.\.\("a" \| "b"\)\[\]\]/);
+        });
+
+        it("parenthesizes a multi-value literal optional element", () => {
+            const out = schemaOf("T", z.tuple([z.string(), z.literal(["a", "b"]).optional()]));
+            assert.match(out, /\[string, \("a" \| "b"\)\?\]/);
         });
 
     });
@@ -409,6 +447,69 @@ describe("getZodSchemaAsTypeScript", () => {
     });
 
     // -----------------------------------------------------------------------
+    // Input schemas for transformations and pipelines
+    // -----------------------------------------------------------------------
+
+    describe("z.transform() and z.pipe()", () => {
+
+        it("emits the JSON input type for a transform pipeline", () => {
+            const DateTime = z.iso.datetime().transform(value => new Date(value));
+            assert.match(schemaOf("DateTime", DateTime), /type DateTime = string;/);
+        });
+
+        it("emits the input schema for a pipeline", () => {
+            const NumberFromString = z.string().pipe(z.coerce.number());
+            assert.match(schemaOf("NumberFromString", NumberFromString), /type NumberFromString = string;/);
+        });
+
+        it("preserves input precedence for pipelines in arrays and optional tuples", () => {
+            const Element = z.union([z.string(), z.number()]).transform(String).pipe(z.string());
+            const values = schemaOf("Values", z.array(Element));
+            const row = schemaOf("Row", z.tuple([Element.optional()]));
+
+            assert.equal(values, "type Values = (string | number)[];\n");
+            assert.equal(row, "type Row = [(string | number)?];\n");
+            assertSchemasCompile([values, row]);
+        });
+
+        it("preserves input precedence through nested pipelines", () => {
+            const Nested = z.union([z.string(), z.number()]).pipe(z.string()).pipe(z.string());
+            assert.equal(schemaOf("Nested", Nested), "type Nested = string | number;\n");
+        });
+
+        it("preserves precedence for optional and multi-value literal pipeline inputs", () => {
+            const OptionalElement = z.string().optional().transform(String);
+            const MultiValueElement = z.literal(["active", "inactive"]).transform(String);
+            const values = schemaOf("Values", z.array(OptionalElement));
+            const statuses = schemaOf("Statuses", z.array(MultiValueElement));
+            const row = schemaOf("Row", z.tuple([z.literal(["active", "inactive"]).transform(String).optional()]));
+
+            assert.equal(values, "type Values = (string | undefined)[];\n");
+            assert.equal(statuses, "type Statuses = (\"active\" | \"inactive\")[];\n");
+            assert.equal(row, "type Row = [(\"active\" | \"inactive\")?];\n");
+            assertSchemasCompile([values, statuses, row]);
+        });
+
+        it("preserves transformed runtime values during validation", () => {
+            const Event = {
+                Event: z.object({
+                    dateTime: z.iso.datetime().transform(value => new Date(value)),
+                }),
+            };
+            const validator = createZodJsonValidator(Event, "Event");
+            assert.match(validator.getSchemaText(), /dateTime: string;/);
+
+            const result = validator.validate({ dateTime: "2022-08-20T08:30:00.000Z" });
+            assert.ok(result.success, "expected ISO date-time validation to succeed");
+            assert.ok(result.data.dateTime instanceof Date);
+
+            const invalidResult = validator.validate({ dateTime: "not-a-date" });
+            assert.ok(!invalidResult.success, "expected invalid date-time validation to fail");
+        });
+
+    });
+
+    // -----------------------------------------------------------------------
     // Fallthrough: unknown type kind → any
     // -----------------------------------------------------------------------
 
@@ -523,6 +624,27 @@ describe("createZodJsonValidator", () => {
             assert.match(result.message, /\n/);
         });
 
+    });
+
+    describe("translator compatibility", () => {
+        it("keeps instance validation for validators without schema preflight", async () => {
+            const validator = createZodJsonValidator(SentimentSchema, "SentimentResponse");
+            generatedSchemas.push(validator.getSchemaText());
+            assert.equal(typeChatSchemaValidation in validator, false);
+
+            let modelCalls = 0;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return { success: true as const, data: '{"sentiment":"positive"}' };
+                }
+            }, validator);
+
+            const result = await translator.translate("positive sentiment");
+            assert.ok(result.success);
+            assert.deepStrictEqual(result.data, { sentiment: "positive" });
+            assert.equal(modelCalls, 1);
+        });
     });
 
 });

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { success, error } from '../result';
-import { TypeChatJsonValidator } from '../typechat';
+import { success, error } from '../result.js';
+import { TypeChatJsonValidator } from '../typechat.js';
 
 /**
  * Returns a JSON validator for a given Zod schema. The schema is supplied as an object where each property provides
@@ -60,10 +60,21 @@ const enum TypePrecedence {
 function getTypePrecedence(type: z.ZodType): TypePrecedence {
     switch (getTypeKind(type)) {
         case "enum":
+        case "optional": // emitted as `T | undefined`
         case "union": // covers both z.union() and z.discriminatedUnion() — Zod v4 merged discriminated unions into the regular union type kind ("ZodDiscriminatedUnion" in v3)
             return TypePrecedence.Union;
+        case "literal": // a multi-value literal is emitted as a union of its values
+            return (type._zod.def as z.core.$ZodLiteralDef<z.core.util.Literal>).values.length > 1 ? TypePrecedence.Union : TypePrecedence.Object;
         case "intersection":
             return TypePrecedence.Intersection;
+        case "literal": {
+            const values = (type._zod.def as z.core.$ZodLiteralDef<z.core.util.Literal>).values;
+            return values.length > 1 ? TypePrecedence.Union : TypePrecedence.Object;
+        }
+        case "optional":
+            return TypePrecedence.Union;
+        case "pipe":
+            return getTypePrecedence((type._zod.def as z.core.$ZodPipeDef).in as z.ZodType);
     }
     return TypePrecedence.Object;
 }
@@ -176,6 +187,8 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
                 return appendUnionOrIntersectionTypes([(type._zod.def as z.core.$ZodOptionalDef).innerType as z.ZodType, z.undefined()], TypePrecedence.Union);
             case "readonly":
                 return appendReadonlyType(type);
+            case "pipe":
+                return appendType((type._zod.def as z.core.$ZodPipeDef).in as z.ZodType);
         }
         append("any");
     }

@@ -23,7 +23,7 @@
     "find-config": "^1.0.0",
     "open": "^7.0.4",
     "sqlite3": "^6.0.1",
-    "typechat": "^0.1.0",
+    "typechat": "^0.2.0",
     "typescript": "^5.3.3"
   },
   "devDependencies": {

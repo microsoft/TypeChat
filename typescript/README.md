@@ -18,11 +18,38 @@ Types are all you need!
 
 # Getting Started
 
+Requires [Node.js 24.22.1 or newer](https://nodejs.org/en/download).
+The development version is pinned in [.nvmrc](../.nvmrc).
+
 Install TypeChat:
 
 ```sh
 npm install typechat
 ```
+
+TypeChat supports both native ECMAScript modules (ESM) and CommonJS. Use `import`
+in an ESM application:
+
+```js
+import { createJsonTranslator } from "typechat";
+import { createTypeScriptJsonValidator } from "typechat/ts";
+```
+
+Or use `require` in a CommonJS application:
+
+```js
+const { createJsonTranslator } = require("typechat");
+const { createTypeScriptJsonValidator } = require("typechat/ts");
+```
+
+The `typechat`, `typechat/ts`, `typechat/zod`, and `typechat/interactive` entry points
+select the matching JavaScript build and TypeScript declarations automatically.
+Both builds target ES2021 and require Node.js 24.22.1 or newer.
+
+For compatibility with earlier CommonJS-only releases, native ESM default imports
+(`import typechat from "typechat"`) and dynamic imports' `.default` properties remain
+supported for all four entry points. Default imports also preserve the exported
+TypeScript types, such as `typechat.Result<T>`.
 
 You can also build TypeChat from source:
 
@@ -33,12 +60,53 @@ npm install
 npm run build
 ```
 
-Run the test suite with `npm test`. The Zod schema tests also compile their generated
-TypeScript schema text to check for syntax errors and unresolved type references.
+The build emits CommonJS JavaScript and declarations in `dist`, and native ESM
+JavaScript and declarations in `dist/esm`.
+
+Run the test suite with `npm test`. Package tests verify named and default imports,
+both module formats, and their declaration resolution using only the files included
+in the npm package.
+The test command recursively discovers compiled `*.test.js` suites under `out/`
+and runtime `*.test.mjs` suites under `tests/`. Add TypeScript tests under
+[test/](https://github.com/microsoft/TypeChat/tree/main/typescript/test) or runtime
+tests under [tests/](https://github.com/microsoft/TypeChat/tree/main/typescript/tests);
+no manual suite-list update is needed.
+Quoted patterns let Node handle discovery consistently across platforms, including
+nested directories, without executing helper files or uncompiled TypeScript.
+
+The Zod schema tests also compile their generated TypeScript schema text to check
+for syntax errors and unresolved type references.
+Node.js CI runs this suite across its Node.js matrix after a clean dependency
+installation and workspace build.
+
+The TypeScript-backed JSON validator checks its schema and target export before a
+translator makes its first model request. Schema configuration errors are returned
+without asking the model to repair them. This preflight uses the same minimal
+TypeScript library as response validation and is cached for the validator's lifetime.
+Once a schema passes preflight, invalid model responses continue through the normal
+validation and repair flow. Zod and custom validators without schema-only checks keep
+their existing instance-validation behavior. The `TypeChatJsonValidator` contract is
+unchanged; custom validators can opt in through the exported `typeChatSchemaValidation`
+symbol, so existing string-named `validateSchema` methods are not invoked as preflight.
+The symbol's runtime value and canonical declaration are shared across the ESM and
+CommonJS builds, so validators remain type-compatible and schema preflight also runs
+when a validator and translator come from different module formats.
 
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.
+
+## Reusing model authentication
+
+The HTTP model factories accept a synchronous or asynchronous `tokenProvider` option
+with `undefined` for the API key. Existing string-key and environment-based calls are
+unchanged. For an already configured OpenAI/AzureOpenAI or compatible client, use
+`createOpenAILanguageModelFromClient`, optionally with `{ useResponsesApi: true }`.
+
+These paths add no SDK dependency to TypeChat. See the
+[token-provider example](../site/src/docs/typescript/basic-usage.md#using-a-bearer-token-provider)
+and [configured-client example](../site/src/docs/typescript/basic-usage.md#reusing-a-configured-client)
+for multimodal prompts, network-control ownership, and error behavior.
 
 ## Accessing failed output
 
@@ -67,6 +135,13 @@ the original message-only shape. A present `data` property can contain any value
 or `undefined`, so check property presence when that distinction matters.
 
 Rejected values and response text may contain sensitive output. Do not log them automatically.
+
+## Accessing response metadata
+
+Model and translation results can include optional `metadata` on success and failure,
+separate from application data. See the [response metadata guide](https://github.com/microsoft/TypeChat/blob/main/typescript/metadata.md)
+for reported token usage, initial and repair response records, and available filtering details.
+The guide is also included as `metadata.md` in the npm package.
 
 ## Contributing
 

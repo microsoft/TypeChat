@@ -2,7 +2,20 @@
 #
 # SPDX-License-Identifier: MIT
 
-from typechat._internal.model import PromptSection, TypeChatLanguageModel, create_language_model, create_openai_language_model, create_azure_openai_language_model
+from typechat._internal.model import (
+    ChatCompletionClient,
+    ImagePromptContent,
+    ImageUrl,
+    PromptContent,
+    PromptSection,
+    TextPromptContent,
+    TokenProvider,
+    TypeChatLanguageModel,
+    create_language_model,
+    create_openai_language_model,
+    create_azure_openai_language_model,
+    create_openai_language_model_from_client,
+)
 from typechat._internal.result import Failure, Result, Success
 from typechat._internal.translator import TypeChatJsonTranslator
 from typechat._internal.ts_conversion import python_type_to_typescript_schema
@@ -17,9 +30,16 @@ __all__ = [
     "Failure",
     "Result",
     "python_type_to_typescript_schema",
+    "PromptContent",
     "PromptSection",
+    "TextPromptContent",
+    "ImagePromptContent",
+    "ImageUrl",
+    "TokenProvider",
+    "ChatCompletionClient",
     "create_language_model",
     "create_openai_language_model",
     "create_azure_openai_language_model",
+    "create_openai_language_model_from_client",
     "process_requests",
 ]

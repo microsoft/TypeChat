@@ -1,6 +1,14 @@
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { createTypeScriptJsonValidator } from "../dist/ts/index.js";
+import {
+    createJsonTranslator,
+    typeChatSchemaValidation,
+    type TypeChatJsonValidator
+} from "../dist/index.js";
+import {
+    createTypeScriptJsonValidator,
+    type TypeScriptJsonValidator
+} from "../dist/ts/index.js";
 
 // ---------------------------------------------------------------------------
 // Shared schemas
@@ -109,13 +117,9 @@ export interface Response {
     factory: new () => { ok: boolean };
 }`;
 
-const promiseLikeSchema = `
-interface PromiseLike<T> {
-    then(onFulfilled: (value: T) => unknown): unknown;
-    catch(onRejected: (reason: unknown) => unknown): unknown;
-}
+const promiseSchema = `
 export interface Response {
-    value: PromiseLike<string>;
+    value: Promise<string>;
 }`;
 
 const genericWrapperSchema = `
@@ -133,8 +137,12 @@ export type Response = Wrapper<Metadata>;
 // ---------------------------------------------------------------------------
 // Helper
 // ---------------------------------------------------------------------------
+const openValidators: { close(): void }[] = [];
+
 function validatorFor<T extends object>(schema: string, typeName: string) {
-    return createTypeScriptJsonValidator<T>(schema, typeName);
+    const validator = createTypeScriptJsonValidator<T>(schema, typeName);
+    openValidators.push(validator);
+    return validator;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +150,192 @@ function validatorFor<T extends object>(schema: string, typeName: string) {
 // ---------------------------------------------------------------------------
 
 describe("createTypeScriptJsonValidator", () => {
+    afterEach(() => {
+        for (const validator of openValidators.splice(0)) {
+            validator.close();
+        }
+    });
+
+    describe("schema-only validation", () => {
+        const invalidSchemas = [
+            {
+                name: "unsupported built-in types",
+                schema: "export interface Event { dateTime?: Date; }",
+                typeName: "Event",
+                diagnostic: /Date/
+            },
+            {
+                name: "unsupported library generics",
+                schema: "export interface Event { values: Set<string>; }",
+                typeName: "Event",
+                diagnostic: /Set/
+            },
+            {
+                name: "syntax errors",
+                schema: "export interface Event { dateTime: string;",
+                typeName: "Event",
+                diagnostic: /schema\.ts\(\d+,\d+\):/
+            },
+            {
+                name: "unresolved references",
+                schema: "export interface Event { dateTime: MissingType; }",
+                typeName: "Event",
+                diagnostic: /MissingType/
+            },
+            {
+                name: "references to the internal probe name",
+                schema: "export interface Event { next?: __TypeChatSchemaTarget; }",
+                typeName: "Event",
+                diagnostic: /__TypeChatSchemaTarget/
+            },
+            {
+                name: "missing target exports",
+                schema: "export interface Event { dateTime: string; }",
+                typeName: "MissingEvent",
+                diagnostic: /MissingEvent/
+            }
+        ];
+
+        for (const { name, schema, typeName, diagnostic } of invalidSchemas) {
+            for (const attemptRepair of [true, false]) {
+                it(`rejects ${name} before a model call when repair is ${attemptRepair ? "enabled" : "disabled"}`, async () => {
+                    const validator = validatorFor(schema, typeName);
+                    let modelCalls = 0;
+                    const translator = createJsonTranslator({
+                        async complete() {
+                            modelCalls++;
+                            return { success: true as const, data: "{}" };
+                        }
+                    }, validator);
+                    translator.attemptRepair = attemptRepair;
+
+                    try {
+                        const result = await translator.translate("test request");
+                        assert.equal(modelCalls, 0);
+                        assert.equal(result.success, false);
+                        assert.match(result.message, /schema validation failed before model request/i);
+                        assert.match(result.message, diagnostic);
+                    } finally {
+                        validator.close();
+                    }
+                });
+            }
+        }
+
+        it("does not conflict with a global interface named like the probe", () => {
+            const validator = validatorFor(
+                "declare global { interface __TypeChatSchemaTarget { value: string; } }\nexport interface Event { value: string; }",
+                "Event"
+            );
+            try {
+                assert.ok(validator[typeChatSchemaValidation]().success);
+                assert.ok(validator.validate({ value: "ok" }).success);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("accepts a valid schema with required properties and caches the result", () => {
+            const validator = validatorFor(
+                "export interface Event { required: string; }",
+                "Event"
+            );
+            try {
+                const firstResult = validator[typeChatSchemaValidation]();
+                assert.ok(firstResult.success, "schema validation must not require a JSON instance");
+                assert.strictEqual(validator[typeChatSchemaValidation](), firstResult);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("keeps response repair for a valid schema", async () => {
+            const validator = validatorFor(smallSchema, "Point");
+            let modelCalls = 0;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return {
+                        success: true as const,
+                        data: modelCalls === 1
+                            ? '{"x":"not-a-number","y":2}'
+                            : '{"x":1,"y":2}'
+                    };
+                }
+            }, validator);
+
+            try {
+                const result = await translator.translate("point");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { x: 1, y: 2 });
+                assert.equal(modelCalls, 2);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("does not let a previous invalid instance poison schema preflight", async () => {
+            const validator = validatorFor(smallSchema, "Point");
+            let modelCalls = 0;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return { success: true as const, data: '{"x":1,"y":2}' };
+                }
+            }, validator);
+
+            try {
+                assert.equal(validator.validate({ x: 1, y: "invalid" }).success, false);
+                const result = await translator.translate("point");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { x: 1, y: 2 });
+                assert.equal(modelCalls, 1);
+            } finally {
+                validator.close();
+            }
+        });
+
+        it("preserves legacy validator contracts and ignores validateSchema name collisions", async () => {
+            type Point = { x: number };
+            const backing = validatorFor<Point>("export interface Point { x: number; }", "Point");
+            let schemaValidationCalls = 0;
+            let modelCalls = 0;
+
+            const legacyTypeScriptValidator: TypeScriptJsonValidator<Point> = {
+                getSchemaText: backing.getSchemaText,
+                getTypeName: backing.getTypeName,
+                createModuleTextFromJson: backing.createModuleTextFromJson,
+                validate: backing.validate,
+                close: backing.close
+            };
+            const legacyCustomValidator = {
+                getSchemaText: legacyTypeScriptValidator.getSchemaText,
+                getTypeName: legacyTypeScriptValidator.getTypeName,
+                validate: legacyTypeScriptValidator.validate,
+                validateSchema: () => {
+                    schemaValidationCalls++;
+                    return true;
+                }
+            };
+            const validator: TypeChatJsonValidator<Point> = legacyCustomValidator;
+            const translator = createJsonTranslator({
+                async complete() {
+                    modelCalls++;
+                    return { success: true as const, data: '{"x":1}' };
+                }
+            }, validator);
+
+            try {
+                const result = await translator.translate("point");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { x: 1 });
+                assert.equal(modelCalls, 1);
+                assert.equal(schemaValidationCalls, 0);
+            } finally {
+                legacyTypeScriptValidator.close();
+            }
+        });
+    });
 
     describe("valid objects", () => {
         it("accepts an object that satisfies all required properties", () => {
@@ -259,7 +453,7 @@ describe("createTypeScriptJsonValidator", () => {
         });
 
         it("preserves rejection of Promise-shaped objects with non-callable methods", () => {
-            const v = validatorFor(promiseLikeSchema, "Response");
+            const v = validatorFor(promiseSchema, "Response");
             const result = v.validate({ value: { then: {}, catch: {} } });
             assert.ok(!result.success, "expected non-callable then/catch methods to fail");
             assert.match(result.message, /not assignable/);
@@ -401,5 +595,106 @@ describe("createTypeScriptJsonValidator", () => {
                 `diagnostic must not target the unwrapped Metadata type, got: ${result.message}`
             );
         });
+    });
+
+    describe("standard-library helper types", () => {
+        const helperSchema = `
+declare function makeConfig(): { port: number; host: string };
+declare function load(): Promise<{ id: string }>;
+export interface Payload {
+    values: ReadonlyArray<string>;
+    readonlySyntax: readonly number[];
+    counts: Record<string, number>;
+    metadata: Partial<{ name: string; size: number }>;
+    required: Required<{ id?: string }>;
+    frozen: Readonly<{ x: number }>;
+    picked: Pick<{ a: string; b: number }, "a">;
+    omitted: Omit<{ a: string; b: number }, "b">;
+    color: Exclude<"red" | "green" | "blue", "green">;
+    kind: Extract<"a" | "b" | 1, string>;
+    label: NonNullable<string | null>;
+    config: ReturnType<typeof makeConfig>;
+    loaded: Awaited<ReturnType<typeof load>>;
+    nested: Awaited<Promise<Promise<number>>>;
+    upper: Uppercase<"get" | "post">;
+    lower: Lowercase<"HeLLo">;
+    capitalized: Capitalize<"hello">;
+    uncapitalized: Uncapitalize<"Hello">;
+}`;
+        const validPayload = {
+            values: ["a"],
+            readonlySyntax: [1],
+            counts: { a: 1 },
+            metadata: {},
+            required: { id: "x" },
+            frozen: { x: 1 },
+            picked: { a: "x" },
+            omitted: { a: "x" },
+            color: "red",
+            kind: "a",
+            label: "l",
+            config: { port: 1, host: "h" },
+            loaded: { id: "x" },
+            nested: 1,
+            upper: "POST",
+            lower: "hello",
+            capitalized: "Hello",
+            uncapitalized: "hello"
+        };
+
+        it("accepts a payload that satisfies every helper type", () => {
+            const v = validatorFor(helperSchema, "Payload");
+            const result = v.validate(validPayload);
+            assert.ok(result.success, `expected validation to succeed, got: ${!result.success && result.message}`);
+        });
+
+        it("accepts the reproduction from issue #452", () => {
+            const v = validatorFor(`
+export interface Payload {
+    values: ReadonlyArray<string>;
+    counts: Record<string, number>;
+    metadata: Partial<{ name: string }>;
+}`, "Payload");
+            const result = v.validate({ values: ["a"], counts: { a: 1 }, metadata: {} });
+            assert.ok(result.success, `expected validation to succeed, got: ${!result.success && result.message}`);
+        });
+
+        const invalidCases: [string, object, RegExp][] = [
+            ["ReadonlyArray element type", { values: [1] }, /'number' is not assignable to type 'string'/],
+            ["readonly array syntax element type", { readonlySyntax: ["x"] }, /'string' is not assignable to type 'number'/],
+            ["Record value type", { counts: { a: "1" } }, /'string' is not assignable to type 'number'/],
+            ["Partial property type", { metadata: { name: 1 } }, /'number' is not assignable to type 'string'/],
+            ["Required missing property", { required: {} }, /Property 'id' is missing/],
+            ["Readonly property type", { frozen: { x: "1" } }, /'string' is not assignable to type 'number'/],
+            ["Pick property type", { picked: { a: 1 } }, /'number' is not assignable to type 'string'/],
+            ["Omit removed property", { omitted: { a: "x", b: 1 } }, /'"?b"?' does not exist/],
+            ["Exclude removed member", { color: "green" }, /'"green"' is not assignable/],
+            ["Extract non-matching member", { kind: 1 }, /'number' is not assignable/],
+            ["NonNullable null", { label: null }, /'null' is not assignable to type 'string'/],
+            ["ReturnType property type", { config: { port: "1", host: "h" } }, /'string' is not assignable to type 'number'/],
+            ["Awaited property type", { loaded: { id: 1 } }, /'number' is not assignable to type 'string'/],
+            ["nested Awaited type", { nested: "1" }, /'string' is not assignable to type 'number'/],
+            ["Uppercase member", { upper: "PUT" }, /'"PUT"' is not assignable/],
+            ["Lowercase value", { lower: "HELLO" }, /'"HELLO"' is not assignable to type '"hello"'/],
+            ["Capitalize value", { capitalized: "hello" }, /'"hello"' is not assignable to type '"Hello"'/],
+            ["Uncapitalize value", { uncapitalized: "Hello" }, /'"Hello"' is not assignable to type '"hello"'/],
+        ];
+
+        it("rejects any JSON value for a Promise property", () => {
+            const v = validatorFor(`export interface Holder { value: Promise<number>; }`, "Holder");
+            for (const value of [1, {}, { then: "x" }]) {
+                const result = v.validate({ value });
+                assert.ok(!result.success, `expected validation to fail for ${JSON.stringify(value)}`);
+            }
+        });
+
+        for (const [name, override, expected] of invalidCases) {
+            it(`rejects an invalid value for ${name}`, () => {
+                const v = validatorFor(helperSchema, "Payload");
+                const result = v.validate({ ...validPayload, ...override });
+                assert.ok(!result.success, "expected validation to fail");
+                assert.match(result.message, expected);
+            });
+        }
     });
 });

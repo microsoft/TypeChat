@@ -53,24 +53,30 @@ export interface TypeChatLanguageModel {
     retryPauseMs?: number;
     /**
      * Obtains a completion from the language model for the given prompt.
-     * @param prompt The prompt string.
+     * @param prompt The prompt string or role-tagged prompt sections.
      */
-    complete(prompt: string): Promise<Result<string>>;
+    complete(prompt: string | PromptSection[]): Promise<Result<string>>;
 }
 ```
 
 then you should be able to try TypeChat out with such a model.
 
 The key thing here is that only `complete` is required.
-`complete` is just a function that takes a `string` and eventually returns a `string` if all goes well.
+`complete` takes a string or an array of prompt sections and eventually returns text wrapped in a
+`Result` if all goes well.
 
 For convenience, TypeChat provides two functions out of the box to connect to the OpenAI API and Azure's OpenAI Services.
 You can call these directly.
 
 ```ts
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint? string): TypeChatLanguageModel;
+export function createOpenAILanguageModel(
+    apiKey: string | undefined, model: string, endPoint?: string,
+    org?: string, options?: LanguageModelOptions
+): TypeChatLanguageModel;
 
-export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string): TypeChatLanguageModel;
+export function createAzureOpenAILanguageModel(
+    apiKey: string | undefined, endPoint: string, options?: LanguageModelOptions
+): TypeChatLanguageModel;
 ```
 
 For even more convenience, TypeChat also provides a function to infer whether you're using OpenAI or Azure OpenAI.
@@ -81,6 +87,102 @@ export function createLanguageModel(env: Record<string, string | undefined>): Ty
 
 With `createLanguageModel`, you can populate your environment variables and pass them in.
 Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get a model of the appropriate type.
+
+#### Using a bearer-token provider
+
+Pass `undefined` for the API key and supply your existing synchronous or asynchronous
+token provider in the options:
+
+```ts
+const model = createAzureOpenAILanguageModel(undefined, endpoint, {
+    tokenProvider
+});
+```
+
+`TokenProvider` is `() => string | Promise<string>`. Return the raw access-token string,
+without a `Bearer ` prefix. The provider owns credential acquisition, caching, renewal,
+and cleanup; TypeChat adds no Azure Identity dependency. It invokes the provider for each
+HTTP attempt, including retries, and sends bearer authorization without an `api-key`
+header. API keys and providers are mutually exclusive. Non-string/empty tokens or tokens
+containing whitespace, control characters, or non-ASCII characters return an error before
+dispatch. Provider exceptions follow the HTTP model's existing
+retry/error policy.
+
+Providers execute on the caller's JavaScript event loop. Synchronous providers should
+return cached tokens quickly; use asynchronous SDK/network APIs for acquisition or renewal.
+Adding `async` or calling `Promise.resolve` around synchronous I/O does not make that work
+nonblocking. If a legacy provider requires blocking I/O, offload it using application-managed
+workers (for example Node.js `worker_threads`) with an appropriate thread-safety and timeout
+strategy. TypeChat invokes providers directly and does not automatically move them to workers.
+
+The same option works with `createOpenAILanguageModel`, including its Responses mode:
+
+```ts
+const model = createOpenAILanguageModel(undefined, deployment, responsesEndpoint, "", {
+    tokenProvider,
+    useResponsesApi: true
+});
+```
+
+The HTTP factories retain their proxy, timeout, response-size, and retry controls.
+The HTTP request timeout does not bound credential acquisition inside your provider.
+Existing string-key calls, environment handling, defaults, and legacy headers are unchanged;
+`AZURE_OPENAI_API_KEY=identity` does not activate a provider.
+
+#### Reusing a configured client
+
+Adapt an existing OpenAI/AzureOpenAI SDK client, or a structurally compatible asynchronous
+client, without importing an SDK into TypeChat:
+
+```ts
+const model = createOpenAILanguageModelFromClient(client, modelOrDeployment);
+const responsesModel = createOpenAILanguageModelFromClient(client, modelOrDeployment, {
+    useResponsesApi: true
+});
+```
+
+Chat Completions is the default and calls `client.chat.completions.create`. Responses mode
+is explicit and calls `client.responses.create`; a Chat-only client does not need a
+`responses` property. TypeChat requests non-streaming output at temperature zero, with
+`n=1` only for Chat Completions.
+
+The adapter exposes only `complete`, retaining the supplied client's endpoint, API version,
+authentication, retry/timeout settings, and ownership. It does not configure or close the
+client or add another network-control layer. Configure proxies, timeouts, retries, and
+response-size safeguards on that client, not on the adapter. Client exceptions and
+cancellation propagate unchanged; missing/malformed output and filtered/refused content
+return TypeChat errors.
+
+String prompts and text/image user messages are supported. Bare strings in content arrays
+become text parts; images retain URLs/data URLs and detail levels. Responses mode maps them
+to `input_text`/`input_image` parts, defaulting omitted image detail to `"auto"`. System and
+assistant messages support text only; unsupported content is reported rather than dropped.
+Neither path fetches image references separately.
+
+Pass either model to `createJsonTranslator` as usual. Schema validation, repair, and
+reported response metadata/filtering behavior are preserved. SDK metadata covers the
+resolved responses visible to TypeChat, not HTTP attempts hidden inside the client's retries.
+
+#### Using OpenAI-compatible gateways
+
+TypeChat works with any service that exposes the OpenAI Chat Completions API.
+To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
+point `createOpenAILanguageModel` at the gateway's endpoint via the `endPoint`
+argument:
+
+```ts
+const model = createOpenAILanguageModel(apiKey, model, "https://api.orcarouter.ai/v1/chat/completions");
+```
+
+With `createLanguageModel`, set the `OPENAI_ENDPOINT` environment variable to
+the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
+`OPENAI_MODEL`:
+
+```
+OPENAI_API_KEY=<your API key>
+OPENAI_MODEL=<model name>
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+```
 
 Regardless, of how you decide to construct your model, it is important to avoid committing credentials directly in source.
 One way to make this work between production and development environments is to use a `.env` file in development, and specify that `.env` in your `.gitignore`.
@@ -111,6 +213,10 @@ export interface SentimentResponse {
     sentiment: "negative" | "neutral" | "positive";  // The sentiment of the text
 }
 ```
+
+The validator type-checks against a minimal library rather than the full TypeScript standard library, since responses are always plain JSON.
+Besides primitives, object types, arrays, and unions, schemas can use `ReadonlyArray`, `Partial`, `Required`, `Readonly`, `Pick`, `Omit`, `Record`, `Exclude`, `Extract`, `NonNullable`, `ReturnType`, `Awaited`, `Uppercase`, `Lowercase`, `Capitalize`, and `Uncapitalize`.
+Runtime types such as `Date`, `Map`, or `Set` aren't JSON values and aren't available; describe their JSON representation instead (for example, an ISO date `string`).
 
 It also means we will need to manually load up an input `.ts` file verbatim.
 
