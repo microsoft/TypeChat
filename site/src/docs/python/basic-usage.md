@@ -238,6 +238,16 @@ OPENAI_MODEL=<model name>
 OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
 ```
 
+For example, to use [Standard Compute](https://standardcompute.com), whose
+`StandardCompute` model routes each request to the cheapest enabled model that
+can handle it, with automatic fallback:
+
+```
+OPENAI_API_KEY=<your Standard Compute API key, e.g. the value of STANDARDCOMPUTE_API_KEY>
+OPENAI_MODEL=StandardCompute
+OPENAI_ENDPOINT=https://api.stdcmpt.com/v1/chat/completions
+```
+
 The HTTP models returned by `create_language_model`,
 `create_openai_language_model`, and `create_azure_openai_language_model` have a
 few writable attributes you might find useful:

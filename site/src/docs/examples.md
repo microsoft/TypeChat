@@ -101,6 +101,14 @@ The examples also work against any OpenAI-compatible gateway, such as [OrcaRoute
 OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
 ```
 
+With [Standard Compute](https://standardcompute.com), the `StandardCompute` model routes each request to the cheapest enabled model that can handle it, with automatic fallback:
+
+```
+OPENAI_API_KEY=<your Standard Compute API key, e.g. the value of STANDARDCOMPUTE_API_KEY>
+OPENAI_MODEL=StandardCompute
+OPENAI_ENDPOINT=https://api.stdcmpt.com/v1/chat/completions
+```
+
 ## Step 4: Run the examples
 
 Examples can be found in the `typescript/examples` directory.
