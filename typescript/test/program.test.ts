@@ -186,6 +186,37 @@ describe("hasOwnProperty shadowing in parsed programs", () => {
     });
 });
 
+describe("__proto__ as object property key", () => {
+    it("generates a computed property name for a string value", () => {
+        const program = JSON.parse('{"@steps":[{"@func":"first","@args":[{"__proto__":"hello"}]}]}');
+        const result = createModuleTextFromProgram(program);
+        assert.equal(result.success, true);
+        assert.match((result as { data: string }).data, /\["__proto__"\]: "hello"/);
+        assert.doesNotMatch((result as { data: string }).data, /"__proto__": "hello"/);
+    });
+
+    it("generates a computed property name for a numeric value", () => {
+        const program = JSON.parse('{"@steps":[{"@func":"first","@args":[{"__proto__":42}]}]}');
+        const result = createModuleTextFromProgram(program);
+        assert.equal(result.success, true);
+        assert.match((result as { data: string }).data, /\["__proto__"\]: 42/);
+    });
+
+    it("generates a computed property name for a null value", () => {
+        const program = JSON.parse('{"@steps":[{"@func":"first","@args":[{"__proto__":null}]}]}');
+        const result = createModuleTextFromProgram(program);
+        assert.equal(result.success, true);
+        assert.match((result as { data: string }).data, /\["__proto__"\]: null/);
+    });
+
+    it("evaluates an object with __proto__ as an own data property", async () => {
+        const program = JSON.parse('{"@steps":[{"@func":"first","@args":[{"__proto__":"value"}]}]}');
+        const result = await evaluateJsonProgram(program, async (_func, args) => args[0]);
+        assert.ok(Object.prototype.hasOwnProperty.call(result, "__proto__"));
+        assert.equal((result as Record<string, unknown>)["__proto__"], "value");
+    });
+});
+
 describe("@func name validation", () => {
     const maliciousProgram: Program = {
         "@steps": [
