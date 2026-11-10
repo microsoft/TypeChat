@@ -56,10 +56,11 @@ function createUniqueJsonWireTypeName(schemaText: string): string {
  * rest of the schema's structure.
  */
 function createJsonWireTypeDefinition(typeName: string): string {
-    return `type ${typeName}<T> = T extends string ? \`\${T}\` : ` +
-        `T extends (...args: any[]) => any ? T : ` +
-        `T extends abstract new (...args: any[]) => any ? T : ` +
-        `T extends object ? { [K in keyof T]: ${typeName}<T[K]> } : T;`;
+    return `type ${typeName}<T> =
+        T extends string ? \`\${T}\` :
+        T extends (...args: any[]) => any ? T :
+        T extends abstract new (...args: any[]) => any ? T :
+        T extends object ? { [K in keyof T]: ${typeName}<T[K]> } : T;`;
 }
 
 /**
