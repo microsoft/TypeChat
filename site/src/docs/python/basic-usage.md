@@ -317,13 +317,16 @@ Responses requests always omit temperature, regardless of this option.
 #### Using OpenAI-compatible gateways
 
 TypeChat works with any service that exposes the OpenAI Chat Completions API.
-To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
-point `create_openai_language_model` at the gateway's endpoint via the
-`endpoint` argument:
+To use a gateway, point `create_openai_language_model` at its Chat Completions
+URL via the `endpoint` argument.
+
+The examples below use a fictional Adatum gateway at `api.adatum.com`, not a live
+service. Replace the URL with your gateway's Chat Completions URL and use that
+gateway's API key and model name:
 
 ```py
 model = create_openai_language_model(
-    api_key, model, endpoint="https://api.orcarouter.ai/v1/chat/completions"
+    api_key, model, endpoint="https://api.adatum.com/v1/chat/completions"
 )
 ```
 
@@ -334,7 +337,7 @@ the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
 ```
 OPENAI_API_KEY=<your API key>
 OPENAI_MODEL=<model name>
-OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+OPENAI_ENDPOINT=https://api.adatum.com/v1/chat/completions
 ```
 
 The HTTP models returned by `create_language_model`,

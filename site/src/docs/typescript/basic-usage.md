@@ -166,12 +166,15 @@ resolved responses visible to TypeChat, not HTTP attempts hidden inside the clie
 #### Using OpenAI-compatible gateways
 
 TypeChat works with any service that exposes the OpenAI Chat Completions API.
-To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
-point `createOpenAILanguageModel` at the gateway's endpoint via the `endPoint`
-argument:
+To use a gateway, point `createOpenAILanguageModel` at its Chat Completions URL
+via the `endPoint` argument.
+
+The examples below use a fictional Adatum gateway at `api.adatum.com`, not a live
+service. Replace the URL with your gateway's Chat Completions URL and use that
+gateway's API key and model name:
 
 ```ts
-const model = createOpenAILanguageModel(apiKey, model, "https://api.orcarouter.ai/v1/chat/completions");
+const model = createOpenAILanguageModel(apiKey, model, "https://api.adatum.com/v1/chat/completions");
 ```
 
 With `createLanguageModel`, set the `OPENAI_ENDPOINT` environment variable to
@@ -181,7 +184,7 @@ the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
 ```
 OPENAI_API_KEY=<your API key>
 OPENAI_MODEL=<model name>
-OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+OPENAI_ENDPOINT=https://api.adatum.com/v1/chat/completions
 ```
 
 Regardless, of how you decide to construct your model, it is important to avoid committing credentials directly in source.
