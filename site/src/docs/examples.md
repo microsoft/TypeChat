@@ -94,11 +94,18 @@ AZURE_OPENAI_ENDPOINT=...
 AZURE_OPENAI_API_KEY=...
 ```
 
-The examples also work against any OpenAI-compatible gateway, such as [OrcaRouter](https://www.orcarouter.ai), by pointing `OPENAI_ENDPOINT` at the gateway's Chat Completions URL in addition to the OpenAI variables above:
+The examples also work against any OpenAI-compatible gateway. Set
+`OPENAI_ENDPOINT` to the gateway's Chat Completions URL and use the gateway's API
+key and model name for `OPENAI_API_KEY` and `OPENAI_MODEL`.
+
+The URL below uses a fictional Adatum gateway at `api.adatum.com`, not a live
+service. Replace it with your gateway's actual Chat Completions URL:
 
 ```
 # Optional: use an OpenAI-compatible gateway instead of api.openai.com
-OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+OPENAI_API_KEY=<your API key>
+OPENAI_MODEL=<model name>
+OPENAI_ENDPOINT=https://api.adatum.com/v1/chat/completions
 ```
 
 ## Step 4: Run the examples

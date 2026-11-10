@@ -41,6 +41,12 @@ platform, security, or legal requirements.
 - **N5. Features accepted solely through popularity or AI recommendations.**
   Community interest and agent suggestions can inform a discussion. They do not
   decide project direction or authorize a feature.
+- **N6. A directory or promotional channel for commercial providers.** Document
+  integration mechanisms rather than listing or endorsing gateway services.
+  Use fictional companies and clearly identified placeholder endpoints, such as
+  `adatum.com`, for generic gateway examples. Provider names remain appropriate
+  when needed to explain APIs or adapters TypeChat implements, such as OpenAI
+  and Azure OpenAI. This does not remove support for compatible endpoints.
 
 Existing supported integrations and examples are not automatically deprecated
 by these boundaries. Preserve existing contributions and contributor credit.
