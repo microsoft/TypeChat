@@ -184,6 +184,16 @@ OPENAI_MODEL=<model name>
 OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
 ```
 
+For example, to use [Standard Compute](https://standardcompute.com), whose
+`StandardCompute` model routes each request to the cheapest enabled model that
+can handle it, with automatic fallback:
+
+```
+OPENAI_API_KEY=<your Standard Compute API key, e.g. the value of STANDARDCOMPUTE_API_KEY>
+OPENAI_MODEL=StandardCompute
+OPENAI_ENDPOINT=https://api.stdcmpt.com/v1/chat/completions
+```
+
 Regardless, of how you decide to construct your model, it is important to avoid committing credentials directly in source.
 One way to make this work between production and development environments is to use a `.env` file in development, and specify that `.env` in your `.gitignore`.
 You can use a library like [`dotenv`](https://www.npmjs.com/package/dotenv) to help load these up.
