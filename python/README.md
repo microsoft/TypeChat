@@ -68,17 +68,35 @@ Existing API-key and environment-based calls are unchanged. See the
 and [configured-client example](../site/src/docs/python/basic-usage.md#reusing-an-already-configured-client)
 for ownership, retry, and error behavior.
 
+## Using the Responses API
+
+For new text and image integrations, pass `use_responses_api=True` to any model
+factory or to `create_openai_language_model_from_client`. HTTP factories need
+the complete Responses endpoint and a model/deployment name; Azure callers
+supply that name with the `model` keyword. Configured clients need only
+`responses.create` and remain application-owned, without a required SDK
+dependency.
+
+Existing calls still use Chat Completions. Endpoint paths do not select an API,
+and automatic Responses-to-Chat fallback is deferred. Both APIs preserve
+TypeChat's schema validation and bounded repair.
+
+See the [Responses API guide](../site/src/docs/python/basic-usage.md#using-the-responses-api)
+and [minimal HTTP/client example](./examples/responses/demo.py).
+
 All four model factories accept a keyword-only `temperature` option. It defaults
-to `0.0`, preserving existing behavior. Pass `temperature=None` to omit the
-parameter entirely and use the configured client's or service's default, for
-example with reasoning models that reject explicit sampling parameters. This
-does not disable reasoning, change authentication, or select a different API.
+to `0.0` for Chat Completions, preserving existing behavior. In Chat Completions
+mode, pass `temperature=None` to omit the parameter entirely and use the
+configured client's or service's default, for example with reasoning models
+that reject explicit sampling parameters. Responses requests always omit
+temperature, regardless of this option. This does not disable reasoning, change
+authentication, or select a different API.
 
 ## Text and image prompts
 
-Both built-in Chat Completions models and the configured-client adapter accept
-typed text/image parts in `PromptSection.content`. Existing whole-string prompts
-remain supported without migration.
+Both built-in HTTP models and configured-client adapters accept typed text/image
+parts in `PromptSection.content`, with Chat Completions or explicitly selected
+Responses. Existing whole-string prompts remain supported without migration.
 
 The following example demonstrates both `model.complete` and translator context;
 applications can use either call independently. Supply your own hosted image URL
@@ -127,6 +145,11 @@ bare strings. Text works in system, user, and assistant messages; images are
 supported only in user messages. Malformed input produces a content-free `Failure`
 locating the section or part before authentication or dispatch.
 
+Use the same public prompt types for either API. Responses models map tagged
+user/system text to `input_text`, assistant text to `output_text`, and images to
+`input_image` with a flat `image_url` string and optional `detail`, preserving
+order, references, and omitted detail.
+
 `translate` still takes a string request. Its preamble stays before the generated
 schema/request message, and image context is preserved during validation and repair.
 Successful model completions remain text-only. Authentication, HTTP controls, and
@@ -138,7 +161,6 @@ accessibility, image counts, detail support, and size/resolution limits depend o
 your provider and model. No image-processing or provider SDK dependency is added.
 See [text and image usage](../site/src/docs/python/basic-usage.md#text-and-image-prompts)
 for the complete prompt type definitions and limitations.
-
 ## Documenting schema fields
 
 Trailing Python comments on directly declared `TypedDict` and dataclass fields become
