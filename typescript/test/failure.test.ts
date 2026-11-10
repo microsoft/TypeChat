@@ -223,6 +223,46 @@ describe("translation failure context", () => {
         assert.equal(result.responseText, responseText);
     });
 
+    it("strips nulls from nested arrays with stripNulls enabled", async () => {
+        type Groups = { groups: number[][] };
+        const validator: TypeChatJsonValidator<Groups> = {
+            getSchemaText: () => "export interface Groups { groups: number[][]; }",
+            getTypeName: () => "Groups",
+            validate: (value: object) => {
+                const v = value as Groups;
+                return Array.isArray(v.groups) ? success(v as Groups) : error("groups must be an array");
+            }
+        };
+        const responseText = '{"groups":[null,[null,1]]}';
+        const model: TypeChatLanguageModel = { complete: async () => success(responseText) };
+        const translator = createJsonTranslator(model, validator);
+        translator.attemptRepair = false;
+        translator.stripNulls = true;
+        const result = await translator.translate("request");
+        assert.ok(result.success);
+        assert.deepEqual(result.data, { groups: [[1]] });
+    });
+
+    it("strips nulls from flat arrays with stripNulls enabled", async () => {
+        type Items = { items: number[] };
+        const validator: TypeChatJsonValidator<Items> = {
+            getSchemaText: () => "export interface Items { items: number[]; }",
+            getTypeName: () => "Items",
+            validate: (value: object) => {
+                const v = value as Items;
+                return Array.isArray(v.items) ? success(v as Items) : error("items must be an array");
+            }
+        };
+        const responseText = '{"items":[null,1,null,2]}';
+        const model: TypeChatLanguageModel = { complete: async () => success(responseText) };
+        const translator = createJsonTranslator(model, validator);
+        translator.attemptRepair = false;
+        translator.stripNulls = true;
+        const result = await translator.translate("request");
+        assert.ok(result.success);
+        assert.deepEqual(result.data, { items: [1, 2] });
+    });
+
     for (const responseText of ["not JSON", 'before {"value":} after', ""]) {
         it("retains unparseable output without inventing data or changing repair behavior", async () => {
             const { translator, prompts } = translatorFor([success(responseText)]);
