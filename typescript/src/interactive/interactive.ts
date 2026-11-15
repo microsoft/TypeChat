@@ -11,7 +11,8 @@ import readline from "readline/promises";
  */
 export async function processRequests(interactivePrompt: string, inputFileName: string | undefined, processRequest: (request: string) => Promise<void>) {
     if (inputFileName) {
-        const lines = fs.readFileSync(inputFileName).toString().split(/\r?\n/);
+        const content = await fs.promises.readFile(inputFileName, "utf-8");
+        const lines = content.split(/\r?\n/);
         for (const line of lines) {
             if (line.length && line !== "#" && !line.startsWith("# ")) {
                 console.log(interactivePrompt + line);
