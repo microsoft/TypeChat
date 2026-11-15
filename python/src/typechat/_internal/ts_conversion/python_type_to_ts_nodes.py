@@ -464,6 +464,8 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
                 for attr_name, field in cast(Dataclassish, py_type).__dataclass_fields__.items():
                     type_hint = annotated_members[attr_name]
+                    if type_hint is ClassVar or get_origin(type_hint) is ClassVar:
+                        continue
                     optional = not(field.default is MISSING and field.default_factory is MISSING)
                     prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional, fallback_comment=inline_comments.get(attr_name, ""))
                     properties.append(prop)
