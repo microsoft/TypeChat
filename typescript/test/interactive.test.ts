@@ -64,21 +64,16 @@ describe("processRequests with an input file", () => {
         const inputFile = path.join(dir, "input.txt");
         fs.writeFileSync(inputFile, "async request\n");
 
-        let timerFired = false;
-        const timer = setTimeout(() => {
-            timerFired = true;
-        }, 0);
-
         const requests: string[] = [];
         try {
-            await processRequests("> ", inputFile, async request => {
+            const promise = processRequests("> ", inputFile, async request => {
                 requests.push(request);
             });
-            assert.equal(timerFired, true, "Event loop should not be blocked during file read");
+            assert.equal(requests.length, 0, "No requests should be dispatched before processRequests yields");
+            await promise;
             assert.deepEqual(requests, ["async request"]);
         }
         finally {
-            clearTimeout(timer);
             fs.rmSync(dir, { recursive: true, force: true });
         }
     });
