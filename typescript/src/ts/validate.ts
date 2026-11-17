@@ -45,7 +45,7 @@ const schemaValidationFileName = "/schema-validation.ts";
  */
 function createUniqueJsonWireTypeName(schemaText: string): string {
     let name = "__TypeChatJsonWire";
-    while (schemaText.includes(name)) {
+    while (schemaText.includes(name) || schemaText.includes(`${name}Object`) || schemaText.includes(`${name}Shape`)) {
         name += "_";
     }
     return name;
@@ -53,14 +53,18 @@ function createUniqueJsonWireTypeName(schemaText: string): string {
 
 /**
  * Maps serialized string-enum values back to their literal enum member types while preserving the
- * rest of the schema's structure.
+ * rest of the schema's structure. Class instances with private or protected members are left
+ * unchanged because mapping their public keys would drop the nominal constraint that rejects
+ * plain JSON objects.
  */
 function createJsonWireTypeDefinition(typeName: string): string {
-    return `type ${typeName}<T> =
-        T extends string ? \`\${T}\` :
-        T extends (...args: any[]) => any ? T :
-        T extends abstract new (...args: any[]) => any ? T :
-        T extends object ? { [K in keyof T]: ${typeName}<T[K]> } : T;`;
+    return `type ${typeName}Object<T> = { [K in keyof T]: ${typeName}<T[K]> };
+type ${typeName}Shape<T> = { [K in keyof T]: T[K] };
+type ${typeName}<T> =
+    T extends string ? \`\${T}\` :
+    T extends (...args: any[]) => any ? T :
+    T extends abstract new (...args: any[]) => any ? T :
+    T extends object ? (${typeName}Shape<T> extends T ? ${typeName}Object<T> : T) : T;`;
 }
 
 /**

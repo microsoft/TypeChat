@@ -122,6 +122,15 @@ export interface Response {
     value: Promise<string>;
 }`;
 
+const classInstanceSchema = `
+export class Token {
+    private brand!: string;
+    value!: string;
+}
+export interface Response {
+    token: Token;
+}`;
+
 const genericWrapperSchema = `
 export interface Metadata {
     m1: string; m2: string; m3: string; m4: string;
@@ -458,6 +467,13 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(!result.success, "expected non-callable then/catch methods to fail");
             assert.match(result.message, /not assignable/);
         });
+
+        it("preserves class-instance constraints in an enum-free schema", () => {
+            const v = validatorFor(classInstanceSchema, "Response");
+            const result = v.validate({ token: { value: "unbranded" } });
+            assert.ok(!result.success, "expected a plain object not to satisfy a class with private members");
+            assert.match(result.message, /brand/);
+        });
     });
 
     describe("type mismatch errors (backward-compatible: unchanged code path)", () => {
@@ -568,7 +584,7 @@ describe("createTypeScriptJsonValidator", () => {
             const result = v.createModuleTextFromJson({ x: 1, y: 2 });
             assert.ok(result.success, "expected module text creation to succeed");
             assert.ok(result.data.includes("import { Point } from './schema'"));
-            assert.ok(result.data.includes("type __TypeChatJsonWire<T> = T extends string"));
+            assert.match(result.data, /type __TypeChatJsonWire<T>\s*=\s*T extends string/);
             assert.ok(result.data.includes("const json: __TypeChatJsonWire<Point> ="));
         });
     });
