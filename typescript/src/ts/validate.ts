@@ -89,8 +89,8 @@ type ${typeName}Object<T> = { [K in keyof T]: ${typeName}<T[K]> };
 type ${typeName}Shape<T> = { [K in keyof T]: T[K] };
 type ${typeName}<T> =
     T extends ${typeName}Enum ? \`\${T}\` :
-    T extends (...args: any[]) => any ? T :
-    T extends abstract new (...args: any[]) => any ? T :
+    T extends (...args: never[]) => unknown ? T :
+    T extends abstract new (...args: never[]) => unknown ? T :
     T extends object ? (${typeName}Shape<T> extends T ?
         (string extends T ? ${typeName}Object<T> : ${typeName}Object<T> & object) : T) : T;`;
 }
