@@ -266,6 +266,43 @@ export interface Response {
     mode: Mode;
 }`;
 
+const literalTypeSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface Box<T> {
+    value: T;
+}
+export interface Response {
+    mode: Mode;
+    box: Box<"fixed">;
+    item: { kind: "fixed"; count: number };
+}`;
+
+const andMoreValueSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface Response {
+    mode: Mode;
+    note: "fixed";
+    extra: string;
+}`;
+
+const nestedMissingSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface LargeItem {
+    m1: string; m2: string; m3: string; m4: string;
+    m5: string; m6: string; m7: string;
+}
+export interface Response {
+    mode: Mode;
+    item: LargeItem;
+    extra: string;
+}`;
+
 const genericWrapperSchema = `
 export interface Metadata {
     m1: string; m2: string; m3: string; m4: string;
@@ -738,6 +775,42 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(!result.success, "expected an unknown enum value to fail");
             assert.ok(result.message.length < 2000, `expected a bounded diagnostic, got ${result.message.length} chars`);
             assert.ok(!result.message.includes('""__TypeChat'), "expected no repeated quoting");
+        });
+
+        it("unwraps literal-bearing type arguments without rewriting them", () => {
+            const v = validatorFor(literalTypeSchema, "Response");
+            const result = v.validate({
+                mode: "on",
+                box: "not-an-object",
+                item: { kind: "fixed", count: 1 }
+            });
+            assert.ok(!result.success, "expected literal type errors to fail");
+            assert.ok(
+                !result.message.includes("TypeChatJsonWire"),
+                `expected no helper name, got: ${result.message}`
+            );
+            assert.ok(
+                result.message.includes('Box<"fixed">'),
+                `expected the literal type argument to be preserved, got: ${result.message}`
+            );
+        });
+
+        it("does not treat a value containing 'and N more' as a truncated list", () => {
+            const v = validatorFor(andMoreValueSchema, "Response");
+            const result = v.validate({ note: "and 5 more" });
+            assert.ok(!result.success, "expected the literal value to fail");
+            assert.ok(
+                result.message.includes("and 5 more"),
+                `expected the rejected value to survive, got: ${result.message}`
+            );
+        });
+
+        it("keeps nested missing-property diagnostics scoped to the nested type", () => {
+            const v = validatorFor(nestedMissingSchema, "Response");
+            const result = v.validate({ mode: "on", item: {} });
+            assert.ok(!result.success, "expected missing nested properties to fail");
+            assert.ok(result.message.includes("LargeItem"), `expected the nested type, got: ${result.message}`);
+            assert.ok(result.message.includes("m1"), `expected a nested property name, got: ${result.message}`);
         });
 
         it("keeps internal helper names out of missing and excess property diagnostics", () => {

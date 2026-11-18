@@ -251,21 +251,35 @@ export function createTypeScriptJsonValidator<T extends object = object>(
             const checker = project.checker;
             const jsonFile = program.getSourceFile(jsonFileName);
             const diagnostics = programDiagnostics.map(d => {
-                const message = normalizeJsonWireTypeNames(flattenDiagnosticMessageText(d, "\n"));
                 // TS error 2740 truncates the missing-properties list to 4 items ("and N more").
                 // Use the type checker to reconstruct the full list of missing required properties.
-                // The truncated message may also be a child of another diagnostic, for example an
-                // intersection target, so check the message as well as the error code.
-                if (jsonFile && d.fileName === jsonFileName && (d.code === 2740 || /and \d+ more/.test(message))) {
-                    return normalizeJsonWireTypeNames(
-                        expandMissingPropertiesMessage(checker, jsonFile, d.pos) ?? message
-                    );
+                // The truncated diagnostic may be a child of another one, for example an
+                // intersection target, so search the message chain rather than the rendered text.
+                const truncated = findDiagnosticWithCode(d, 2740);
+                if (jsonFile && truncated?.fileName === jsonFileName) {
+                    const expanded = expandMissingPropertiesMessage(checker, jsonFile, truncated.pos, truncated.text);
+                    if (expanded) {
+                        return normalizeJsonWireTypeNames(expanded);
+                    }
                 }
-                return message;
+                return normalizeJsonWireTypeNames(flattenDiagnosticMessageText(d, "\n"));
             }).join("\n");
             return error(diagnostics, { data: jsonObject });
         }
         return success(jsonObject as T);
+    }
+
+    function findDiagnosticWithCode(diagnostic: Diagnostic, code: number): Diagnostic | undefined {
+        if (diagnostic.code === code) {
+            return diagnostic;
+        }
+        for (const child of diagnostic.messageChain ?? []) {
+            const match = findDiagnosticWithCode(child, code);
+            if (match) {
+                return match;
+            }
+        }
+        return undefined;
     }
 
     /**
@@ -276,89 +290,93 @@ export function createTypeScriptJsonValidator<T extends object = object>(
         if (!jsonWireTypeDefinition) {
             return message;
         }
-        // Double-quoted spans are data values printed by TypeScript. Leave them untouched so a
-        // rejected value that happens to contain a helper name is reported verbatim.
-        return mapOutsideStringLiterals(message, segment => {
-            let result = segment;
-            let previous: string;
-            do {
-                previous = result;
-                for (const name of [`${jsonWireTypeName}Shape`, `${jsonWireTypeName}Object`, jsonWireTypeName]) {
-                    result = stripTypeApplications(result, name);
-                }
-            } while (result !== previous);
-            if (jsonWireEnumValues) {
-                // Replace the enum alias once. Doing this inside the loop could re-substitute a
-                // rejected value that spells the alias and never terminate.
-                result = result.split(`${jsonWireTypeName}Enum`).join(jsonWireEnumValues);
-            }
-            return result;
-        });
+        return normalizeDiagnosticText(message);
     }
 
-    function mapOutsideStringLiterals(text: string, map: (segment: string) => string): string {
+    /**
+     * Unwraps helper type applications while leaving double-quoted values verbatim. Type arguments
+     * can themselves contain string literals, so a quoted span never terminates an enclosing
+     * application.
+     */
+    function normalizeDiagnosticText(text: string): string {
+        const names = [`${jsonWireTypeName}Shape`, `${jsonWireTypeName}Object`, jsonWireTypeName];
         let result = "";
         let index = 0;
         while (index < text.length) {
-            if (text[index] !== '"') {
-                const end = text.indexOf('"', index);
-                result += map(text.slice(index, end < 0 ? text.length : end));
-                index = end < 0 ? text.length : end;
+            if (text[index] === '"') {
+                const end = skipStringLiteral(text, index);
+                result += text.slice(index, end);
+                index = end;
                 continue;
             }
-            let end = index + 1;
-            while (end < text.length) {
-                if (text[end] === "\\") {
-                    end += 2;
+            let matched = false;
+            for (const name of names) {
+                if (!text.startsWith(name, index) || text[index + name.length] !== "<") {
+                    continue;
                 }
-                else if (text[end] === '"') {
-                    end++;
-                    break;
+                const end = findTypeArgumentEnd(text, index + name.length);
+                if (end < 0) {
+                    continue;
                 }
-                else {
-                    end++;
+                result += normalizeDiagnosticText(text.slice(index + name.length + 1, end));
+                index = end + 1;
+                if (name.endsWith("Object")) {
+                    // Drop the `& object` guard from the rendered helper so diagnostics mention
+                    // the schema type alone.
+                    const guard = /^\s*&\s*object\b/.exec(text.slice(index));
+                    if (guard) {
+                        index += guard[0].length;
+                    }
                 }
+                matched = true;
+                break;
             }
-            result += text.slice(index, end);
-            index = end;
+            if (matched) {
+                continue;
+            }
+            const enumName = `${jsonWireTypeName}Enum`;
+            if (jsonWireEnumValues && text.startsWith(enumName, index)) {
+                // Replace the alias once. Re-scanning the substituted text could turn a value
+                // that spells the alias into an unbounded expansion.
+                result += jsonWireEnumValues;
+                index += enumName.length;
+                continue;
+            }
+            result += text[index++];
         }
         return result;
     }
 
-    function stripTypeApplications(text: string, name: string): string {
-        const marker = `${name}<`;
-        let result = "";
-        let index = 0;
-        while (true) {
-            const start = text.indexOf(marker, index);
-            if (start < 0) {
-                return result + text.slice(index);
+    function skipStringLiteral(text: string, start: number): number {
+        let index = start + 1;
+        while (index < text.length) {
+            if (text[index] === "\\") {
+                index += 2;
             }
-            result += text.slice(index, start);
-            let depth = 0;
-            let end = start + name.length;
-            for (; end < text.length; end++) {
-                if (text[end] === "<") {
-                    depth++;
-                }
-                else if (text[end] === ">" && text[end - 1] !== "=" && --depth === 0) {
-                    break;
-                }
+            else if (text[index] === '"') {
+                return index + 1;
             }
-            if (end >= text.length) {
-                return result + text.slice(start);
-            }
-            result += text.slice(start + name.length + 1, end);
-            index = end + 1;
-            if (name.endsWith("Object")) {
-                // Drop the `& object` guard from the rendered helper so diagnostics mention the
-                // schema type alone.
-                const guard = /^\s*&\s*object\b/.exec(text.slice(index));
-                if (guard) {
-                    index += guard[0].length;
-                }
+            else {
+                index++;
             }
         }
+        return text.length;
+    }
+
+    function findTypeArgumentEnd(text: string, openBracket: number): number {
+        let depth = 0;
+        for (let index = openBracket; index < text.length; index++) {
+            if (text[index] === '"') {
+                index = skipStringLiteral(text, index) - 1;
+            }
+            else if (text[index] === "<") {
+                depth++;
+            }
+            else if (text[index] === ">" && text[index - 1] !== "=" && --depth === 0) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -402,7 +420,13 @@ export function createTypeScriptJsonValidator<T extends object = object>(
      * variable declaration at `position` in `file`. Returns `undefined` if the declaration
      * cannot be located or yields no missing properties (fallback to the original message).
      */
-    function expandMissingPropertiesMessage(checker: Checker, file: SourceFile, position: number): string | undefined {
+    function expandMissingPropertiesMessage(
+        checker: Checker,
+        file: SourceFile,
+        position: number,
+        diagnosticText: string
+    ): string | undefined {
+        const reportedTarget = / from type '(.+)': /.exec(diagnosticText)?.[1];
         for (const stmt of file.statements) {
             if (isVariableStatement(stmt)) {
                 for (const decl of stmt.declarationList.declarations) {
@@ -429,6 +453,13 @@ export function createTypeScriptJsonValidator<T extends object = object>(
                         if (missingProps.length > 0) {
                             const srcStr = checker.typeToString(sourceType, undefined, NodeBuilderFlags.NoTruncation);
                             const tgtStr = checker.typeToString(targetType, undefined, NodeBuilderFlags.NoTruncation);
+                            // A nested diagnostic reports the nested type. Expanding it here
+                            // would replace it with the outer declaration's missing properties.
+                            if (reportedTarget !== undefined &&
+                                    reportedTarget !== tgtStr &&
+                                    reportedTarget !== `${jsonWireTypeName}Object<${tgtStr}>`) {
+                                continue;
+                            }
                             return `Type '${srcStr}' is missing the following properties from type '${tgtStr}': ${missingProps.join(", ")}`;
                         }
                     }
