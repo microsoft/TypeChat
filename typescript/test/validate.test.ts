@@ -111,9 +111,47 @@ export interface Order {
     currency: Currency;
 }`;
 
-const callableSchema = `
+const recursiveEnumSchema = `
+export enum Phase {
+    Draft = "draft",
+    Done = "done"
+}
+export interface Task {
+    phase: Phase;
+    next?: Task;
+    history: [Phase, number];
+}`;
+
+const brandedStringSchema = `
+type UserId = string & { readonly __brand: "UserId" };
+export interface Response {
+    id: UserId;
+}`;
+
+const objectConstraintSchema = `
+export interface Response {
+    value: object & { length: number };
+}`;
+
+const diagnosticSchema = `
+export enum State {
+    Active = "active"
+}
+export interface Item {
+    state: State;
+    count: number;
+}
+export interface Response {
+    item: Item;
+}`;
+
+const callbackSchema = `
 export interface Response {
     callback: () => string;
+}`;
+
+const constructableSchema = `
+export interface Response {
     factory: new () => { ok: boolean };
 }`;
 
@@ -386,11 +424,17 @@ describe("createTypeScriptJsonValidator", () => {
             const v = validatorFor(differingEnumValueSchema, "Subscription");
             const unknown = v.validate({ plan: "enterprise" });
             assert.ok(!unknown.success, "expected an unknown enum value to fail");
-            assert.match(unknown.message, /not assignable/);
+            assert.match(unknown.message, /not assignable to type/);
+            assert.ok(unknown.message.includes("enterprise"), "expected the rejected value in the diagnostic");
+            assert.ok(
+                unknown.message.includes("basic") && unknown.message.includes("pro"),
+                "expected the accepted enum values in the diagnostic"
+            );
 
             const memberName = v.validate({ plan: "Basic" });
             assert.ok(!memberName.success, "expected an enum member name to fail when it differs from the value");
-            assert.match(memberName.message, /not assignable/);
+            assert.match(memberName.message, /not assignable to type/);
+            assert.ok(memberName.message.includes("Basic"), "expected the rejected member name in the diagnostic");
         });
 
         it("validates enums in nested objects, arrays, unions, and index signatures", () => {
@@ -450,13 +494,49 @@ describe("createTypeScriptJsonValidator", () => {
             assert.match(invalid.message, /not assignable/);
         });
 
+        it("validates enums in tuples, optional properties, and recursive schemas", () => {
+            const v = validatorFor(recursiveEnumSchema, "Task");
+            const valid = v.validate({
+                phase: "done",
+                next: { phase: "draft", history: ["done", 1] },
+                history: ["draft", 2]
+            });
+            assert.ok(valid.success, `expected recursive enum values to pass, got: ${valid.success ? "" : valid.message}`);
+
+            const invalidTuple = v.validate({ phase: "draft", history: ["unknown", 1] });
+            assert.ok(!invalidTuple.success, "expected an unknown tuple enum value to fail");
+
+            const invalidOptional = v.validate({
+                phase: "draft",
+                next: { phase: "unknown", history: ["done", 1] },
+                history: ["draft", 2]
+            });
+            assert.ok(!invalidOptional.success, "expected an unknown optional-property enum value to fail");
+        });
+
+        it("does not widen branded string types", () => {
+            const v = validatorFor(brandedStringSchema, "Response");
+            const result = v.validate({ id: "plain-string" });
+            assert.ok(!result.success, "expected a plain string not to satisfy a branded string type");
+            assert.match(result.message, /not assignable/);
+        });
+
+        it("preserves non-primitive object constraints", () => {
+            const v = validatorFor(objectConstraintSchema, "Response");
+            const valid = v.validate({ value: [1, 2] });
+            assert.ok(valid.success, `expected an array to satisfy object with length, got: ${valid.success ? "" : valid.message}`);
+
+            const invalid = v.validate({ value: "abc" });
+            assert.ok(!invalid.success, "expected a primitive string not to satisfy object with length");
+            assert.match(invalid.message, /not assignable/);
+        });
+
         it("preserves rejection of call and construct signatures", () => {
-            const v = validatorFor(callableSchema, "Response");
-            const callback = v.validate({ callback: {}, factory: { ok: true } });
+            const callback = validatorFor(callbackSchema, "Response").validate({ callback: {} });
             assert.ok(!callback.success, "expected an empty object not to satisfy a call signature");
             assert.match(callback.message, /not assignable/);
 
-            const factory = v.validate({ callback: () => "ok", factory: {} });
+            const factory = validatorFor(constructableSchema, "Response").validate({ factory: {} });
             assert.ok(!factory.success, "expected an empty object not to satisfy a construct signature");
             assert.match(factory.message, /not assignable/);
         });
@@ -473,6 +553,31 @@ describe("createTypeScriptJsonValidator", () => {
             const result = v.validate({ token: { value: "unbranded" } });
             assert.ok(!result.success, "expected a plain object not to satisfy a class with private members");
             assert.match(result.message, /brand/);
+        });
+
+        it("keeps internal helper names out of missing and excess property diagnostics", () => {
+            const v = validatorFor(diagnosticSchema, "Response");
+            const missing = v.validate({});
+            assert.ok(!missing.success, "expected a missing property to fail");
+            assert.ok(
+                missing.message.includes("item"),
+                `expected the property name in the message, got: ${missing.message}`
+            );
+            assert.ok(
+                !missing.message.includes("TypeChatJsonWire"),
+                `expected no internal type helper in the message, got: ${missing.message}`
+            );
+
+            const excess = v.validate({ item: { state: "active", count: 1, extra: true } });
+            assert.ok(!excess.success, "expected an excess property to fail");
+            assert.ok(
+                excess.message.includes("extra"),
+                `expected the property name in the message, got: ${excess.message}`
+            );
+            assert.ok(
+                !excess.message.includes("TypeChatJsonWire"),
+                `expected no internal type helper in the message, got: ${excess.message}`
+            );
         });
     });
 
@@ -584,8 +689,8 @@ describe("createTypeScriptJsonValidator", () => {
             const result = v.createModuleTextFromJson({ x: 1, y: 2 });
             assert.ok(result.success, "expected module text creation to succeed");
             assert.ok(result.data.includes("import { Point } from './schema'"));
-            assert.match(result.data, /type __TypeChatJsonWire<T>\s*=\s*T extends string/);
-            assert.ok(result.data.includes("const json: __TypeChatJsonWire<Point> ="));
+            assert.ok(result.data.includes("const json: Point ="));
+            assert.ok(!result.data.includes("TypeChatJsonWire"));
         });
     });
 
