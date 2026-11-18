@@ -169,6 +169,103 @@ export interface Response {
     token: Token;
 }`;
 
+// Enum-bearing variants ensure the enum wire mapping does not change unrelated constraints.
+const wrapperTypeSchema = `
+export enum Mode {
+    On = "on",
+    Off = "off"
+}
+export interface Response {
+    count: Number;
+    enabled: Boolean;
+    label: String;
+    mode: Mode;
+}`;
+
+const objectConstraintEnumSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface Response {
+    mode: Mode;
+    value: object & { length: number };
+}`;
+
+const brandedStringEnumSchema = `
+export enum Mode {
+    On = "on"
+}
+type UserId = string & { readonly __brand: "UserId" };
+export interface Response {
+    mode: Mode;
+    id: UserId;
+}`;
+
+const callbackEnumSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface Response {
+    mode: Mode;
+    callback: () => string;
+    factory: new () => { ok: boolean };
+}`;
+
+const classInstanceEnumSchema = `
+export enum Mode {
+    On = "on"
+}
+export class Token {
+    private brand!: string;
+    value!: string;
+}
+export interface Response {
+    mode: Mode;
+    token: Token;
+}`;
+
+const numericAndStringEnumSchema = `
+export enum Priority {
+    Low,
+    High
+}
+export enum Mode {
+    On = "on"
+}
+export interface Config {
+    priority: Priority;
+    mode: Mode;
+    count: number;
+}`;
+
+const wideEnumSchema = `
+export enum Mode {
+    On = "on",
+    Off = "off"
+}
+export interface Response {
+    mode: Mode;
+    m1: string; m2: string; m3: string; m4: string;
+    m5: string; m6: string; m7: string;
+}`;
+
+const quotedValueSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface Response {
+    mode: Mode;
+    note: "fixed";
+}`;
+
+const helperSpellingEnumSchema = `
+export enum Mode {
+    Wire = "__TypeChat" + "JsonWireEnum"
+}
+export interface Response {
+    mode: Mode;
+}`;
+
 const genericWrapperSchema = `
 export interface Metadata {
     m1: string; m2: string; m3: string; m4: string;
@@ -553,6 +650,94 @@ describe("createTypeScriptJsonValidator", () => {
             const result = v.validate({ token: { value: "unbranded" } });
             assert.ok(!result.success, "expected a plain object not to satisfy a class with private members");
             assert.match(result.message, /brand/);
+        });
+
+        it("preserves number, boolean, and string wrapper types when an enum is declared", () => {
+            const v = validatorFor(wrapperTypeSchema, "Response");
+            const valid = v.validate({ count: 1, enabled: true, label: "x", mode: "on" });
+            assert.ok(valid.success, `expected primitive wrappers to accept primitives, got: ${valid.success ? "" : valid.message}`);
+
+            const invalid = v.validate({ count: "1", enabled: true, label: "x", mode: "on" });
+            assert.ok(!invalid.success, "expected a string not to satisfy Number");
+            assert.match(invalid.message, /not assignable/);
+        });
+
+        it("preserves object constraints when an enum is declared", () => {
+            const v = validatorFor(objectConstraintEnumSchema, "Response");
+            const valid = v.validate({ mode: "on", value: [1, 2] });
+            assert.ok(valid.success, `expected an array to satisfy object with length, got: ${valid.success ? "" : valid.message}`);
+
+            const invalid = v.validate({ mode: "on", value: "abc" });
+            assert.ok(!invalid.success, "expected a primitive string not to satisfy object with length");
+            assert.match(invalid.message, /not assignable/);
+        });
+
+        it("does not widen branded strings when an enum is declared", () => {
+            const v = validatorFor(brandedStringEnumSchema, "Response");
+            const result = v.validate({ mode: "on", id: "plain-string" });
+            assert.ok(!result.success, "expected a plain string not to satisfy a branded string type");
+            assert.match(result.message, /not assignable/);
+        });
+
+        it("preserves call and construct signatures when an enum is declared", () => {
+            const v = validatorFor(callbackEnumSchema, "Response");
+            const callback = v.validate({ mode: "on", callback: {}, factory: {} });
+            assert.ok(!callback.success, "expected an empty object not to satisfy a call signature");
+            assert.match(callback.message, /not assignable/);
+        });
+
+        it("preserves class-instance constraints when an enum is declared", () => {
+            const v = validatorFor(classInstanceEnumSchema, "Response");
+            const result = v.validate({ mode: "on", token: { value: "unbranded" } });
+            assert.ok(!result.success, "expected a plain object not to satisfy a class with private members");
+            assert.match(result.message, /brand/);
+        });
+
+        it("preserves numeric enums alongside string enums", () => {
+            const v = validatorFor(numericAndStringEnumSchema, "Config");
+            const valid = v.validate({ priority: 0, mode: "on", count: 1 });
+            assert.ok(valid.success, `expected valid enum values to pass, got: ${valid.success ? "" : valid.message}`);
+
+            const invalid = v.validate({ priority: 5, mode: "on", count: 1 });
+            assert.ok(!invalid.success, "expected a value outside the numeric enum to fail");
+            assert.match(invalid.message, /not assignable/);
+        });
+
+        it("does not hide unrelated type errors when a string enum is declared", () => {
+            const v = validatorFor(numericAndStringEnumSchema, "Config");
+            const result = v.validate({ priority: 0, mode: "on", count: "two" });
+            assert.ok(!result.success, "expected an unrelated type error to fail validation");
+            assert.match(result.message, /not assignable/);
+        });
+
+        it("expands the full missing-property list for a normalized target", () => {
+            const v = validatorFor(wideEnumSchema, "Response");
+            const result = v.validate({});
+            assert.ok(!result.success, "expected missing properties to fail");
+            for (const name of ["mode", "m1", "m2", "m3", "m4", "m5", "m6", "m7"]) {
+                assert.ok(result.message.includes(name), `expected '${name}' in the message, got: ${result.message}`);
+            }
+            assert.ok(result.message.includes("Response"), `expected the original target type, got: ${result.message}`);
+            assert.ok(!/and \d+ more/.test(result.message), `expected the complete list, got: ${result.message}`);
+            assert.ok(!result.message.includes("TypeChatJsonWire"), `expected no helper name, got: ${result.message}`);
+        });
+
+        it("preserves quoted values that resemble helper names", () => {
+            const v = validatorFor(quotedValueSchema, "Response");
+            const result = v.validate({ mode: "on", note: "__TypeChatJsonWireObject<EUR>" });
+            assert.ok(!result.success, "expected a fixed literal to reject another value");
+            assert.ok(
+                result.message.includes("__TypeChatJsonWireObject<EUR>"),
+                `expected the rejected value verbatim, got: ${result.message}`
+            );
+        });
+
+        it("terminates when an enum value spells the helper alias", () => {
+            const v = validatorFor(helperSpellingEnumSchema, "Response");
+            const result = v.validate({ mode: "other" });
+            assert.ok(!result.success, "expected an unknown enum value to fail");
+            assert.ok(result.message.length < 2000, `expected a bounded diagnostic, got ${result.message.length} chars`);
+            assert.ok(!result.message.includes('""__TypeChat'), "expected no repeated quoting");
         });
 
         it("keeps internal helper names out of missing and excess property diagnostics", () => {

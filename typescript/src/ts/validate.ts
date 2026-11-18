@@ -43,13 +43,14 @@ const schemaValidationFileName = "/schema-validation.ts";
 /**
  * Returns a type alias name that does not collide with identifiers in the schema.
  */
-function createUniqueJsonWireTypeName(schemaText: string): string {
+function createUniqueJsonWireTypeName(schemaText: string, stringEnumValues: readonly string[]): string {
     let name = "__TypeChatJsonWire";
     while (
         schemaText.includes(name) ||
         schemaText.includes(`${name}Enum`) ||
         schemaText.includes(`${name}Object`) ||
-        schemaText.includes(`${name}Shape`)
+        schemaText.includes(`${name}Shape`) ||
+        stringEnumValues.some(value => value.includes(name))
     ) {
         name += "_";
     }
@@ -92,7 +93,13 @@ type ${typeName}<T> =
     T extends (...args: never[]) => unknown ? T :
     T extends abstract new (...args: never[]) => unknown ? T :
     T extends object ? (${typeName}Shape<T> extends T ?
-        (string extends T ? ${typeName}Object<T> : ${typeName}Object<T> & object) : T) : T;`;
+        (string extends T
+            ? ${typeName}Object<T>
+            : number extends T
+            ? ${typeName}Object<T>
+            : boolean extends T
+            ? ${typeName}Object<T>
+            : ${typeName}Object<T> & object) : T) : T;`;
 }
 
 /**
@@ -150,13 +157,13 @@ export function createTypeScriptJsonValidator<T extends object = object>(
         throw new Error("The TypeScript virtual file system doesn't support writing files.");
     }
     const writeFile = fileSystem.writeFile;
-    const jsonWireTypeName = createUniqueJsonWireTypeName(schema);
     const initialSnapshot = api.updateSnapshot({ openProjects: [configFileName] });
     const schemaProject = initialSnapshot.getProject(configFileName);
     const schemaSourceFile = schemaProject?.program.getSourceFile(schemaFileName);
     const stringEnumValues = schemaProject && schemaSourceFile
         ? getStringEnumValues(schemaProject.checker, schemaSourceFile)
         : [];
+    const jsonWireTypeName = createUniqueJsonWireTypeName(schema, stringEnumValues);
     const jsonWireTypeDefinition = stringEnumValues.length
         ? createJsonWireTypeDefinition(jsonWireTypeName, stringEnumValues)
         : "";
@@ -247,7 +254,9 @@ export function createTypeScriptJsonValidator<T extends object = object>(
                 const message = normalizeJsonWireTypeNames(flattenDiagnosticMessageText(d, "\n"));
                 // TS error 2740 truncates the missing-properties list to 4 items ("and N more").
                 // Use the type checker to reconstruct the full list of missing required properties.
-                if (d.code === 2740 && jsonFile && d.fileName === jsonFileName) {
+                // The truncated message may also be a child of another diagnostic, for example an
+                // intersection target, so check the message as well as the error code.
+                if (jsonFile && d.fileName === jsonFileName && (d.code === 2740 || /and \d+ more/.test(message))) {
                     return normalizeJsonWireTypeNames(
                         expandMissingPropertiesMessage(checker, jsonFile, d.pos) ?? message
                     );
@@ -264,17 +273,55 @@ export function createTypeScriptJsonValidator<T extends object = object>(
      * type that they wrote.
      */
     function normalizeJsonWireTypeNames(message: string): string {
-        let result = message;
-        let previous: string;
-        do {
-            previous = result;
-            for (const name of [`${jsonWireTypeName}Shape`, `${jsonWireTypeName}Object`, jsonWireTypeName]) {
-                result = stripTypeApplications(result, name);
-            }
+        if (!jsonWireTypeDefinition) {
+            return message;
+        }
+        // Double-quoted spans are data values printed by TypeScript. Leave them untouched so a
+        // rejected value that happens to contain a helper name is reported verbatim.
+        return mapOutsideStringLiterals(message, segment => {
+            let result = segment;
+            let previous: string;
+            do {
+                previous = result;
+                for (const name of [`${jsonWireTypeName}Shape`, `${jsonWireTypeName}Object`, jsonWireTypeName]) {
+                    result = stripTypeApplications(result, name);
+                }
+            } while (result !== previous);
             if (jsonWireEnumValues) {
+                // Replace the enum alias once. Doing this inside the loop could re-substitute a
+                // rejected value that spells the alias and never terminate.
                 result = result.split(`${jsonWireTypeName}Enum`).join(jsonWireEnumValues);
             }
-        } while (result !== previous);
+            return result;
+        });
+    }
+
+    function mapOutsideStringLiterals(text: string, map: (segment: string) => string): string {
+        let result = "";
+        let index = 0;
+        while (index < text.length) {
+            if (text[index] !== '"') {
+                const end = text.indexOf('"', index);
+                result += map(text.slice(index, end < 0 ? text.length : end));
+                index = end < 0 ? text.length : end;
+                continue;
+            }
+            let end = index + 1;
+            while (end < text.length) {
+                if (text[end] === "\\") {
+                    end += 2;
+                }
+                else if (text[end] === '"') {
+                    end++;
+                    break;
+                }
+                else {
+                    end++;
+                }
+            }
+            result += text.slice(index, end);
+            index = end;
+        }
         return result;
     }
 
@@ -303,6 +350,14 @@ export function createTypeScriptJsonValidator<T extends object = object>(
             }
             result += text.slice(start + name.length + 1, end);
             index = end + 1;
+            if (name.endsWith("Object")) {
+                // Drop the `& object` guard from the rendered helper so diagnostics mention the
+                // schema type alone.
+                const guard = /^\s*&\s*object\b/.exec(text.slice(index));
+                if (guard) {
+                    index += guard[0].length;
+                }
+            }
         }
     }
 
