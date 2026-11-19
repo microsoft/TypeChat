@@ -43,9 +43,17 @@ const schemaValidationFileName = "/schema-validation.ts";
 /**
  * Returns a type alias name that does not collide with identifiers in the schema.
  */
-function createUniqueJsonWireTypeName(schemaText: string, stringEnumValues: readonly string[]): string {
+function createUniqueJsonWireTypeName(
+    schemaText: string,
+    importedTypeName: string,
+    stringEnumValues: readonly string[]
+): string {
     let name = "__TypeChatJsonWire";
     while (
+        importedTypeName === name ||
+        importedTypeName === `${name}Enum` ||
+        importedTypeName === `${name}Object` ||
+        importedTypeName === `${name}Shape` ||
         schemaText.includes(name) ||
         schemaText.includes(`${name}Enum`) ||
         schemaText.includes(`${name}Object`) ||
@@ -85,6 +93,9 @@ function getStringEnumValues(checker: Checker, sourceFile: SourceFile): string[]
  */
 function createJsonWireTypeDefinition(typeName: string, stringEnumValues: readonly string[]): string {
     const enumValues = stringEnumValues.map(value => JSON.stringify(value)).join(" | ");
+    // Intersecting an all-optional mapped shape with `object` disables TypeScript's weak-type
+    // check. Keep the explicit object constraint for ordinary objects, but let weak shapes use the
+    // mapped type alone so arrays and unrelated objects are still rejected.
     return `type ${typeName}Enum = ${enumValues};
 type ${typeName}Object<T> = { [K in keyof T]: ${typeName}<T[K]> };
 type ${typeName}Shape<T> = { [K in keyof T]: T[K] };
@@ -98,6 +109,10 @@ type ${typeName}<T> =
             : number extends T
             ? ${typeName}Object<T>
             : boolean extends T
+            ? ${typeName}Object<T>
+            : keyof T extends never
+            ? ${typeName}Object<T> & object
+            : {} extends T
             ? ${typeName}Object<T>
             : ${typeName}Object<T> & object) : T) : T;`;
 }
@@ -163,7 +178,7 @@ export function createTypeScriptJsonValidator<T extends object = object>(
     const stringEnumValues = schemaProject && schemaSourceFile
         ? getStringEnumValues(schemaProject.checker, schemaSourceFile)
         : [];
-    const jsonWireTypeName = createUniqueJsonWireTypeName(schema, stringEnumValues);
+    const jsonWireTypeName = createUniqueJsonWireTypeName(schema, typeName, stringEnumValues);
     const jsonWireTypeDefinition = stringEnumValues.length
         ? createJsonWireTypeDefinition(jsonWireTypeName, stringEnumValues)
         : "";

@@ -191,6 +191,35 @@ export interface Response {
     value: object & { length: number };
 }`;
 
+const weakObjectSchema = `
+export interface Response {
+    options: { enabled?: boolean };
+}`;
+
+const weakObjectEnumSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface Response {
+    mode: Mode;
+    options: { enabled?: boolean };
+}`;
+
+const plainObjectEnumSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface Response {
+    mode: Mode;
+    value: object;
+}`;
+
+const escapedJsonWireTypeSchema = `
+export enum Mode {
+    On = "on"
+}
+export type \\u005f_TypeChatJsonWire = { mode: Mode };`;
+
 const brandedStringEnumSchema = `
 export enum Mode {
     On = "on"
@@ -718,6 +747,39 @@ describe("createTypeScriptJsonValidator", () => {
             const invalid = v.validate({ mode: "on", value: "abc" });
             assert.ok(!invalid.success, "expected a primitive string not to satisfy object with length");
             assert.match(invalid.message, /not assignable/);
+        });
+
+        it("preserves weak-type checking for all-optional object shapes", () => {
+            const plain = validatorFor(weakObjectSchema, "Response");
+            const withEnum = validatorFor(weakObjectEnumSchema, "Response");
+            for (const value of [{ options: [] }, { options: { extra: 1 } }]) {
+                const plainResult = plain.validate(value);
+                const enumResult = withEnum.validate({ mode: "on", ...value });
+                assert.ok(!plainResult.success, `expected the enum-free schema to reject ${JSON.stringify(value)}`);
+                assert.ok(
+                    !enumResult.success,
+                    `expected the enum-bearing schema to reject ${JSON.stringify(value)}, got: ${enumResult.success ? "" : enumResult.message}`
+                );
+            }
+            assert.ok(withEnum.validate({ mode: "on", options: {} }).success);
+            assert.ok(withEnum.validate({ mode: "on", options: { enabled: true } }).success);
+        });
+
+        it("preserves the plain object constraint when an enum is declared", () => {
+            const v = validatorFor(plainObjectEnumSchema, "Response");
+            const valid = v.validate({ mode: "on", value: [] });
+            assert.ok(valid.success, `expected an array to satisfy object, got: ${valid.success ? "" : valid.message}`);
+            const invalid = v.validate({ mode: "on", value: "abc" });
+            assert.ok(!invalid.success, "expected a primitive string not to satisfy object");
+        });
+
+        it("avoids an escaped identifier that resolves to the helper name", () => {
+            const v = validatorFor(escapedJsonWireTypeSchema, "__TypeChatJsonWire");
+            const generated = v.createModuleTextFromJson({ mode: "on" });
+            assert.ok(generated.success);
+            assert.match(generated.data, /type __TypeChatJsonWire_</);
+            const result = v.validate({ mode: "on" });
+            assert.ok(result.success, `expected the escaped target type to validate, got: ${result.success ? "" : result.message}`);
         });
 
         it("does not widen branded strings when an enum is declared", () => {
