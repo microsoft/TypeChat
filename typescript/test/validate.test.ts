@@ -805,6 +805,34 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(!invalidEnum.success, "expected the enum-bearing intersection to reject a primitive length value");
         });
 
+        it("preserves explicit object intersections with primitive wrapper types", () => {
+            for (const { type, value } of [
+                { type: "Number", value: 1 },
+                { type: "Boolean", value: true },
+                { type: "String", value: "abc" }
+            ]) {
+                const plain = validatorFor(
+                    `export interface Response { value: object & ${type}; }`,
+                    "Response"
+                );
+                const withEnum = validatorFor(
+                    `export enum Mode { On = "on" }\n` +
+                        `export interface Response { mode: Mode; value: object & ${type}; }`,
+                    "Response"
+                );
+                const plainResult = plain.validate({ value });
+                const enumResult = withEnum.validate({ mode: "on", value });
+                assert.ok(
+                    !plainResult.success,
+                    `expected the enum-free schema to reject ${type}`
+                );
+                assert.ok(
+                    !enumResult.success,
+                    `expected the enum-bearing schema to reject ${type}, got: ${enumResult.success ? "" : enumResult.message}`
+                );
+            }
+        });
+
         it("avoids an escaped identifier that resolves to the helper name", () => {
             const v = validatorFor(escapedJsonWireTypeSchema, "__TypeChatJsonWire");
             const generated = v.createModuleTextFromJson({ mode: "on" });
