@@ -163,6 +163,10 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
                 return append("unknown");
             case "array":
                 return appendArrayType(type);
+            case "set":
+                return appendSetType(type);
+            case "map":
+                return appendMapType(type);
             case "object":
                 return appendObjectType(type);
             case "union": { // covers both z.union() and z.discriminatedUnion() — Zod v4 merged discriminated unions into the regular union type kind ("ZodDiscriminatedUnion" in v3); both have an `options` array
@@ -196,6 +200,20 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
     function appendArrayType(arrayType: z.ZodType) {
         appendType((arrayType._zod.def as z.core.$ZodArrayDef).element as z.ZodType, TypePrecedence.Object);
         append("[]");
+    }
+
+    function appendSetType(setType: z.ZodType) {
+        appendType((setType._zod.def as z.core.$ZodSetDef).valueType as z.ZodType, TypePrecedence.Object);
+        append("[]");
+    }
+
+    function appendMapType(mapType: z.ZodType) {
+        const mapDef = mapType._zod.def as z.core.$ZodMapDef;
+        append("[");
+        appendType(mapDef.keyType as z.ZodType);
+        append(", ");
+        appendType(mapDef.valueType as z.ZodType);
+        append("][]");
     }
 
     function appendObjectType(objectType: z.ZodType) {

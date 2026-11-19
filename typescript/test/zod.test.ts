@@ -151,6 +151,34 @@ describe("getZodSchemaAsTypeScript", () => {
     });
 
     // -----------------------------------------------------------------------
+    // Set & Map
+    // -----------------------------------------------------------------------
+
+    describe("z.set()", () => {
+
+        it("produces an array wire representation for sets", () => {
+            assert.match(schemaOf("T", z.set(z.string())), /type T = string\[\];/);
+        });
+
+        it("parenthesizes a union element type in a set", () => {
+            assert.match(schemaOf("T", z.set(z.union([z.string(), z.number()]))), /type T = \(string \| number\)\[\];/);
+        });
+
+    });
+
+    describe("z.map()", () => {
+
+        it("produces a key-value tuple array wire representation for maps", () => {
+            assert.match(schemaOf("T", z.map(z.string(), z.number())), /type T = \[string, number\]\[\];/);
+        });
+
+        it("supports union key and value types in maps", () => {
+            assert.match(schemaOf("T", z.map(z.union([z.string(), z.number()]), z.boolean())), /type T = \[string \| number, boolean\]\[\];/);
+        });
+
+    });
+
+    // -----------------------------------------------------------------------
     // Object — emitted as interface
     // -----------------------------------------------------------------------
 
