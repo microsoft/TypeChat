@@ -303,6 +303,17 @@ export interface Response {
     extra: string;
 }`;
 
+const recursiveMissingSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface Node {
+    mode: Mode;
+    id: string; a: string; b: string; c: string;
+    d: string; e: string; f: string;
+    next: Node;
+}`;
+
 const genericWrapperSchema = `
 export interface Metadata {
     m1: string; m2: string; m3: string; m4: string;
@@ -813,6 +824,29 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(result.message.includes("m1"), `expected a nested property name, got: ${result.message}`);
         });
 
+        it("does not expand a nested recursive diagnostic as the outer declaration", () => {
+            const v = validatorFor(recursiveMissingSchema, "Node");
+            const result = v.validate({
+                mode: "on",
+                id: "root",
+                a: "a", b: "b", c: "c", d: "d", e: "e",
+                next: {}
+            });
+            assert.ok(!result.success, "expected the nested recursive value to fail");
+            assert.ok(
+                result.message.includes("Type '{}'"),
+                `expected the nested source type, got: ${result.message}`
+            );
+            assert.ok(
+                result.message.includes("mode") && result.message.includes("id"),
+                `expected the nested missing properties, got: ${result.message}`
+            );
+            assert.ok(
+                !result.message.includes("next: {}"),
+                `expected no outer-instance expansion, got: ${result.message}`
+            );
+        });
+
         it("keeps internal helper names out of missing and excess property diagnostics", () => {
             const v = validatorFor(diagnosticSchema, "Response");
             const missing = v.validate({});
@@ -972,6 +1006,52 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(
                 !result.message.includes("from type 'Metadata'"),
                 `diagnostic must not target the unwrapped Metadata type, got: ${result.message}`
+            );
+        });
+
+        it("leaves a property identifier that matches the enum helper unchanged", () => {
+            const v = validatorFor<Record<string, unknown>>(stringEnumSchema, "Order");
+            v.createModuleTextFromJson = () => ({
+                success: true,
+                data: `import { Currency, Order } from './schema';\n` +
+                    `const json: Order = { currency: Currency.USD, __TypeChatJsonWireEnum: 1 };`
+            });
+            const result = v.validate({});
+            assert.ok(!result.success, "expected the custom object literal to fail validation");
+            assert.ok(
+                result.message.includes("__TypeChatJsonWireEnum"),
+                `expected the property name verbatim, got: ${result.message}`
+            );
+            assert.ok(
+                !result.message.includes(`"USD" | "EUR"`),
+                `expected no enum alias substitution, got: ${result.message}`
+            );
+        });
+
+        it("preserves template literal types while unwrapping a helper", () => {
+            const v = validatorFor<Record<string, unknown>>(stringEnumSchema, "Order");
+            const generated = v.createModuleTextFromJson({});
+            assert.ok(generated.success);
+            const pattern = "`a>${string}`";
+            const other = "`a<${string}`";
+            const escaped = "`a\\`b>${string}`";
+            const target = `{ pattern: ${pattern}; other: ${other}; escaped: ${escaped}; }`;
+            const moduleText = generated.data.replace(
+                "const json: __TypeChatJsonWire<Order> = {};",
+                `const json: __TypeChatJsonWire<${target}> = 1;`
+            );
+            assert.notEqual(moduleText, generated.data);
+            v.createModuleTextFromJson = () => ({ success: true, data: moduleText });
+
+            const result = v.validate({});
+            assert.ok(!result.success, "expected the template literal target to fail validation");
+            assert.ok(
+                result.message.includes(target),
+                `expected template literal types verbatim, got: ${result.message}`
+            );
+            assert.ok(
+                !result.message.includes("TypeChatJsonWire"),
+                `expected no helper name, got: ${result.message}`
             );
         });
     });

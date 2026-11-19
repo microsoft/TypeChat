@@ -294,17 +294,23 @@ export function createTypeScriptJsonValidator<T extends object = object>(
     }
 
     /**
-     * Unwraps helper type applications while leaving double-quoted values verbatim. Type arguments
-     * can themselves contain string literals, so a quoted span never terminates an enclosing
+     * Unwraps helper type applications while leaving string and template-literal spans verbatim.
+     * Type arguments can contain either form, so their punctuation never terminates an enclosing
      * application.
      */
-    function normalizeDiagnosticText(text: string): string {
+    function normalizeDiagnosticText(text: string, insideHelper = false): string {
         const names = [`${jsonWireTypeName}Shape`, `${jsonWireTypeName}Object`, jsonWireTypeName];
         let result = "";
         let index = 0;
         while (index < text.length) {
             if (text[index] === '"') {
                 const end = skipStringLiteral(text, index);
+                result += text.slice(index, end);
+                index = end;
+                continue;
+            }
+            if (text[index] === "`") {
+                const end = skipTemplateLiteral(text, index);
                 result += text.slice(index, end);
                 index = end;
                 continue;
@@ -318,7 +324,7 @@ export function createTypeScriptJsonValidator<T extends object = object>(
                 if (end < 0) {
                     continue;
                 }
-                result += normalizeDiagnosticText(text.slice(index + name.length + 1, end));
+                result += normalizeDiagnosticText(text.slice(index + name.length + 1, end), true);
                 index = end + 1;
                 if (name.endsWith("Object")) {
                     // Drop the `& object` guard from the rendered helper so diagnostics mention
@@ -335,7 +341,7 @@ export function createTypeScriptJsonValidator<T extends object = object>(
                 continue;
             }
             const enumName = `${jsonWireTypeName}Enum`;
-            if (jsonWireEnumValues && text.startsWith(enumName, index)) {
+            if (insideHelper && jsonWireEnumValues && text.startsWith(enumName, index)) {
                 // Replace the alias once. Re-scanning the substituted text could turn a value
                 // that spells the alias into an unbounded expansion.
                 result += jsonWireEnumValues;
@@ -363,11 +369,81 @@ export function createTypeScriptJsonValidator<T extends object = object>(
         return text.length;
     }
 
+    /**
+     * Skips a template literal type, including escaped characters and nested `${...}`
+     * interpolations. Diagnostic type text can contain any of these, and their punctuation must
+     * not be mistaken for an enclosing type argument list.
+     */
+    function skipTemplateLiteral(text: string, start: number): number {
+        let index = start + 1;
+        while (index < text.length) {
+            if (text[index] === "\\") {
+                index += 2;
+            }
+            else if (text[index] === "`") {
+                return index + 1;
+            }
+            else if (text[index] === "$" && text[index + 1] === "{") {
+                index = skipTemplateExpression(text, index + 2);
+            }
+            else {
+                index++;
+            }
+        }
+        return text.length;
+    }
+
+    function skipTemplateExpression(text: string, start: number): number {
+        let depth = 1;
+        let index = start;
+        while (index < text.length) {
+            if (text[index] === '"') {
+                index = skipStringLiteral(text, index);
+            }
+            else if (text[index] === "'") {
+                index = skipSingleQuotedString(text, index);
+            }
+            else if (text[index] === "`") {
+                index = skipTemplateLiteral(text, index);
+            }
+            else if (text[index] === "{") {
+                depth++;
+                index++;
+            }
+            else if (text[index] === "}" && --depth === 0) {
+                return index + 1;
+            }
+            else {
+                index++;
+            }
+        }
+        return text.length;
+    }
+
+    function skipSingleQuotedString(text: string, start: number): number {
+        let index = start + 1;
+        while (index < text.length) {
+            if (text[index] === "\\") {
+                index += 2;
+            }
+            else if (text[index] === "'") {
+                return index + 1;
+            }
+            else {
+                index++;
+            }
+        }
+        return text.length;
+    }
+
     function findTypeArgumentEnd(text: string, openBracket: number): number {
         let depth = 0;
         for (let index = openBracket; index < text.length; index++) {
             if (text[index] === '"') {
                 index = skipStringLiteral(text, index) - 1;
+            }
+            else if (text[index] === "`") {
+                index = skipTemplateLiteral(text, index) - 1;
             }
             else if (text[index] === "<") {
                 depth++;
@@ -430,10 +506,14 @@ export function createTypeScriptJsonValidator<T extends object = object>(
         for (const stmt of file.statements) {
             if (isVariableStatement(stmt)) {
                 for (const decl of stmt.declarationList.declarations) {
-                    // Match the specific declaration that spans the diagnostic position.
-                    // Use getStart() to exclude leading trivia from the range check.
-                    if (decl.getStart(file) <= position && position <= decl.end &&
-                            decl.type && isTypeReferenceNode(decl.type) && decl.initializer) {
+                    // Only the diagnostic attached to the declaration itself belongs to the outer
+                    // instance. A nested property diagnostic also falls within decl.end, but its
+                    // position is inside the initializer rather than the declaration prefix or
+                    // type annotation.
+                    if (decl.getStart(file) <= position &&
+                            decl.type &&
+                            position <= decl.type.getEnd() &&
+                            isTypeReferenceNode(decl.type) && decl.initializer) {
                         // Only the declaration generated by this validator wraps the schema type in
                         // the JsonWire helper. A custom createModuleTextFromJson may use any generic
                         // annotation, so unwrap only our own helper and keep other targets intact.
