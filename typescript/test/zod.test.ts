@@ -156,24 +156,24 @@ describe("getZodSchemaAsTypeScript", () => {
 
     describe("z.set()", () => {
 
-        it("produces an array wire representation for sets", () => {
-            assert.match(schemaOf("T", z.set(z.string())), /type T = string\[\];/);
+        it("produces Set<T> representation for sets", () => {
+            assert.match(schemaOf("T", z.set(z.string())), /type T = Set<string>;/);
         });
 
-        it("parenthesizes a union element type in a set", () => {
-            assert.match(schemaOf("T", z.set(z.union([z.string(), z.number()]))), /type T = \(string \| number\)\[\];/);
+        it("supports union element type in a set", () => {
+            assert.match(schemaOf("T", z.set(z.union([z.string(), z.number()]))), /type T = Set<string \| number>;/);
         });
 
     });
 
     describe("z.map()", () => {
 
-        it("produces a key-value tuple array wire representation for maps", () => {
-            assert.match(schemaOf("T", z.map(z.string(), z.number())), /type T = \[string, number\]\[\];/);
+        it("produces Map<K, V> representation for maps", () => {
+            assert.match(schemaOf("T", z.map(z.string(), z.number())), /type T = Map<string, number>;/);
         });
 
         it("supports union key and value types in maps", () => {
-            assert.match(schemaOf("T", z.map(z.union([z.string(), z.number()]), z.boolean())), /type T = \[string \| number, boolean\]\[\];/);
+            assert.match(schemaOf("T", z.map(z.union([z.string(), z.number()]), z.boolean())), /type T = Map<string \| number, boolean>;/);
         });
 
     });
@@ -533,6 +533,60 @@ describe("getZodSchemaAsTypeScript", () => {
 
             const invalidResult = validator.validate({ dateTime: "not-a-date" });
             assert.ok(!invalidResult.success, "expected invalid date-time validation to fail");
+        });
+
+        it("preserves explicit array-to-Set and tuple-array-to-Map transforms during validation and translation", async () => {
+            const CollectionSchema = {
+                Collections: z.object({
+                    tags: z.array(z.string()).transform(items => new Set(items)),
+                    entries: z.array(z.tuple([z.string(), z.number()])).transform(tuples => new Map(tuples)),
+                }),
+            };
+            const validator = createZodJsonValidator(CollectionSchema, "Collections");
+            const schemaText = validator.getSchemaText();
+            assert.match(schemaText, /tags: string\[\];/);
+            assert.match(schemaText, /entries: \[string, number\]\[\];/);
+
+            // Validation with JSON array inputs produces Set and Map instances
+            const valid = validator.validate({
+                tags: ["apple", "banana", "apple"],
+                entries: [["first", 1], ["second", 2]],
+            });
+            assert.ok(valid.success, "expected validation to succeed");
+            assert.ok(valid.data.tags instanceof Set);
+            assert.equal(valid.data.tags.size, 2);
+            assert.ok(valid.data.tags.has("apple"));
+            assert.ok(valid.data.tags.has("banana"));
+            assert.ok(valid.data.entries instanceof Map);
+            assert.equal(valid.data.entries.get("first"), 1);
+            assert.equal(valid.data.entries.get("second"), 2);
+
+            // Rejects invalid array elements
+            const invalid = validator.validate({
+                tags: [123],
+                entries: [["first", 1]],
+            });
+            assert.ok(!invalid.success, "expected invalid collection element to fail validation");
+
+            // Full translation path with stubbed language model
+            const mockModel = {
+                async complete() {
+                    return {
+                        success: true as const,
+                        data: JSON.stringify({
+                            tags: ["alpha", "beta"],
+                            entries: [["count", 42]],
+                        }),
+                    };
+                },
+            };
+            const translator = createJsonTranslator(mockModel, validator);
+            const translationResult = await translator.translate("Provide sample collections");
+            assert.ok(translationResult.success, "expected translation to succeed");
+            assert.ok(translationResult.data.tags instanceof Set);
+            assert.ok(translationResult.data.tags.has("alpha"));
+            assert.ok(translationResult.data.entries instanceof Map);
+            assert.equal(translationResult.data.entries.get("count"), 42);
         });
 
     });

@@ -203,17 +203,18 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
     }
 
     function appendSetType(setType: z.ZodType) {
-        appendType((setType._zod.def as z.core.$ZodSetDef).valueType as z.ZodType, TypePrecedence.Object);
-        append("[]");
+        append("Set<");
+        appendType((setType._zod.def as z.core.$ZodSetDef).valueType as z.ZodType);
+        append(">");
     }
 
     function appendMapType(mapType: z.ZodType) {
         const mapDef = mapType._zod.def as z.core.$ZodMapDef;
-        append("[");
+        append("Map<");
         appendType(mapDef.keyType as z.ZodType);
         append(", ");
         appendType(mapDef.valueType as z.ZodType);
-        append("][]");
+        append(">");
     }
 
     function appendObjectType(objectType: z.ZodType) {
