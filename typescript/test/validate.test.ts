@@ -214,6 +214,22 @@ export interface Response {
     value: object;
 }`;
 
+const objectIntersectionSchema = `
+export interface Response {
+    lengthValue: object & { length?: number };
+    weakValue: object & { enabled?: boolean };
+}`;
+
+const objectIntersectionEnumSchema = `
+export enum Mode {
+    On = "on"
+}
+export interface Response {
+    mode: Mode;
+    lengthValue: object & { length?: number };
+    weakValue: object & { enabled?: boolean };
+}`;
+
 const escapedJsonWireTypeSchema = `
 export enum Mode {
     On = "on"
@@ -771,6 +787,22 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(valid.success, `expected an array to satisfy object, got: ${valid.success ? "" : valid.message}`);
             const invalid = v.validate({ mode: "on", value: "abc" });
             assert.ok(!invalid.success, "expected a primitive string not to satisfy object");
+        });
+
+        it("preserves explicit object intersections with all-optional properties", () => {
+            const plain = validatorFor(objectIntersectionSchema, "Response");
+            const withEnum = validatorFor(objectIntersectionEnumSchema, "Response");
+            const valid = { lengthValue: [], weakValue: [] };
+            const validPlain = plain.validate(valid);
+            const validEnum = withEnum.validate({ mode: "on", ...valid });
+            assert.ok(validPlain.success, `expected the enum-free intersection to accept arrays, got: ${validPlain.success ? "" : validPlain.message}`);
+            assert.ok(validEnum.success, `expected the enum-bearing intersection to accept arrays, got: ${validEnum.success ? "" : validEnum.message}`);
+
+            const invalid = { lengthValue: "abc", weakValue: [] };
+            const invalidPlain = plain.validate(invalid);
+            const invalidEnum = withEnum.validate({ mode: "on", ...invalid });
+            assert.ok(!invalidPlain.success, "expected the enum-free intersection to reject a primitive length value");
+            assert.ok(!invalidEnum.success, "expected the enum-bearing intersection to reject a primitive length value");
         });
 
         it("avoids an escaped identifier that resolves to the helper name", () => {

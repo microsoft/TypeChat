@@ -94,8 +94,8 @@ function getStringEnumValues(checker: Checker, sourceFile: SourceFile): string[]
 function createJsonWireTypeDefinition(typeName: string, stringEnumValues: readonly string[]): string {
     const enumValues = stringEnumValues.map(value => JSON.stringify(value)).join(" | ");
     // Intersecting an all-optional mapped shape with `object` disables TypeScript's weak-type
-    // check. Keep the explicit object constraint for ordinary objects, but let weak shapes use the
-    // mapped type alone so arrays and unrelated objects are still rejected.
+    // check. Array assignability distinguishes explicit `object` intersections from ordinary weak
+    // shapes: the former accept arrays, while the latter must keep their weak-type check.
     return `type ${typeName}Enum = ${enumValues};
 type ${typeName}Object<T> = { [K in keyof T]: ${typeName}<T[K]> };
 type ${typeName}Shape<T> = { [K in keyof T]: T[K] };
@@ -110,11 +110,9 @@ type ${typeName}<T> =
             ? ${typeName}Object<T>
             : boolean extends T
             ? ${typeName}Object<T>
-            : keyof T extends never
+            : unknown[] extends T
             ? ${typeName}Object<T> & object
-            : {} extends T
-            ? ${typeName}Object<T>
-            : ${typeName}Object<T> & object) : T) : T;`;
+            : ${typeName}Object<T>) : T) : T;`;
 }
 
 /**
