@@ -58,4 +58,23 @@ describe("processRequests with an input file", () => {
         const { requests } = await run("# a comment\r\nfirst request\r\nsecond request\r\n");
         assert.deepEqual(requests, ["first request", "second request"]);
     });
+
+    it("reads input files asynchronously without blocking the event loop", async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), "typechat-interactive-"));
+        const inputFile = path.join(dir, "input.txt");
+        fs.writeFileSync(inputFile, "async request\n");
+
+        const requests: string[] = [];
+        try {
+            const promise = processRequests("> ", inputFile, async request => {
+                requests.push(request);
+            });
+            assert.equal(requests.length, 0, "No requests should be dispatched before processRequests yields");
+            await promise;
+            assert.deepEqual(requests, ["async request"]);
+        }
+        finally {
+            fs.rmSync(dir, { recursive: true, force: true });
+        }
+    });
 });
