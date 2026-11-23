@@ -43,8 +43,8 @@ platform, security, or legal requirements.
   decide project direction or authorize a feature.
 - **N6. A directory or promotional channel for commercial providers.** Document
   integration mechanisms rather than listing or endorsing gateway services.
-  Use fictional companies and clearly identified placeholder endpoints, such as
-  `adatum.com`, for generic gateway examples. Provider names remain appropriate
+  Use Microsoft-sanctioned example companies and clearly identified placeholder
+  endpoints, such as `adatum.com`. Provider names remain appropriate
   when needed to explain APIs or adapters TypeChat implements, such as OpenAI
   and Azure OpenAI. This does not remove support for compatible endpoints.
 
