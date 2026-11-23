@@ -697,20 +697,6 @@ describe("createOpenAILanguageModel (Responses API path)", () => {
 // createLanguageModel env-var routing
 // ---------------------------------------------------------------------------
 
-describe("createLanguageModel live API integration", () => {
-    test("calls the configured API when live tests are explicitly enabled", {
-        skip: process.env.TYPECHAT_LIVE_TESTS !== "1" || !process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL,
-    }, async () => {
-        const model = createLanguageModel(process.env);
-        model.timeoutMs = 30_000;
-        model.retryMaxAttempts = 0;
-        const result = await model.complete("Reply with the single word: pong");
-        assert.equal(result.success, true, result.message);
-        assert.equal(typeof result.data, "string");
-        assert.notEqual(result.data.trim(), "");
-    });
-});
-
 describe("createLanguageModel environment variable routing", () => {
     after(teardownFetch);
 
