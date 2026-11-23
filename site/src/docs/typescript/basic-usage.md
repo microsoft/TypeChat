@@ -174,7 +174,8 @@ service. Replace the URL with your gateway's Chat Completions URL and use that
 gateway's API key and model name:
 
 ```ts
-const model = createOpenAILanguageModel(apiKey, model, "https://api.adatum.com/v1/chat/completions");
+const modelName = "<model name>";
+const model = createOpenAILanguageModel(apiKey, modelName, "https://api.adatum.com/v1/chat/completions");
 ```
 
 With `createLanguageModel`, set the `OPENAI_ENDPOINT` environment variable to
