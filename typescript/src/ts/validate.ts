@@ -1,8 +1,8 @@
 // TODO: Revisit these `typescript/unstable/*` imports once a stable API is available.
 import { API, NodeBuilderFlags, SymbolFlags, type Checker, type Diagnostic } from 'typescript/unstable/sync';
 import { createVirtualFileSystem } from 'typescript/unstable/fs';
-import type { SourceFile } from 'typescript/unstable/ast';
-import { isTypeReferenceNode, isVariableStatement } from 'typescript/unstable/ast/is';
+import type { Node, SourceFile } from 'typescript/unstable/ast';
+import { isEnumDeclaration, isTypeReferenceNode, isVariableStatement } from 'typescript/unstable/ast/is';
 import { Result, success, error } from '../result.js';
 import { typeChatSchemaValidation, type TypeChatJsonValidator } from "../typechat.js";
 
@@ -39,6 +39,88 @@ const libFileName = "/lib.d.ts";
 const schemaFileName = "/schema.ts";
 const jsonFileName = "/json.ts";
 const schemaValidationFileName = "/schema-validation.ts";
+
+/**
+ * Returns a type alias name that does not collide with identifiers in the schema.
+ */
+function createUniqueJsonWireTypeName(
+    schemaText: string,
+    importedTypeName: string,
+    stringEnumValues: readonly string[]
+): string {
+    let name = "__TypeChatJsonWire";
+    while (
+        importedTypeName === name ||
+        importedTypeName === `${name}Enum` ||
+        importedTypeName === `${name}Object` ||
+        importedTypeName === `${name}Shape` ||
+        schemaText.includes(name) ||
+        schemaText.includes(`${name}Enum`) ||
+        schemaText.includes(`${name}Object`) ||
+        schemaText.includes(`${name}Shape`) ||
+        stringEnumValues.some(value => value.includes(name))
+    ) {
+        name += "_";
+    }
+    return name;
+}
+
+/**
+ * Collects the string values declared by enums in the schema. Limiting the JSON wire mapping to
+ * these values leaves branded and opaque string types untouched.
+ */
+function getStringEnumValues(checker: Checker, sourceFile: SourceFile): string[] {
+    const values = new Set<string>();
+    sourceFile.forEachChild(function visit(node: Node) {
+        if (isEnumDeclaration(node)) {
+            for (const member of node.members) {
+                const value = checker.getConstantValue(member);
+                if (typeof value === "string") {
+                    values.add(value);
+                }
+            }
+        }
+        node.forEachChild(visit);
+    });
+    return [...values];
+}
+
+/**
+ * Maps serialized string-enum values back to their literal enum member types while preserving the
+ * rest of the schema's structure. Class instances with private or protected members are left
+ * unchanged because mapping their public keys would drop the nominal constraint that rejects
+ * plain JSON objects.
+ */
+function createJsonWireTypeDefinition(typeName: string, stringEnumValues: readonly string[]): string {
+    const enumValues = stringEnumValues.map(value => JSON.stringify(value)).join(" | ");
+    // Intersecting an all-optional mapped shape with `object` disables TypeScript's weak-type
+    // check. Keep the constraint when an explicit intersection accepts arrays, or when the mapped
+    // shape would newly accept a primitive that the original type rejects. Ordinary weak shapes
+    // keep their weak-type check.
+    return `type ${typeName}Enum = ${enumValues};
+type ${typeName}Object<T> = { [K in keyof T]: ${typeName}<T[K]> };
+type ${typeName}Shape<T> = { [K in keyof T]: T[K] };
+type ${typeName}<T> =
+    T extends ${typeName}Enum ? \`\${T}\` :
+    T extends (...args: never[]) => unknown ? T :
+    T extends abstract new (...args: never[]) => unknown ? T :
+    T extends object ? (${typeName}Shape<T> extends T ?
+        (string extends T
+            ? ${typeName}Object<T>
+            : number extends T
+            ? ${typeName}Object<T>
+            : boolean extends T
+            ? ${typeName}Object<T>
+            : string extends ${typeName}Object<T>
+            ? ${typeName}Object<T> & object
+            : number extends ${typeName}Object<T>
+            ? ${typeName}Object<T> & object
+            : boolean extends ${typeName}Object<T>
+            ? ${typeName}Object<T> & object
+            : unknown[] extends T
+            ? ${typeName}Object<T> & object
+            : ${typeName}Object<T>) : T) : T;`;
+}
 
 /**
  * Represents an object that can validate JSON strings according to a given TypeScript schema.
@@ -91,11 +173,21 @@ export function createTypeScriptJsonValidator<T extends object = object>(
         [schemaValidationFileName]: ""
     });
     const api = new API({ fs: fileSystem, cwd: "/" });
-    api.updateSnapshot({ openProjects: [configFileName] });
     if (!fileSystem.writeFile) {
         throw new Error("The TypeScript virtual file system doesn't support writing files.");
     }
     const writeFile = fileSystem.writeFile;
+    const initialSnapshot = api.updateSnapshot({ openProjects: [configFileName] });
+    const schemaProject = initialSnapshot.getProject(configFileName);
+    const schemaSourceFile = schemaProject?.program.getSourceFile(schemaFileName);
+    const stringEnumValues = schemaProject && schemaSourceFile
+        ? getStringEnumValues(schemaProject.checker, schemaSourceFile)
+        : [];
+    const jsonWireTypeName = createUniqueJsonWireTypeName(schema, typeName, stringEnumValues);
+    const jsonWireTypeDefinition = stringEnumValues.length
+        ? createJsonWireTypeDefinition(jsonWireTypeName, stringEnumValues)
+        : "";
+    const jsonWireEnumValues = stringEnumValues.map(value => JSON.stringify(value)).join(" | ");
     let schemaValidationResult: Result<void> | undefined;
     const validator: TypeScriptJsonValidatorWithSchemaValidation<T> = {
         getSchemaText: () => schema,
@@ -179,17 +271,208 @@ export function createTypeScriptJsonValidator<T extends object = object>(
             const checker = project.checker;
             const jsonFile = program.getSourceFile(jsonFileName);
             const diagnostics = programDiagnostics.map(d => {
-                const message = flattenDiagnosticMessageText(d, "\n");
                 // TS error 2740 truncates the missing-properties list to 4 items ("and N more").
                 // Use the type checker to reconstruct the full list of missing required properties.
-                if (d.code === 2740 && jsonFile && d.fileName === jsonFileName) {
-                    return expandMissingPropertiesMessage(checker, jsonFile, d.pos) ?? message;
+                // The truncated diagnostic may be a child of another one, for example an
+                // intersection target, so search the message chain rather than the rendered text.
+                const truncated = findDiagnosticWithCode(d, 2740);
+                if (jsonFile && truncated?.fileName === jsonFileName) {
+                    const expanded = expandMissingPropertiesMessage(checker, jsonFile, truncated.pos, truncated.text);
+                    if (expanded) {
+                        return normalizeJsonWireTypeNames(expanded);
+                    }
                 }
-                return message;
+                return normalizeJsonWireTypeNames(flattenDiagnosticMessageText(d, "\n"));
             }).join("\n");
             return error(diagnostics, { data: jsonObject });
         }
         return success(jsonObject as T);
+    }
+
+    function findDiagnosticWithCode(diagnostic: Diagnostic, code: number): Diagnostic | undefined {
+        if (diagnostic.code === code) {
+            return diagnostic;
+        }
+        for (const child of diagnostic.messageChain ?? []) {
+            const match = findDiagnosticWithCode(child, code);
+            if (match) {
+                return match;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Removes internal helper names from diagnostics so callers and repair prompts see the schema
+     * type that they wrote.
+     */
+    function normalizeJsonWireTypeNames(message: string): string {
+        if (!jsonWireTypeDefinition) {
+            return message;
+        }
+        return normalizeDiagnosticText(message);
+    }
+
+    /**
+     * Unwraps helper type applications while leaving string and template-literal spans verbatim.
+     * Type arguments can contain either form, so their punctuation never terminates an enclosing
+     * application.
+     */
+    function normalizeDiagnosticText(text: string, insideHelper = false): string {
+        const names = [`${jsonWireTypeName}Shape`, `${jsonWireTypeName}Object`, jsonWireTypeName];
+        let result = "";
+        let index = 0;
+        while (index < text.length) {
+            if (text[index] === '"') {
+                const end = skipStringLiteral(text, index);
+                result += text.slice(index, end);
+                index = end;
+                continue;
+            }
+            if (text[index] === "`") {
+                const end = skipTemplateLiteral(text, index);
+                result += text.slice(index, end);
+                index = end;
+                continue;
+            }
+            let matched = false;
+            for (const name of names) {
+                if (!text.startsWith(name, index) || text[index + name.length] !== "<") {
+                    continue;
+                }
+                const end = findTypeArgumentEnd(text, index + name.length);
+                if (end < 0) {
+                    continue;
+                }
+                result += normalizeDiagnosticText(text.slice(index + name.length + 1, end), true);
+                index = end + 1;
+                if (name.endsWith("Object")) {
+                    // Drop the `& object` guard from the rendered helper so diagnostics mention
+                    // the schema type alone.
+                    const guard = /^\s*&\s*object\b/.exec(text.slice(index));
+                    if (guard) {
+                        index += guard[0].length;
+                    }
+                }
+                matched = true;
+                break;
+            }
+            if (matched) {
+                continue;
+            }
+            const enumName = `${jsonWireTypeName}Enum`;
+            if (insideHelper && jsonWireEnumValues && text.startsWith(enumName, index)) {
+                // Replace the alias once. Re-scanning the substituted text could turn a value
+                // that spells the alias into an unbounded expansion.
+                result += jsonWireEnumValues;
+                index += enumName.length;
+                continue;
+            }
+            result += text[index++];
+        }
+        return result;
+    }
+
+    function skipStringLiteral(text: string, start: number): number {
+        let index = start + 1;
+        while (index < text.length) {
+            if (text[index] === "\\") {
+                index += 2;
+            }
+            else if (text[index] === '"') {
+                return index + 1;
+            }
+            else {
+                index++;
+            }
+        }
+        return text.length;
+    }
+
+    /**
+     * Skips a template literal type, including escaped characters and nested `${...}`
+     * interpolations. Diagnostic type text can contain any of these, and their punctuation must
+     * not be mistaken for an enclosing type argument list.
+     */
+    function skipTemplateLiteral(text: string, start: number): number {
+        let index = start + 1;
+        while (index < text.length) {
+            if (text[index] === "\\") {
+                index += 2;
+            }
+            else if (text[index] === "`") {
+                return index + 1;
+            }
+            else if (text[index] === "$" && text[index + 1] === "{") {
+                index = skipTemplateExpression(text, index + 2);
+            }
+            else {
+                index++;
+            }
+        }
+        return text.length;
+    }
+
+    function skipTemplateExpression(text: string, start: number): number {
+        let depth = 1;
+        let index = start;
+        while (index < text.length) {
+            if (text[index] === '"') {
+                index = skipStringLiteral(text, index);
+            }
+            else if (text[index] === "'") {
+                index = skipSingleQuotedString(text, index);
+            }
+            else if (text[index] === "`") {
+                index = skipTemplateLiteral(text, index);
+            }
+            else if (text[index] === "{") {
+                depth++;
+                index++;
+            }
+            else if (text[index] === "}" && --depth === 0) {
+                return index + 1;
+            }
+            else {
+                index++;
+            }
+        }
+        return text.length;
+    }
+
+    function skipSingleQuotedString(text: string, start: number): number {
+        let index = start + 1;
+        while (index < text.length) {
+            if (text[index] === "\\") {
+                index += 2;
+            }
+            else if (text[index] === "'") {
+                return index + 1;
+            }
+            else {
+                index++;
+            }
+        }
+        return text.length;
+    }
+
+    function findTypeArgumentEnd(text: string, openBracket: number): number {
+        let depth = 0;
+        for (let index = openBracket; index < text.length; index++) {
+            if (text[index] === '"') {
+                index = skipStringLiteral(text, index) - 1;
+            }
+            else if (text[index] === "`") {
+                index = skipTemplateLiteral(text, index) - 1;
+            }
+            else if (text[index] === "<") {
+                depth++;
+            }
+            else if (text[index] === ">" && text[index - 1] !== "=" && --depth === 0) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -233,15 +516,32 @@ export function createTypeScriptJsonValidator<T extends object = object>(
      * variable declaration at `position` in `file`. Returns `undefined` if the declaration
      * cannot be located or yields no missing properties (fallback to the original message).
      */
-    function expandMissingPropertiesMessage(checker: Checker, file: SourceFile, position: number): string | undefined {
+    function expandMissingPropertiesMessage(
+        checker: Checker,
+        file: SourceFile,
+        position: number,
+        diagnosticText: string
+    ): string | undefined {
+        const reportedTarget = / from type '(.+)': /.exec(diagnosticText)?.[1];
         for (const stmt of file.statements) {
             if (isVariableStatement(stmt)) {
                 for (const decl of stmt.declarationList.declarations) {
-                    // Match the specific declaration that spans the diagnostic position.
-                    // Use getStart() to exclude leading trivia from the range check.
-                    if (decl.getStart(file) <= position && position <= decl.end &&
-                            decl.type && isTypeReferenceNode(decl.type) && decl.initializer) {
-                        const targetType = checker.getTypeAtLocation(decl.type);
+                    // Only the diagnostic attached to the declaration itself belongs to the outer
+                    // instance. A nested property diagnostic also falls within decl.end, but its
+                    // position is inside the initializer rather than the declaration prefix or
+                    // type annotation.
+                    if (decl.getStart(file) <= position &&
+                            decl.type &&
+                            position <= decl.type.getEnd() &&
+                            isTypeReferenceNode(decl.type) && decl.initializer) {
+                        // Only the declaration generated by this validator wraps the schema type in
+                        // the JsonWire helper. A custom createModuleTextFromJson may use any generic
+                        // annotation, so unwrap only our own helper and keep other targets intact.
+                        const isJsonWireReference = decl.type.typeName.getText(file) === jsonWireTypeName;
+                        const targetTypeNode = isJsonWireReference
+                            ? decl.type.typeArguments?.[0] ?? decl.type
+                            : decl.type;
+                        const targetType = checker.getTypeAtLocation(targetTypeNode);
                         const sourceType = checker.getTypeAtLocation(decl.initializer);
                         if (!targetType || !sourceType) {
                             continue;
@@ -253,6 +553,13 @@ export function createTypeScriptJsonValidator<T extends object = object>(
                         if (missingProps.length > 0) {
                             const srcStr = checker.typeToString(sourceType, undefined, NodeBuilderFlags.NoTruncation);
                             const tgtStr = checker.typeToString(targetType, undefined, NodeBuilderFlags.NoTruncation);
+                            // A nested diagnostic reports the nested type. Expanding it here
+                            // would replace it with the outer declaration's missing properties.
+                            if (reportedTarget !== undefined &&
+                                    reportedTarget !== tgtStr &&
+                                    reportedTarget !== `${jsonWireTypeName}Object<${tgtStr}>`) {
+                                continue;
+                            }
                             return `Type '${srcStr}' is missing the following properties from type '${tgtStr}': ${missingProps.join(", ")}`;
                         }
                     }
@@ -263,6 +570,12 @@ export function createTypeScriptJsonValidator<T extends object = object>(
     }
 
     function createModuleTextFromJson(jsonObject: object) {
-        return success(`import { ${typeName} } from './schema';\nconst json: ${typeName} = ${JSON.stringify(jsonObject, undefined, 2)};\n`);
+        // String enums do not accept their serialized values in a normal enum-typed assignment.
+        // The JsonWire helper maps each enum value back to its string literal while recursively
+        // preserving object, array, tuple, optional-property, and union shapes. Numeric enums and
+        // enum-free schemas continue to validate against the original type.
+        const typeDefinition = jsonWireTypeDefinition ? `${jsonWireTypeDefinition}\n` : "";
+        const jsonType = jsonWireTypeDefinition ? `${jsonWireTypeName}<${typeName}>` : typeName;
+        return success(`import { ${typeName} } from './schema';\n${typeDefinition}const json: ${jsonType} = ${JSON.stringify(jsonObject, undefined, 2)};\n`);
     }
 }
