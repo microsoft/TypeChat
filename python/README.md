@@ -54,6 +54,22 @@ To learn more about TypeChat, visit the
 [documentation](https://microsoft.github.io/TypeChat/docs/python/basic-usage/)
 which includes more information on TypeChat and how to get started.
 
+## Translator prompts in 0.3
+
+`await translator.translate(request)` sends the schema and JSON instructions as a
+`system` message, then the verbatim request as a `user` message. For a follow-up,
+pass earlier messages as `prompt_preamble`: they go between those two messages,
+with their original roles and order. A nonempty string preamble is one `user`
+message. The translator does not remember earlier turns for you.
+
+To keep the pre-0.3 combined user prompt, construct
+`TypeChatJsonTranslator(model, validator, target_type, use_legacy_prompt=True)`.
+This keyword-only option keeps existing `_create_request_prompt(self, intent)`
+overrides in the **user** role. For the new default, customize
+`_create_system_prompt(self)` with application-owned instructions only. See the
+[migration guide](../site/src/docs/python/basic-usage.md#prompt-layout-and-migration)
+and the [math](./examples/math/program.py) and [health-data](./examples/healthData/translator.py) examples.
+
 ## Reusing model authentication
 
 For keyless Azure OpenAI requests, pass a synchronous or asynchronous bearer-token
@@ -150,8 +166,9 @@ user/system text to `input_text`, assistant text to `output_text`, and images to
 `input_image` with a flat `image_url` string and optional `detail`, preserving
 order, references, and omitted detail.
 
-`translate` still takes a string request. Its preamble stays before the generated
-schema/request message, and image context is preserved during validation and repair.
+`translate` still takes a string request. Image context stays in the preamble,
+including during repair: the translator appends the raw assistant reply and a
+user diagnostic without rewriting earlier messages.
 Successful model completions remain text-only. Authentication, HTTP controls, and
 configured-client ownership remain unchanged.
 

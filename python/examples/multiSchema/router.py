@@ -29,16 +29,11 @@ class TextRequestRouter:
         self._current_agents[name] = agent
 
     async def route_request(self, line: str):
-        classes_str = json.dumps(self._current_agents, indent=2, default=lambda o: None, allow_nan=False)
-
-        prompt_fragment = F"""
-Classify ""{line}"" using the following classification table:
-'''
-{classes_str}
-'''
-"""
-
-        result = await self._translator.translate(prompt_fragment)
+        classes = {name: agent["description"] for name, agent in self._current_agents.items()}
+        result = await self._translator.translate(line, prompt_preamble=[{
+            "role": "system",
+            "content": f"Classify the user request using this table of registered agents:\n{json.dumps(classes, indent=2)}",
+        }])
         if isinstance(result, Failure):
             print("Translation Failed ❌")
             print(f"Context: {result.message}")

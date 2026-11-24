@@ -10,6 +10,7 @@ from render import render_drawing
 from typechat import (
     Success,
     Failure,
+    PromptSection,
     TypeChatJsonTranslator,
     TypeChatValidator,
     create_language_model,
@@ -30,12 +31,14 @@ async def main(file_path: str | None):
     canvas.pack(padx=10, pady=10)
     canvas.bind("<Button-1>", lambda event: window.quit())
 
-    history: list[str] = []
+    history: list[PromptSection] = [
+        {"role": "system", "content": "Return the complete drawing, applying all drawing requests in order."},
+    ]
 
     async def request_handler(request: str):
         print("[Sending request...]")
-        history.append(request)
-        result: Success[schema.Drawing] | Failure = await translator.translate("\n".join(history))
+        result: Success[schema.Drawing] | Failure = await translator.translate(request, prompt_preamble=history)
+        history.append({"role": "user", "content": request})
         if isinstance(result, Failure):
             print("Failure:", result.message)
         else:

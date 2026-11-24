@@ -449,12 +449,9 @@ becomes `input_image` with the original reference in a flat
 omitted. Images are never flattened into text, including during translator repair.
 
 The translator's current request remains a string, and ordinary `translate(str)`
-calls need no changes. Preamble messages remain before the combined schema/request
-message; validation and repair keep the original context and append rejected
-assistant text followed by user diagnostics. This does not adopt the alternative
-prompt layout proposed in [#241](https://github.com/microsoft/TypeChat/pull/241).
-Model completions remain text-only, and schema generation and strict result
-validation are unchanged.
+calls need no changes. The default [prompt layout](#prompt-layout-and-migration)
+places image context after the schema instructions and before the request.
+Model completions remain text-only, and schema generation and strict result validation are unchanged.
 
 Supply a provider/model that supports images and follow its supported file formats
 (for example PNG, JPEG, or WebP), accessible-URL requirements, image-count limits,
@@ -586,11 +583,60 @@ translator = TypeChatJsonTranslator(model, validator, sentiment.Sentiment)
 When we are ready to translate a user request, we can call the `translate`
 method.
 
-```ts
-translator.translate("Hello world! 🙂");
+```py
+result = await translator.translate("Hello world! 🙂")
 ```
 
-We'll come back to this.
+### Prompt layout and migration
+
+In Python 0.3 the translator builds a `system` message with the application
+schema, translation instructions, and JSON formatting rules. It then passes
+through any `prompt_preamble` and sends the current request **once, unchanged**
+as a `user` message. For example:
+
+```py
+from typechat import PromptSection
+
+history: list[PromptSection] = [
+    {"role": "user", "content": "I liked it."},
+    {"role": "assistant", "content": '{"sentiment": "positive"}'},
+]
+result = await translator.translate("Actually, I didn't like it.", prompt_preamble=history)
+```
+
+The roles here are `system`, `user`, `assistant`, `user`. History is
+application-managed; omitting it starts an independent request. A nonempty
+string preamble becomes one `user` message. Message lists retain their roles,
+order, and content. Only label application-owned instructions as `system`;
+the translator does not relabel or sanitize a caller's role assignments.
+
+**Existing custom prompts:** To retain the old layout (preamble, then one
+combined schema/request `user` message), select it explicitly:
+
+```py
+translator = TypeChatJsonTranslator(model, validator, sentiment.Sentiment, use_legacy_prompt=True)
+```
+
+The keyword-only option also preserves subclasses' `_create_request_prompt(self, intent)`.
+To migrate a subclass, override `_create_system_prompt(self) -> str` instead.
+It runs once per turn and takes no request or history. For example, return
+`super()._create_system_prompt() + "\nUse the application's approved category names."`.
+Keep user data and previous replies out of this hook. A subclass can implement
+both hooks to support both layouts. Overriding only the old hook on the default
+layout raises a `ValueError` before the model is called; its text is never promoted
+to `system` or silently discarded.
+
+Both layouts validate the same way. A repair keeps the original messages and
+appends the **raw** rejected `assistant` reply and a `user` diagnostic (customizable
+with `_create_repair_prompt(self, validation_error)`). The default limit is one
+repair. A final `Failure` may retain a rejected parsed value and the latest
+response text, even if the latter could not be parsed.
+
+Model adapters must preserve the roles they receive or report an unsupported
+prompt. A provider without system-message support needs explicit legacy mode;
+there is no automatic fallback that flattens history. Role separation is not a
+guarantee of correct answers, resistance to prompt injection, or authorization
+to act on a validated result.
 
 ## Creating a "REPL"
 

@@ -118,18 +118,19 @@ class TypeChatProgramValidator(TypeChatValidator[JsonProgram]):
 
 
 class TypeChatProgramTranslator(TypeChatJsonTranslator[JsonProgram]):
-    _api_declaration_str: str
-
-    def __init__(self, model: TypeChatLanguageModel, validator: TypeChatProgramValidator, api_type: type):
-        super().__init__(model=model, validator=validator, target_type=api_type, _raise_on_schema_errors = False)
+    def __init__(
+        self, model: TypeChatLanguageModel, validator: TypeChatProgramValidator, api_type: type,
+        *, use_legacy_prompt: bool = False,
+    ):
         # TODO: the conversion result here has errors!
-        conversion_result = python_type_to_typescript_schema(api_type)
-        self._api_declaration_str = conversion_result.typescript_schema_str
+        super().__init__(
+            model=model, validator=validator, target_type=api_type,
+            use_legacy_prompt=use_legacy_prompt, _raise_on_schema_errors=False,
+        )
+        self._api_declaration_str = self.schema_str
 
-    @override
-    def _create_request_prompt(self, intent: str) -> str:
-
-        prompt = F"""
+    def _program_instructions(self) -> str:
+        return f"""
 You are a service that translates user requests into programs represented as JSON using the following TypeScript definitions:
 ```
 {program_schema_text}
@@ -137,14 +138,23 @@ You are a service that translates user requests into programs represented as JSO
 The programs can call functions from the API defined in the following TypeScript definitions:
 ```
 {self._api_declaration_str}
-```
+```"""
+
+    @override
+    def _create_system_prompt(self) -> str:
+        return f"""{self._program_instructions()}
+Translate each user request into a JSON program object with 2 spaces of indentation and no properties with the value undefined.
+"""
+
+    @override
+    def _create_request_prompt(self, intent: str) -> str:
+        return f"""{self._program_instructions()}
 The following is a user request:
 '''
 {intent}
 '''
 The following is the user request translated into a JSON program object with 2 spaces of indentation and no properties with the value undefined:
 """
-        return prompt
 
     @override
     def _create_repair_prompt(self, validation_error: str) -> str:
