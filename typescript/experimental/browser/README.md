@@ -9,6 +9,54 @@ and native TypeScript 7.0.2 backend. This package is deliberately outside its np
 workspaces and normal build/test commands. Installing TypeChat does not install
 this experimental compiler or its WASM artifact.
 
+## Current shipping blockers
+
+The expanded stability investigation found an upstream Unicode conformance
+failure: both the stable native backend and the pinned WASM backend reject a
+valid string-enum value containing a lone surrogate immediately followed by
+U+FEFF. The altered value without U+FEFF is also rejected. See
+[microsoft/TypeScript#65458](https://github.com/microsoft/TypeScript/issues/65458).
+This is a false rejection, not permission to widen the schema or accept arbitrary
+strings.
+
+The same failure was reproduced on an **untouched main snapshot** at
+[`0ef51b0`](https://github.com/microsoft/TypeChat/commit/0ef51b05e6f9c0373870c2754070e7f12b470bf7),
+using Node.js 24.22.1 and the normal TypeScript 7.0.2 backend. All 21 library
+source/runtime-manifest files were checked against that commit, allowing only
+Git's Windows line-ending conversion, then the original package was built.
+The loader/refactor in this branch is therefore not the origin of the failure.
+The leading-U+FEFF control passes; the lone-surrogate-plus-U+FEFF declared value
+fails despite successful schema preflight.
+
+[`tests/repro-unicode-enum.mjs`](./tests/repro-unicode-enum.mjs) is a standalone
+reproduction for the existing upstream report. Copy it into the `typescript`
+directory of a fresh TypeChat checkout at the commit above, then build and run
+it **from that directory**:
+
+```sh
+npm ci
+npm run build
+node repro-unicode-enum.mjs
+```
+
+The script resolves TypeChat from the current checkout (not from the prototype),
+prints the compiler versions, code units, preflight and validation results, then
+exits nonzero when the declared value is rejected. It uses no WASM, model, or
+credentials. This reproduction has been prepared; no new upstream comment or
+pull request has been posted.
+
+The two independent semantic regression checks remain **intentionally failing**
+in `npm test`; native/WASM parity alone cannot catch a shared upstream defect.
+Do not treat the earlier green corpus, or normal repository CI, as resolving
+this blocker. No dependency upgrade, decoder patch, or validation bypass has
+been applied.
+
+The investigation also found and fixed a prototype lifetime bug: retaining a
+closed validator previously retained its compiled module through the loader's
+closure context. Validator closures are now constructed outside that context.
+The regression inspects a strong heap-reference path rather than relying on a
+garbage-collection timeout; it fails before the fix and passes afterwards.
+
 ## Design and boundaries
 
 - The native and browser adapters share schema generation, enum normalization,
@@ -55,6 +103,25 @@ npm run test:browser
 tests plus a shared validation corpus against three backends: the default native
 7.0.2 compiler, the matching development native compiler, and WASM. The two
 same-version backends must match diagnostics as well as acceptance outcomes.
+The additional stability suite also asserts independently expected semantics;
+it currently reports the two Unicode failures described above.
+
+After the lifetime fix, the complete experimental Node run reports **21 passed,
+2 failed** (the Unicode checks), and **3 skipped** opt-in browser recovery checks.
+Those three recovery checks were run separately in Chromium, Firefox, and WebKit
+and all passed: seven workers closed per engine, with no remaining abort
+listeners, page errors, or fetches for the intentionally mismatched compiler.
+A final combined run of the Node checks, full three-engine browser matrix, and
+opt-in recovery checks reported **27 passed, 2 failed, 0 skipped**. Only the two
+independently expected Unicode cases remain red. The ordinary repository build
+and 424-test suite were also rerun successfully, with live tests disabled.
+To repeat that focused recovery run in PowerShell:
+
+```powershell
+$env:TYPECHAT_STABILITY_BROWSERS = "1"
+node --test --test-concurrency=1 --test-timeout=90000 --test-name-pattern="^stability: (chromium|firefox|webkit)" tests\stability.test.mjs
+Remove-Item Env:\TYPECHAT_STABILITY_BROWSERS
+```
 
 `npm run test:browser` bundles the actual private-package exports with **no Node
 polyfills or externalized dependencies**, then runs Chromium, Firefox, and WebKit against a temporary loopback server. It
@@ -183,7 +250,8 @@ On Windows and Node.js 24.22.1:
   unchanged. Existing custom-module diagnostics, program validation, lifecycle,
   and CJS/ESM consumer tests were rechecked.
 
-One clean-install development-host run measured:
+The initial clean-install development-host run, before the lifetime follow-up,
+measured:
 
 | Measurement | Observed |
 | --- | ---: |
@@ -220,8 +288,70 @@ inside a worker. Main-thread timer ticks were counted only during validation:
 | Firefox 151.0 | 19,389 ms | 1,843 | 34,603,008 bytes |
 | Playwright WebKit 26.5 | 2,895 ms | 184 | 35,127,296 bytes |
 
-Firefox's substantially slower execution is an observed limitation, even though
-the UI remains responsive. The worker's linear-memory report returns zero after
+These Firefox numbers were obtained under Playwright's Juggler debugger. Further
+investigation found that the installed debugger lacks the `allowUnobservedWasm`
+setting, which can pin WASM to baseline compilation. Its frame actors are
+registered before the command-line flag check and attach dedicated workers;
+removing the Juggler launch flag alone did not remove the confound.
+
+A bounded follow-up used the same installed Firefox 151.0 binary, compiler,
+artifact, fixed built library, fresh profiles, and 500-property/250-validation
+workload. Direct launches used no Playwright connection or devtools; the page
+reported results to its loopback server:
+
+| Firefox execution mode | Load/verify/compile | Initialization | Preflight | First validation | Warm validation mean | All 250 validations |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Direct launch, dedicated worker | 829 ms | 104 ms | 35 ms | 91 ms | 76.09 ms | 19,040 ms |
+| Playwright-attached, dedicated worker | 932 ms | 106 ms | 36 ms | 88 ms | 77.39 ms | 19,360 ms |
+| Direct launch, unobserved service worker | 515 ms | 42 ms | 10 ms | 15 ms | 8.57 ms | 2,152 ms |
+
+Installed Juggler excludes non-dedicated workers from its attachment hook. The
+roughly 9x improvement in the unobserved case strongly supports a debugger
+confound. **It also changes worker type**, so it is not a controlled single-setting
+experiment or retail-Firefox/dedicated-worker certification. It is not a reason
+to change the application example to a service worker. Do not present the original
+automated ratio as an intrinsic Firefox production-performance result.
+
+These are three successful workloads, not a statistical sample. The attached
+control explicitly enabled both WASM JIT preferences after an earlier compile
+failure; failed setup attempts contributed no timings. All accepted results and
+untimed changed-value rejection/recovery controls passed. Each profile fetched
+the raw artifact once over uncached loopback HTTP; host filesystem caches were
+warm.
+
+#### Retail Firefox dedicated-worker confirmation
+
+A subsequent comparison used the official
+[Mozilla Firefox 151.0 Windows x64 release](https://archive.mozilla.org/pub/firefox/releases/151.0/win64/en-US/Firefox%20Setup%20151.0.exe),
+extracted into an owned temporary directory without installation. Its installer
+matched Mozilla's SHA-512 manifest; the installer and executable had valid
+Mozilla Corporation Authenticode signatures. The release resources contained no
+Juggler code. No existing profile, Playwright connection, devtools, JIT override,
+or sandbox change was used.
+
+All three fresh profiles used the **same dedicated-worker workload** and the same
+fixed built TypeChat library, compiler version, and verified WASM artifact:
+
+| Retail Firefox run | Load/verify/compile | Initialization | First validation | Warm validation mean | All 250 validations |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 504 ms | 39 ms | 15 ms | 8.53 ms | 2,141 ms |
+| 2 | 491 ms | 43 ms | 16 ms | 8.68 ms | 2,180 ms |
+| 3 | 503 ms | 39 ms | 13 ms | 8.62 ms | 2,161 ms |
+
+Preflight took 9 ms per run. Each run also rejected a changed string-valued
+candidate, accepted its numeric replacement, rejected use after close, and
+reported zero owned linear memory after close. The downloaded browser, profiles,
+server, and helpers were removed afterwards.
+
+**The approximately 19-second automated slowdown was not reproduced in retail
+Firefox.** The 2,161 ms median supports a harness-confound explanation rather
+than an intrinsic Firefox performance problem. Retail and Playwright had the same
+151.0 version but different BuildIDs (`20260516144017` and `20260611193205`), so
+this is not a pure single-setting causal experiment. It is three localhost runs
+on one desktop, not a production latency guarantee, retail memory profile, mobile
+result, or full retail-browser conformance certification.
+
+The worker's linear-memory report returns zero after
 explicit close; this does not assert immediate OS-memory reclamation.
 
 The test also samples the **entire owned browser process tree** on Windows:
@@ -237,8 +367,9 @@ Shared pages can be counted more than once. Samples include the preceding corpus
 and lifecycle probes in the same browser session; they do not establish the
 incremental memory of a single job, a precise peak, or a leak. Browser/runtime
 overhead and delayed reclamation make the cost materially larger than WASM linear
-memory alone. Other operating systems report this metric as unavailable rather
-than substituting a misleading value.
+memory alone. These samples also used the instrumented Playwright builds; retail
+Firefox memory was not reprofiled. Other operating systems report this metric as
+unavailable rather than substituting a misleading value.
 
 A gzip-compressed compiler download was also delivered in 256 KiB chunks with
 64 ms delays (nominally 4 MiB/s before backpressure). Loading, verifying, and
@@ -248,7 +379,8 @@ transfer test, not a complete WAN simulation.
 Only the browser-engine/OS combinations above were exercised. Playwright WebKit on
 Windows is **not Safari certification**. macOS, mobile/low-memory devices, production
 CSPs, and real edge runtimes remain unverified. The full existing native suite is
-not yet a full browser matrix.
+not yet a full browser matrix, and the retail Firefox probe is a focused workload
+check rather than the full automated corpus.
 
 ## Upgrade, rollback, and recommendation
 
@@ -267,10 +399,11 @@ Rollback is to stop opting into this package and its assets. The ordinary Node
 backend remains available and does not require the experimental dependencies.
 Keep the prototype out of the default workspace/build until reviewed explicitly.
 
-**Recommendation: the prototype is ready for draft design review, not for
-supported browser functionality or a mainline merge.** Mainline gates remain an
+**Recommendation: retain draft-only status, not supported browser functionality
+or a mainline merge.** Mainline gates remain an
 explicit upstream-stability/maintenance decision, review of the provisional API
-and substantial browser costs (especially Firefox latency), target-device/CSP
-coverage, and a full regression/compatibility assessment.
+and startup/memory costs on target devices,
+resolution of the Unicode conformance failure, target-device/CSP coverage, and a
+full regression/compatibility assessment.
 The existing root-package Node-proxy bundling problem remains separate; this
 package does not fix that public entry point or automatically resolve #534.

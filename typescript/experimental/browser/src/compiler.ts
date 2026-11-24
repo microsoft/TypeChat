@@ -1,6 +1,6 @@
 import { version } from "typescript";
 import { API, type Snapshot } from "typescript/sync";
-import { instantiateWasm, WasmTransport } from "typescript/wasm";
+import { instantiateWasm, WasmTransport, type WasmReactorInstance } from "typescript/wasm";
 import {
     configFileName, createCompiler, jsonFileName, schemaFileName, schemaValidationFileName
 } from "../../../src/ts/compiler.js";
@@ -83,70 +83,81 @@ export async function loadBrowserTypeScriptCompiler(
     return {
         version: compilerVersion,
         async createValidator<T extends object = object>(schema: string, typeName: string, schemaValidationTypeName = typeName) {
-            const instance = await instantiateWasm(module);
-            if (!("memory" in instance.exports) || !(instance.exports.memory instanceof WebAssembly.Memory)) {
-                throw new Error("The TypeScript WASM reactor did not export its memory.");
-            }
-            let memory: WebAssembly.Memory | undefined = instance.exports.memory;
-            let transport: WasmTransport | undefined;
-            let api: API | undefined;
-            let snapshot: Snapshot | undefined;
-            const close = () => {
-                const currentApi = api;
-                const currentTransport = transport;
-                api = undefined;
-                transport = undefined;
-                snapshot = undefined;
-                memory = undefined;
-                if (currentApi) {
-                    currentApi.close();
-                } else {
-                    currentTransport?.close();
+            return createValidatorFromInstance<T>(
+                await instantiateWasm(module), schema, typeName, schemaValidationTypeName
+            );
+        }
+    };
+}
+
+// Keep returned validator closures outside the loader's context, which owns the compiled module.
+function createValidatorFromInstance<T extends object>(
+    instance: WasmReactorInstance,
+    schema: string,
+    typeName: string,
+    schemaValidationTypeName: string
+): BrowserTypeScriptValidator<T> {
+    if (!("memory" in instance.exports) || !(instance.exports.memory instanceof WebAssembly.Memory)) {
+        throw new Error("The TypeScript WASM reactor did not export its memory.");
+    }
+    let memory: WebAssembly.Memory | undefined = instance.exports.memory;
+    let transport: WasmTransport | undefined;
+    let api: API | undefined;
+    let snapshot: Snapshot | undefined;
+    const close = () => {
+        const currentApi = api;
+        const currentTransport = transport;
+        api = undefined;
+        transport = undefined;
+        snapshot = undefined;
+        memory = undefined;
+        if (currentApi) {
+            currentApi.close();
+        } else {
+            currentTransport?.close();
+        }
+    };
+    try {
+        transport = new WasmTransport({ instance, cwd: "/" });
+        api = new API({ transport });
+        const validator = createTypeScriptJsonValidatorWithCompiler<T>(
+            schema, typeName, schemaValidationTypeName,
+            files => {
+                if (!transport) {
+                    throw new Error("The TypeScript WASM transport has been closed.");
                 }
-            };
-            try {
-                transport = new WasmTransport({ instance, cwd: "/" });
-                api = new API({ transport });
-                const validator = createTypeScriptJsonValidatorWithCompiler<T>(
-                    schema, typeName, schemaValidationTypeName,
-                    files => {
+                for (const [name, text] of Object.entries(files)) {
+                    transport.setFile(name, text);
+                }
+                return createCompiler({
+                    writeFile(name, text) {
                         if (!transport) {
                             throw new Error("The TypeScript WASM transport has been closed.");
                         }
-                        for (const [name, text] of Object.entries(files)) {
-                            transport.setFile(name, text);
+                        transport.setFile(name, text);
+                    },
+                    update(changedFiles) {
+                        if (!api) {
+                            throw new Error("The TypeScript WASM API has been closed.");
                         }
-                        return createCompiler({
-                            writeFile(name, text) {
-                                if (!transport) {
-                                    throw new Error("The TypeScript WASM transport has been closed.");
-                                }
-                                transport.setFile(name, text);
-                            },
-                            update(changedFiles) {
-                                if (!api) {
-                                    throw new Error("The TypeScript WASM API has been closed.");
-                                }
-                                const next = api.createSnapshot({
-                                    openFiles: [schemaFileName, jsonFileName, schemaValidationFileName],
-                                    fileNotifications: { changed: [...changedFiles], deleted: [] }
-                                });
-                                snapshot?.dispose();
-                                snapshot = next;
-                                const project = next.getConfiguredProject(configFileName);
-                                return project && projectView(project);
-                            },
-                            close
+                        const next = api.createSnapshot({
+                            openFiles: [schemaFileName, jsonFileName, schemaValidationFileName],
+                            fileNotifications: { changed: [...changedFiles], deleted: [] }
                         });
-                    }
-                );
-                return Object.assign(validator, {
-                    getWasmMemoryByteLength: () => memory?.buffer.byteLength ?? 0
+                        snapshot?.dispose();
+                        snapshot = next;
+                        const project = next.getConfiguredProject(configFileName);
+                        return project && projectView(project);
+                    },
+                    close
                 });
-            } catch (cause) {
-                close();
-                throw cause;
             }
-        }
-    };
+        );
+        return Object.assign(validator, {
+            getWasmMemoryByteLength: () => memory?.buffer.byteLength ?? 0
+        });
+    } catch (cause) {
+        close();
+        throw cause;
+    }
 }
