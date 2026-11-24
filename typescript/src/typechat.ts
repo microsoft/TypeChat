@@ -4,6 +4,11 @@ import { typeChatSchemaValidation } from "./schemaValidation.js";
 
 export { typeChatSchemaValidation } from "./schemaValidation.js";
 
+export interface TypeChatTranslatorOptions {
+    /** Use separate system and user messages (default), or explicitly select the 0.2 request prompt. */
+    promptLayout?: "schema-first" | "legacy";
+}
+
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
  */
@@ -29,10 +34,13 @@ export interface TypeChatJsonTranslator<T extends object> {
      */
     stripNulls:  boolean;
     /**
-     * Creates an AI language model prompt from the given request. This function is called by `completeAndValidate`
-     * to obtain the prompt. An application can assign a new function to provide a different prompt.
-     * @param request The natural language request.
-     * @returns A prompt that combines the request with the schema and type name of the underlying validator.
+     * Creates the schema-first system message. Include only application-owned instructions, schema,
+     * and output rules, not user requests, model output, or history.
+     */
+    createSystemPrompt(): string;
+    /**
+     * Creates the final user message in the legacy layout. To use an existing override, select
+     * `{ promptLayout: "legacy" }` at construction. Its content is never used as a system message.
      */
     createRequestPrompt(request: string): PromptContent;
     /**
@@ -62,8 +70,8 @@ export interface TypeChatJsonTranslator<T extends object> {
      * come from different attempts if a repair response couldn't be parsed.
      * Optional result metadata retains response records and reported usage across both attempts.
      * @param request The natural language request.
-     * @param promptPreamble An optional string or array of prompt sections to prepend to the generated
-     *   prompt. If a string is specified, it is converted into a single "user" role prompt section.
+     * @param promptPreamble Optional context before the current user message (after the system message
+     *   in the default layout). A string becomes one user message; sections retain their roles and order.
      * @returns A promise for the resulting object.
      */
     translate(request: string, promptPreamble?: string | PromptSection[]): Promise<Result<T>>;
@@ -97,25 +105,35 @@ export interface TypeChatJsonValidatorWithSchemaValidation<T extends object> ext
 
 /**
  * Creates an object that can translate natural language requests into JSON objects of the given type.
- * The specified type argument `T` must be the same type as `typeName` in the given `schema`. The function
- * creates a `TypeChatJsonValidator<T>` and stores it in the `validator` property of the returned instance.
  * @param model The language model to use for translating requests into JSON.
- * @param validator A string containing the TypeScript source code for the JSON schema.
- * @param typeName The name of the JSON target type in the schema.
+ * @param validator Supplies the schema and validates the translated object.
+ * @param options Selects the prompt layout.
  * @returns A `TypeChatJsonTranslator<T>` instance.
  */
-export function createJsonTranslator<T extends object>(model: TypeChatLanguageModel, validator: TypeChatJsonValidator<T>): TypeChatJsonTranslator<T> {
+export function createJsonTranslator<T extends object>(
+    model: TypeChatLanguageModel, validator: TypeChatJsonValidator<T>, { promptLayout = "schema-first" }: TypeChatTranslatorOptions = {}
+): TypeChatJsonTranslator<T> {
+    if (promptLayout !== "schema-first" && promptLayout !== "legacy") {
+        throw new Error(`Unknown promptLayout: ${promptLayout}. Expected "schema-first" or "legacy".`);
+    }
     const typeChat: TypeChatJsonTranslator<T> = {
         model,
         validator,
         attemptRepair: true,
         stripNulls: false,
+        createSystemPrompt,
         createRequestPrompt,
         createRepairPrompt,
         validateInstance: success,
         translate
     };
     return typeChat;
+
+    function createSystemPrompt() {
+        return `Translate user requests into JSON objects of type "${validator.getTypeName()}" using the following TypeScript definitions:\n` +
+            `\`\`\`\n${validator.getSchemaText()}\n\`\`\`\n` +
+            `Return only the JSON object with 2 spaces of indentation and no properties with the value undefined.`;
+    }
 
     function createRequestPrompt(request: string) {
         return `You are a service that translates user requests into JSON objects of type "${validator.getTypeName()}" according to the following TypeScript definitions:\n` +
@@ -139,7 +157,12 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             return error(`Schema validation failed before model request: ${preflight.message}`);
         }
         const preamble: PromptSection[] = typeof promptPreamble === "string" ? [{ role: "user", content: promptPreamble }] : promptPreamble ?? [];
-        let prompt: PromptSection[] = [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }];
+        if (promptLayout !== "legacy" && typeChat.createRequestPrompt !== createRequestPrompt) {
+            return error('A custom createRequestPrompt requires { promptLayout: "legacy" }. To migrate, move application instructions to createSystemPrompt() and pass context as promptPreamble.');
+        }
+        const prompt: PromptSection[] = promptLayout === "legacy"
+            ? [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }]
+            : [{ role: "system", content: typeChat.createSystemPrompt() }, ...preamble, { role: "user", content: request }];
         let attemptRepair = typeChat.attemptRepair;
         let failureContext: (Pick<TypeChatError, "data"> & { responseText: string }) | undefined;
         const responses: TypeChatResponseMetadata[] = [];

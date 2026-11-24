@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import findConfig from "find-config";
 import fs from "fs";
 import path from "path";
-import { createJsonTranslator, createLanguageModel } from "typechat";
+import { createJsonTranslator, createLanguageModel, PromptSection } from "typechat";
 import { processRequests } from "typechat/interactive";
 import { createTypeScriptJsonValidator } from "typechat/ts";
 import { Drawing } from "./drawingSchema";
@@ -22,18 +22,20 @@ const model = createLanguageModel(process.env);
 const schema = fs.readFileSync(path.join(__dirname, "drawingSchema.ts"), "utf8");
 const validator = createTypeScriptJsonValidator<Drawing>(schema, "Drawing");
 const translator = createJsonTranslator(model, validator);
+const schemaPrompt = translator.createSystemPrompt;
+translator.createSystemPrompt = () => `${schemaPrompt()}\nReturn the complete drawing, including the requested changes.`;
 const outputPath = path.join(__dirname, "drawing.svg");
 
-const history: string[] = [];
+const history: PromptSection[] = [];
 
 // Process requests interactively or from the input file specified on the command line
 processRequests("🎨> ", process.argv[2], async (request) => {
-    const response = await translator.translate([...history, request].join("\n"));
+    const response = await translator.translate(request, history);
     if (!response.success) {
         console.log(response.message);
         return;
     }
-    history.push(request);
+    history.push({ role: "user", content: request });
 
     const drawing = response.data;
     console.log(JSON.stringify(drawing, undefined, 2));

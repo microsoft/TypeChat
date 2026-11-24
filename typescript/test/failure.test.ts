@@ -251,15 +251,19 @@ describe("translation failure context", () => {
 });
 
 describe("repair failure context", () => {
-    it("preserves a successful repair and the existing repair prompt", async () => {
-        const first = '{"value":"invalid"}';
+    it("repair: raw invalid reply as assistant, validator diagnostic as user", async () => {
+        const first = 'original preface\n{"value":"invalid"}\noriginal suffix';
         const { translator, prompts } = translatorFor([success(first), success('{"value":42}')]);
         assert.deepEqual(await translator.translate("request"), success({ value: 42 }));
         assert.equal(prompts.length, 2);
-        const repairPrompt = prompts[1];
-        assert.ok(Array.isArray(repairPrompt));
-        assert.equal(repairPrompt[1].content, first);
-        assert.match(String(repairPrompt[2].content), /value must be a number/);
+        const [initial, repair] = prompts;
+        assert.ok(Array.isArray(initial));
+        assert.deepEqual(initial.map(section => section.role), ["system", "user"]);
+        assert.equal(initial[1].content, "request");
+        assert.doesNotMatch(String(initial[0].content), /original preface|value must be a number/);
+        assert.deepEqual(repair, [...initial, { role: "assistant", content: first }, { role: "user", content:
+            `The JSON object is invalid for the following reason:\n"""\nvalue must be a number\n"""\nThe following is a revised JSON object:\n`
+        }]);
     });
 
     it("returns the latest rejected candidate after exactly one repair", async () => {

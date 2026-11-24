@@ -396,7 +396,60 @@ When we are ready to translate a user request, we can call the `translate` metho
 translator.translate("Hello world! 🙂");
 ```
 
-We'll come back to this.
+### Message layout in 0.3
+
+By default the translator sends:
+
+1. A **system** message with the application's instructions, the validator's schema and target type, and the JSON output rules.
+2. Any **caller-supplied context**, in its original order and roles. A string preamble becomes one user message.
+3. One **user** message containing the current request exactly as passed to `translate`, without quoting or other wrappers.
+
+TypeChat does not store conversation history. For a follow-up, pass prior turns as the second argument, **not** as part of the new request:
+
+```ts
+await translator.translate("What about this one? Great!", [
+    { role: "user", content: "I disliked it." },
+    { role: "assistant", content: '{"sentiment":"negative"}' }
+]);
+```
+
+For multimodal context, a user section's `content` can be an array of text and image parts.
+The [crossword example](https://github.com/microsoft/TypeChat/tree/main/typescript/examples/crossword/src/translator.ts)
+passes a screenshot that way, leaving the final user question untouched.
+
+To add application-owned instructions, extend the system builder. It receives **no request or history**:
+
+```ts
+const schemaPrompt = translator.createSystemPrompt;
+translator.createSystemPrompt = () => `${schemaPrompt()}\nClassify the sentiment of the most recent user message.`;
+```
+
+Keep user text, retrieved content, and model replies out of this builder; assign a caller preamble the system role **only** for your own trusted instructions.
+Role separation does not establish intent or authorize an action. Continue validating data and applying application permissions.
+
+`createProgramTranslator(model, apiSchema)` from `typechat/ts` uses the same message order but a different output contract:
+it asks for a JSON **Program** with `@steps`, provides the Program definitions **and** the allowed `API`, and checks calls against that API.
+
+### Migrating a 0.2 request hook or model
+
+If you need the previous layout, select it when constructing the translator. This preserves the combined schema/request **user** prompt
+and the `createRequestPrompt(request)` hook, including hooks that return structured content:
+
+```ts
+const legacy = createJsonTranslator(model, validator, { promptLayout: "legacy" });
+// If your app overrode this hook in 0.2, the same function can still be used.
+legacy.createRequestPrompt = myExistingRequestPrompt;
+```
+
+`createProgramTranslator` accepts the same option. In the default layout an override of `createRequestPrompt` returns a migration error from `translate` before a model call;
+TypeChat neither ignores the override nor calls it to build a system message. To migrate, move just the trusted instructions into `createSystemPrompt()` and pass the context as a preamble.
+
+A custom model must forward the roles and structured content it receives or report that it cannot. Do not concatenate history into a single prompt.
+There is no automatic fallback to legacy. Even in legacy layout a preamble or a repair can require multiple roles.
+
+In either layout a parsed object that fails validation can trigger **one** repair: TypeChat appends the original model text as **assistant**
+and `createRepairPrompt(validationError)` as **user**. Set `attemptRepair = false` to turn that off.
+Missing or malformed JSON still fails without a repair. The model's transport retry settings are separate.
 
 ## Creating the Prompt
 
