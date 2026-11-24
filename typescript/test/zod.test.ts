@@ -156,24 +156,34 @@ describe("getZodSchemaAsTypeScript", () => {
 
     describe("z.set()", () => {
 
-        it("produces Set<T> representation for sets", () => {
-            assert.match(schemaOf("T", z.set(z.string())), /type T = Set<string>;/);
+        it("produces globalThis.Set<T> representation for sets", () => {
+            assert.match(schemaOf("T", z.set(z.string())), /type T = globalThis\.Set<string>;/);
         });
 
         it("supports union element type in a set", () => {
-            assert.match(schemaOf("T", z.set(z.union([z.string(), z.number()]))), /type T = Set<string \| number>;/);
+            assert.match(schemaOf("T", z.set(z.union([z.string(), z.number()]))), /type T = globalThis\.Set<string \| number>;/);
+        });
+
+        it("qualifies Set to avoid collision when the schema itself is named Set", () => {
+            const out = schemaOf("Set", z.set(z.string()));
+            assert.match(out, /type Set = globalThis\.Set<string>;/);
         });
 
     });
 
     describe("z.map()", () => {
 
-        it("produces Map<K, V> representation for maps", () => {
-            assert.match(schemaOf("T", z.map(z.string(), z.number())), /type T = Map<string, number>;/);
+        it("produces globalThis.Map<K, V> representation for maps", () => {
+            assert.match(schemaOf("T", z.map(z.string(), z.number())), /type T = globalThis\.Map<string, number>;/);
         });
 
         it("supports union key and value types in maps", () => {
-            assert.match(schemaOf("T", z.map(z.union([z.string(), z.number()]), z.boolean())), /type T = Map<string \| number, boolean>;/);
+            assert.match(schemaOf("T", z.map(z.union([z.string(), z.number()]), z.boolean())), /type T = globalThis\.Map<string \| number, boolean>;/);
+        });
+
+        it("qualifies Map to avoid collision when the schema itself is named Map", () => {
+            const out = schemaOf("Map", z.map(z.string(), z.number()));
+            assert.match(out, /type Map = globalThis\.Map<string, number>;/);
         });
 
     });

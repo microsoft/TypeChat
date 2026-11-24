@@ -203,14 +203,14 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
     }
 
     function appendSetType(setType: z.ZodType) {
-        append("Set<");
+        append("globalThis.Set<");
         appendType((setType._zod.def as z.core.$ZodSetDef).valueType as z.ZodType);
         append(">");
     }
 
     function appendMapType(mapType: z.ZodType) {
         const mapDef = mapType._zod.def as z.core.$ZodMapDef;
-        append("Map<");
+        append("globalThis.Map<");
         appendType(mapDef.keyType as z.ZodType);
         append(", ");
         appendType(mapDef.valueType as z.ZodType);
