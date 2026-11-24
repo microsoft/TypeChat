@@ -105,6 +105,7 @@ function makeErrorResponse(status, statusText, retryAfterSec = null) {
 
 let capturedRequests = [];
 let mockResponses = [];
+const nativeFetch = globalThis.fetch;
 
 function setupFetch(responses) {
     capturedRequests = [];
@@ -118,7 +119,7 @@ function setupFetch(responses) {
 }
 
 function teardownFetch() {
-    delete globalThis.fetch;
+    globalThis.fetch = nativeFetch;
     capturedRequests = [];
     mockResponses = [];
 }
