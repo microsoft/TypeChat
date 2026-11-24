@@ -1,0 +1,30 @@
+{
+  "name": "@typechat/experimental-browser",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Isolated browser/WASM validator investigation for TypeChat issue #536.",
+  "exports": {
+    ".": {
+      "types": "./dist/experimental/browser/src/index.d.ts",
+      "default": "./dist/experimental/browser/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"tests/*.test.mjs\"",
+    "test:browser": "npm run build && node --test \"tests/browser/*.test.mjs\""
+  },
+  "engines": {
+    "node": ">=24.22.1"
+  },
+  "dependencies": {
+    "@typescript/typescript-wasip1-wasm": "7.1.0-dev.20261030.1",
+    "typescript": "7.1.0-dev.20261030.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "esbuild": "0.28.2",
+    "playwright": "1.61.0"
+  }
+}

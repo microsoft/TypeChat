@@ -1,5 +1,5 @@
 import { Result, success, error, withResponseMetadata, TypeChatResponseMetadata, Error as TypeChatError } from "./result.js";
-import { TypeChatLanguageModel, PromptSection, PromptContent } from "./model.js";
+import type { TypeChatLanguageModel, PromptSection, PromptContent } from "./modelTypes.js";
 import { typeChatSchemaValidation } from "./schemaValidation.js";
 
 export { typeChatSchemaValidation } from "./schemaValidation.js";
