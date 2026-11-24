@@ -79,6 +79,40 @@ for syntax errors and unresolved type references.
 Node.js CI runs this suite across its Node.js matrix after a clean dependency
 installation and workspace build.
 
+### Optional live model tests
+
+Mocked regression tests always run. The separate live API smoke test is skipped
+unless `TYPECHAT_LIVE_TESTS` is exactly `1`, even when credentials are available.
+Live requests may incur provider charges; do not enable them in ordinary CI.
+
+Configure either `OPENAI_API_KEY` and `OPENAI_MODEL`, or `AZURE_OPENAI_API_KEY`
+and `AZURE_OPENAI_ENDPOINT`. OpenAI configuration takes precedence if both keys
+are set. `OPENAI_ENDPOINT` is optional and supports OpenAI-compatible servers;
+an endpoint whose path ends in `/responses` selects the Responses API.
+Tests read the process environment directly and do not load `.env` files.
+
+With the desired credentials already configured, enable the live test:
+
+```sh
+TYPECHAT_LIVE_TESTS=1 npm test
+```
+
+In PowerShell:
+
+```powershell
+$env:TYPECHAT_LIVE_TESTS = "1"
+npm test
+Remove-Item Env:\TYPECHAT_LIVE_TESTS
+```
+
+The live suite runs in a separate test process from fetch mocks. It makes one
+completion request with a 30-second request timeout, no retries, and a 35-second
+test timeout. Missing configuration, request errors, and empty completions fail
+the run instead of silently skipping or falling back to mocks. Offline regression
+tests exercise this behavior against deterministic loopback HTTP fixtures.
+
+### Schema validation tests
+
 The TypeScript-backed JSON validator checks its schema and target export before a
 translator makes its first model request. Schema configuration errors are returned
 without asking the model to repair them. This preflight uses the same minimal
