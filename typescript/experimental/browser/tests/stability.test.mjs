@@ -401,7 +401,7 @@ for (const engineName of ["chromium", "firefox", "webkit"]) {
     }, async t => {
         const { build } = await import("esbuild");
         const { [engineName]: engine } = await import("playwright");
-        const { buildWorkerExample } = await import("../examples/worker/build.mjs");
+        const { createWorkerExampleHandler } = await import("../examples/worker/host.mjs");
         const settings = { bundle: true, platform: "browser", format: "iife", write: false, logLevel: "silent" };
         const entry = await build({
             ...settings,
@@ -429,7 +429,8 @@ globalThis.mismatchedLoader = loadBrowserTypeScriptCompiler;`,
                 }
             }]
         });
-        const assets = await buildWorkerExample();
+        const handleExample = await createWorkerExampleHandler();
+        const assets = new Map();
         assets.set("/", ["text/html", '<script src="/entry.js"></script><script src="/mismatch.js"></script>']);
         assets.set("/entry.js", ["text/javascript", entry.outputFiles[0].contents]);
         assets.set("/mismatch.js", ["text/javascript", mismatch.outputFiles[0].contents]);
@@ -437,6 +438,7 @@ globalThis.mismatchedLoader = loadBrowserTypeScriptCompiler;`,
         assets.set("/short.wasm", ["application/wasm", artifact.subarray(0, 100)]);
         let mismatchRequests = 0;
         const server = createServer((request, response) => {
+            if (handleExample(request, response)) return;
             if (request.url === "/never-fetch.wasm") mismatchRequests++;
             const asset = assets.get(request.url);
             response.writeHead(asset ? 200 : 404, { "Content-Type": asset?.[0] ?? "text/plain" });

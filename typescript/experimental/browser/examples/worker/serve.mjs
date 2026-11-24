@@ -1,21 +1,12 @@
-import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { buildWorkerExample } from "./build.mjs";
+import { createWorkerExampleHandler } from "./host.mjs";
 
-const assets = await buildWorkerExample();
-assets.set("/tsc.wasm", [
-    "application/wasm",
-    await readFile(new URL("../../node_modules/@typescript/typescript-wasip1-wasm/lib/tsc.wasm", import.meta.url))
-]);
+const handleExample = await createWorkerExampleHandler();
 const server = createServer((request, response) => {
-    const asset = assets.get(request.url);
-    if (request.method !== "GET" || !asset) {
-        response.writeHead(404);
+    if (!handleExample(request, response)) {
+        response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
         response.end("Not found");
-        return;
     }
-    response.writeHead(200, { "Content-Type": asset[0], "Cache-Control": "no-store" });
-    response.end(asset[1]);
 });
 server.listen(0, "127.0.0.1", () => {
     const address = server.address();

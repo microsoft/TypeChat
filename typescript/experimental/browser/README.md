@@ -106,15 +106,17 @@ same-version backends must match diagnostics as well as acceptance outcomes.
 The additional stability suite also asserts independently expected semantics;
 it currently reports the two Unicode failures described above.
 
-After the lifetime fix, the complete experimental Node run reports **21 passed,
-2 failed** (the Unicode checks), and **3 skipped** opt-in browser recovery checks.
-Those three recovery checks were run separately in Chromium, Firefox, and WebKit
-and all passed: seven workers closed per engine, with no remaining abort
-listeners, page errors, or fetches for the intentionally mismatched compiler.
-A final combined run of the Node checks, full three-engine browser matrix, and
-opt-in recovery checks reported **27 passed, 2 failed, 0 skipped**. Only the two
-independently expected Unicode cases remain red. The ordinary repository build
-and 424-test suite were also rerun successfully, with live tests disabled.
+The latest combined run of the Node checks, hosting contracts, full three-engine
+browser matrix, and opt-in recovery checks reported **34 passed, 2 failed,
+0 skipped**. Only the two independently expected Unicode cases remain red.
+The three recovery checks passed in Chromium, Firefox, and WebKit: seven workers
+closed per engine, with no remaining abort listeners, page errors, or fetches for
+the intentionally mismatched compiler. Ordinary `npm test` skips those optional
+browser recovery checks unless explicitly enabled.
+
+The ordinary repository build and 424-test suite were last verified successfully
+with live tests disabled before this hosting-only follow-up; library sources and
+dependency manifests have not changed in the hosting follow-up.
 To repeat that focused recovery run in PowerShell:
 
 ```powershell
@@ -203,8 +205,9 @@ npm run example:worker
 Open the printed loopback URL. The example validates a JSON batch against a schema
 with a string enum, displays valid and invalid results, and keeps a main-thread
 timer running. Cancel interrupts a running job; Ctrl+C stops the local server.
-The development server serves the raw artifact without caching. A production
-application would need deliberate asset compression and cache/version handling.
+The development server serves a verified, versioned WASM artifact with compression
+and explicit cache rules. It remains a loopback example, not a deployment service
+or a supported production hosting platform.
 
 [`examples/worker/client.ts`](./examples/worker/client.ts) and
 [`examples/worker/validator.worker.ts`](./examples/worker/validator.worker.ts) are
@@ -226,6 +229,40 @@ The one-shot design deliberately favors simple ownership and cancellation over
 throughput. It reloads/reinitializes a compiler per job. A reusable worker or
 compiled-module cache would need separate lifecycle and cancellation design; this
 investigation does not introduce a worker pool into TypeChat.
+
+### Hosting and CSP contract
+
+The demo and its browser tests use the same
+[`examples/worker/host.mjs`](./examples/worker/host.mjs) handler:
+
+- HTML, JavaScript, and CSS use `Cache-Control: no-store`. The WASM URL contains
+  both the exact compiler version and the full artifact SHA-256, with
+  `public, max-age=31536000, immutable`. Startup verifies the artifact before
+  advertising that immutable URL.
+- Gzip and identity representations preserve the exact artifact bytes.
+  `Accept-Encoding` preferences/exclusions are honored, representation-specific
+  ETags and `Vary: Accept-Encoding` prevent mixing encoded responses, and matching
+  conditional requests return an empty `304`. `HEAD`, invalid encoding headers,
+  unsupported methods, and missing asset versions have explicit responses.
+- The HTML uses external scripts/styles. CSP permits same-origin scripts,
+  workers, connections and styles, plus **`'wasm-unsafe-eval'` only** for WASM
+  compilation. It does not enable JavaScript `'unsafe-eval'` or `'unsafe-inline'`.
+  The worker script receives the policy too; removing WASM permission makes the
+  job reject explicitly instead of falling back to another validator.
+- This policy belongs to the example, not to the library API. Applications must
+  deliberately review their HTTPS, CDN/CORS, model-endpoint, and embedding needs.
+  Do not blindly broaden `connect-src` or add API secrets to client code.
+
+Four HTTP contract tests and the three-engine hosted-page tests verify these
+behaviors. JavaScript eval is checked from a real served page script, not debugger
+evaluation that could bypass CSP. Existing validation/worker recovery suites also
+use the shared handler; **13 changed-surface checks passed** on Windows.
+
+Browser caching remains browser-controlled. In the recorded automated two-job
+tests, Firefox reused the cached artifact; Chromium and WebKit fetched it again.
+Every network representation was gzip (13,359,431 bytes), but immutable headers
+do not guarantee storage, prevent eviction, or avoid compilation in a new worker.
+These observations are not retail-browser cache guarantees.
 
 ## Recorded verification
 

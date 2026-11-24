@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { build } from "esbuild";
 import { chromium, firefox, webkit } from "playwright";
-import { buildWorkerExample } from "../../examples/worker/build.mjs";
+import { createWorkerExampleHandler } from "../../examples/worker/host.mjs";
 import { sampleBrowserMemory } from "./process-memory.mjs";
 
 for (const engine of [chromium, firefox, webkit]) {
@@ -66,8 +66,9 @@ for (const engine of [chromium, firefox, webkit]) {
             ["/worker-probe.js", ["text/javascript", workerProbe.outputFiles[0].contents]],
             ["/broken-worker.js", ["text/javascript", 'throw new Error("synthetic worker startup failure");']]
         ]);
-        for (const [route, asset] of await buildWorkerExample()) assets.set(route, asset);
+        const handleExample = await createWorkerExampleHandler();
         const server = createServer((request, response) => {
+            if (handleExample(request, response)) return;
             if (request.url === "/slow.wasm" || request.url === "/worker-slow.wasm") {
                 response.writeHead(200, { "Content-Type": "application/wasm" });
                 response.write(wasm.subarray(0, 100));
@@ -154,7 +155,8 @@ for (const engine of [chromium, firefox, webkit]) {
         assert.deepEqual(await page.evaluate(() => globalThis.runMismatchProbe()), { rejected: true, fetchCalls: 0 });
         await page.goto(`http://127.0.0.1:${address.port}/worker`);
         await page.locator("#run").click();
-        await page.waitForFunction(() => document.getElementById("status").textContent === "Completed; worker disposed");
+        await page.waitForFunction(() => !document.getElementById("run").disabled, null, { timeout: 65000 });
+        assert.equal(await page.locator("#status").innerText(), "Completed; worker disposed");
         const demo = JSON.parse(await page.locator("#result").innerText());
         assert.deepEqual(demo.results.map(result => result.success), [true, false]);
         assert.equal(demo.closedLinearMemoryBytes, 0);

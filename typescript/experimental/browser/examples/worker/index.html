@@ -1,14 +1,13 @@
 <!doctype html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Experimental TypeChat worker validation</title>
-<style>
-body { font: 1rem system-ui; max-width: 55rem; margin: 2rem auto; padding: 0 1rem; }
-textarea { display: block; width: 100%; min-height: 7rem; margin: 1rem 0; }
-button { padding: .5rem 1rem; margin-right: .5rem; }
-pre { white-space: pre-wrap; overflow-wrap: anywhere; }
-</style>
+<link rel="stylesheet" href="/worker.css">
+<script type="module" src="/worker-main.js"></script>
+</head>
+<body data-wasm-url="__TYPECHAT_WASM_ASSET__">
 <h1>Experimental TypeChat worker validation</h1>
 <p>Offline example: no model calls or credentials. Each run owns a worker and a
 compiler. Cancellation terminates that worker. The experimental WASM download is
@@ -22,45 +21,5 @@ interface Request { status: Status; value: number; }</pre>
 <p id="status" role="status">Ready</p>
 <p>Main-thread timer ticks: <span id="ticks">0</span></p>
 <pre id="result"></pre>
-<script type="module">
-import { validateInWorker } from "/worker-client.js";
-const run = document.getElementById("run");
-const cancel = document.getElementById("cancel");
-const status = document.getElementById("status");
-const result = document.getElementById("result");
-let controller;
-let ticks = 0;
-const timer = setInterval(() => document.getElementById("ticks").textContent = String(++ticks), 50);
-cancel.onclick = () => controller?.abort();
-run.onclick = async () => {
-    controller = new AbortController();
-    run.disabled = true;
-    cancel.disabled = false;
-    result.textContent = "";
-    try {
-        const values = JSON.parse(document.getElementById("values").value);
-        const report = await validateInWorker("/validator.worker.js", {
-            wasmUrl: new URL("/tsc.wasm", location.href).href,
-            schema: 'export enum Status { Active = "active", Paused = "paused" } export interface Request { status: Status; value: number; }',
-            typeName: "Request",
-            values
-        }, {
-            signal: AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]),
-            onPhase: phase => status.textContent = phase
-        });
-        result.textContent = JSON.stringify(report, null, 2);
-        status.textContent = "Completed; worker disposed";
-    } catch (error) {
-        status.textContent = `${error.name}: ${error.message}`;
-    } finally {
-        run.disabled = false;
-        cancel.disabled = true;
-        controller = undefined;
-    }
-};
-addEventListener("pagehide", () => {
-    clearInterval(timer);
-    controller?.abort();
-}, { once: true });
-</script>
+</body>
 </html>

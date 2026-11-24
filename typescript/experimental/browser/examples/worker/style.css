@@ -1,0 +1,4 @@
+body { font: 1rem system-ui; max-width: 55rem; margin: 2rem auto; padding: 0 1rem; }
+textarea { display: block; width: 100%; min-height: 7rem; margin: 1rem 0; }
+button { padding: .5rem 1rem; margin-right: .5rem; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
