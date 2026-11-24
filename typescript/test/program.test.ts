@@ -1,5 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { stripTypeScriptTypes } from "node:module";
+import { runInNewContext } from "node:vm";
 import type { PromptSection } from "../dist/index.js";
 import {
     createModuleTextFromProgram,
@@ -219,6 +221,34 @@ describe("hasOwnProperty shadowing in parsed programs", () => {
         const result = await evaluateJsonProgram(program, async (_func, args) => args[0]);
         assert.deepEqual(result, { hasOwnProperty: 1 });
     });
+});
+
+describe("literal __proto__ property preservation in generated modules", () => {
+    for (const value of ["kept", { label: "kept" }, null]) {
+        it(`preserves an own __proto__ data property with value ${JSON.stringify(value)}`, async () => {
+            const input = JSON.parse(`{"__proto__": ${JSON.stringify(value)}, "value": 7}`);
+            const program: Program = { "@steps": [{ "@func": "identity", "@args": [input] }] };
+            const moduleResult = createModuleTextFromProgram(program);
+            assert.ok(moduleResult.success);
+            assert.match(moduleResult.data, /\["__proto__"\]: /);
+            assert.doesNotMatch(moduleResult.data, /(?<!\[)"__proto__": /);
+            assert.match(moduleResult.data, /"value": 7/);
+
+            const executableSource = stripTypeScriptTypes(moduleResult.data.replace(/^import[^\n]*\n/, ""));
+            const generatedProgram = runInNewContext(`${executableSource}\nprogram`) as
+                (api: { identity: (arg: unknown) => unknown }) => unknown;
+            const generatedResult = generatedProgram({ identity: arg => arg });
+
+            assert.ok(typeof generatedResult === "object" && generatedResult !== null);
+            assert.ok(Object.prototype.hasOwnProperty.call(generatedResult, "__proto__"));
+            assert.equal(JSON.stringify(generatedResult), JSON.stringify(input));
+
+            const interpretedResult = await evaluateJsonProgram(program, async (_func, args) => args[0]);
+            assert.ok(typeof interpretedResult === "object" && interpretedResult !== null);
+            assert.ok(Object.prototype.hasOwnProperty.call(interpretedResult, "__proto__"));
+            assert.equal(JSON.stringify(generatedResult), JSON.stringify(interpretedResult));
+        });
+    }
 });
 
 describe("@func name validation", () => {
