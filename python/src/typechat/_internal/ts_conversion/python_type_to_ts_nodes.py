@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import ast
+import collections.abc
 from collections import OrderedDict
 import inspect
+import io
+import re
+import sys
+import tokenize
 import typing
 import typing_extensions
 from dataclasses import MISSING, Field, dataclass
@@ -20,6 +26,7 @@ from typing_extensions import (
     NotRequired,
     Protocol,
     Required,
+    Self,
     TypeAlias,
     TypeAliasType,    
     TypeGuard,
@@ -74,10 +81,29 @@ class Annotatedish(Protocol):
 class Dataclassish(Protocol):
     __dataclass_fields__: dict[str, Field[Any]]
 
+
+class NewTypeish(Protocol):
+    __supertype__: object
+
+
 # type[TypedDict]
 # https://github.com/microsoft/pyright/pull/6505#issuecomment-1834431725
 class TypeOfTypedDict(Protocol):
     __total__: bool
+
+
+def is_new_type(py_type: object) -> TypeGuard[NewTypeish]:
+    return isinstance(py_type, (typing.NewType, typing_extensions.NewType))
+
+
+if sys.version_info >= (3, 12) and typing.TypeAliasType is not typing_extensions.TypeAliasType:
+    # Sometimes typing_extensions aliases TypeAliasType,
+    # sometimes it's its own declaration.
+    def is_type_alias_type(py_type: object) -> TypeGuard[TypeAliasType]:
+        return isinstance(py_type, typing.TypeAliasType | typing_extensions.TypeAliasType)
+else:
+    def is_type_alias_type(py_type: object) -> TypeGuard[TypeAliasType]:
+        return isinstance(py_type, typing_extensions.TypeAliasType)
 
 
 def is_generic(py_type: object) -> TypeGuard[GenericAliasish]:
@@ -88,9 +114,8 @@ def is_dataclass(py_type: object) -> TypeGuard[Dataclassish]:
 
 TypeReferenceTarget: TypeAlias = type | TypeAliasType | TypeVar | GenericAliasish
 
-
 def is_python_type_or_alias(origin: object) -> TypeGuard[type | TypeAliasType]:
-    return isinstance(origin, TypeAliasType | type)
+    return isinstance(origin, type) or is_type_alias_type(origin)
 
 
 _KNOWN_GENERIC_SPECIAL_FORMS: frozenset[Any] = frozenset(
@@ -122,25 +147,66 @@ class TypeScriptNodeTranslationResult:
     errors: list[str]
 
 
-# TODO: https://github.com/microsoft/pyright/issues/6587
-_SELF_TYPE = getattr(typing_extensions, "Self")
-
 _LIST_TYPES: set[object] = {
     list,
     set,
     frozenset,
-    # TODO: https://github.com/microsoft/pyright/issues/6582
-    # collections.abc.MutableSequence,
-    # collections.abc.Sequence,
-    # collections.abc.Set
+    collections.abc.Sequence,
+    collections.abc.MutableSequence,
+    collections.abc.Set,
+    collections.abc.MutableSet,
+    collections.abc.Iterable,
+    collections.abc.Collection,
 }
 
-# TODO: https://github.com/microsoft/pyright/issues/6582
-# _DICT_TYPES: set[type] = {
-#     dict,
-#     collections.abc.MutableMapping,
-#     collections.abc.Mapping
-# }
+
+_DICT_TYPES: set[type] = {
+    dict,
+    collections.abc.MutableMapping,
+    collections.abc.Mapping,
+}
+
+
+def _extract_inline_field_comments(py_type: type) -> dict[str, str]:
+    """Extract comments for directly declared fields when the class source is available."""
+    try:
+        source_lines, _ = inspect.getsourcelines(py_type)
+    except (OSError, TypeError):
+        return {}
+
+    source = "".join(source_lines)
+    try:
+        statements = ast.parse(source).body
+    except IndentationError:
+        # An outer suite accepts nested source without changing multiline string contents.
+        source = "if True:\n" + source
+        statements = ast.parse(source).body
+        if len(statements) == 1 and isinstance(statements[0], ast.If):
+            statements = statements[0].body
+    if len(statements) != 1 or not isinstance(statements[0], ast.ClassDef):
+        raise ValueError("Source does not contain a single class definition.")
+
+    comments_by_line = {
+        token.start[0]: token.string[1:].strip()
+        for token in tokenize.generate_tokens(io.StringIO(source).readline)
+        if token.type == tokenize.COMMENT and not re.match(r"#\s*type:\s*ignore\b", token.string)
+    }
+    lines = source.split("\n")
+    comments: dict[str, str] = {}
+    for stmt in statements[0].body:
+        if (
+            isinstance(stmt, ast.AnnAssign)
+            and isinstance(stmt.target, ast.Name)
+            and stmt.end_lineno is not None
+            and stmt.end_col_offset is not None
+        ):
+            comment = comments_by_line.get(stmt.end_lineno)
+            if comment:
+                # AST column offsets count UTF-8 bytes, not characters.
+                trailing = lines[stmt.end_lineno - 1].encode("utf-8")[stmt.end_col_offset:].decode("utf-8")
+                if trailing.lstrip(" \t;").startswith("#"):
+                    comments[stmt.target.id] = comment
+    return comments
 
 
 def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTranslationResult:
@@ -213,12 +279,20 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             return NullTypeReferenceNode
         if py_type is Never or py_type is NoReturn:
             return NeverTypeReferenceNode
-        if py_type is _SELF_TYPE:
+        if py_type is Self:
             return ThisTypeReferenceNode
+
+        # A NewType has the same runtime representation as its underlying type,
+        # so we emit the underlying type (which may itself be a NewType).
+        if is_new_type(py_type):
+            return convert_to_type_node(py_type.__supertype__)
 
         # TODO: consider handling bare 'tuple' (and list, etc.)
         # https://docs.python.org/3/library/typing.html#annotating-tuples
         # Using plain tuple as an annotation is equivalent to using tuple[Any, ...]:
+
+        if is_new_type(py_type):
+            return convert_to_type_node(py_type.__supertype__)
 
         origin = get_origin(py_type)
         if origin is not None:
@@ -228,7 +302,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                     return TypeReferenceNode(IdentifierNode("Array"), [type_arg])
                 return ArrayTypeNode(type_arg)
 
-            if origin is dict:
+            if origin in _DICT_TYPES:
                 # TODO
                 # Currently, we naively assume all dicts are string-keyed
                 # unless they're annotated with `int` or `float` (note: not `int | float`).
@@ -257,7 +331,10 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                         )
                         return ArrayTypeNode(AnyTypeReferenceNode)
 
-                    return ArrayTypeNode(convert_to_type_node(type_args[0]))
+                    element_type = convert_to_type_node(type_args[0])
+                    if isinstance(element_type, UnionTypeNode):
+                        return TypeReferenceNode(IdentifierNode("Array"), [element_type])
+                    return ArrayTypeNode(element_type)
 
                 return TupleTypeNode([convert_to_type_node(py_type_arg) for py_type_arg in type_args])
 
@@ -283,10 +360,10 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
         errors.append(f"'{py_type}' cannot be used as a type annotation.")
         return AnyTypeReferenceNode
 
-    def declare_property(name: str, py_annotation: type | TypeAliasType, is_typeddict_attribute: bool, optionality_default: bool):
+    def declare_property(name: str, py_annotation: type | TypeAliasType, is_typeddict_attribute: bool, optionality_default: bool, fallback_comment: str = ""):
         """
         Declare a property for a given type.
-        If 'optionality_default' is 
+        If 'optionality_default' is
         """
         current_annotation: object = py_annotation
         origin: object
@@ -323,7 +400,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             optional = optionality_default
 
         type_annotation = convert_to_type_node(skip_annotations(current_annotation))
-        return PropertyDeclarationNode(name, optional, comment or "", type_annotation)
+        return PropertyDeclarationNode(name, optional, comment if comment is not None else fallback_comment, type_annotation)
 
     def reserve_name(val: type | TypeAliasType):
         type_name = val.__name__
@@ -362,6 +439,12 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                     base_attributes.setdefault(prop, set()).add(type_hint)
             bases = [convert_to_type_node(base) for base in raw_but_filtered_bases]
 
+            try:
+                inline_comments = _extract_inline_field_comments(py_type)
+            except (SyntaxError, tokenize.TokenError, ValueError) as exc:
+                errors.append(f"Cannot extract inline field comments for {py_type.__name__}: {exc}")
+                inline_comments = {}
+
             properties: list[PropertyDeclarationNode | IndexSignatureDeclarationNode] = []
             if is_typeddict(py_type):
                 for attr_name, type_hint in annotated_members.items():
@@ -369,7 +452,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                         continue
 
                     assume_optional = cast(TypeOfTypedDict, py_type).__total__ is False
-                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=True, optionality_default=assume_optional)
+                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=True, optionality_default=assume_optional, fallback_comment=inline_comments.get(attr_name, ""))
                     properties.append(prop)
             else:
                 # When a dataclass is created with no explicit docstring, @dataclass will
@@ -381,8 +464,10 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
 
                 for attr_name, field in cast(Dataclassish, py_type).__dataclass_fields__.items():
                     type_hint = annotated_members[attr_name]
+                    if type_hint is ClassVar or get_origin(type_hint) is ClassVar:
+                        continue
                     optional = not(field.default is MISSING and field.default_factory is MISSING)
-                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional)
+                    prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional, fallback_comment=inline_comments.get(attr_name, ""))
                     properties.append(prop)
 
             reserve_name(py_type)
@@ -393,7 +478,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
             reserve_name(py_type)
 
             return InterfaceDeclarationNode(py_type.__name__, None, "", None, [])
-        if isinstance(py_type, TypeAliasType):
+        if is_type_alias_type(py_type):
             type_params = [TypeParameterDeclarationNode(type_param.__name__) for type_param in py_type.__type_params__]
 
             reserve_name(py_type)

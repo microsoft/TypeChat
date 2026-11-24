@@ -1,9 +1,12 @@
 import asyncio
-
 import sys
+
 from dotenv import dotenv_values
+from typechat import (Failure, TypeChatJsonTranslator, TypeChatValidator,
+                      create_language_model, process_requests)
+
 import schema as sentiment
-from typechat import Failure, TypeChatJsonTranslator, TypeChatValidator, create_language_model, process_requests
+
 
 async def main():    
     env_vals = dotenv_values()

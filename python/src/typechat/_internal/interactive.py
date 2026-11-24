@@ -12,7 +12,7 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
         process_request: Async callback function that is invoked for each interactive input or each line in text file.
     """
     if input_file_name is not None:
-        with open(input_file_name, "r") as file:
+        with open(input_file_name, "r", encoding="utf-8") as file:
             lines = filter(str.rstrip, file)
             for line in lines:
                 if line.startswith("# "):
@@ -20,8 +20,11 @@ async def process_requests(interactive_prompt: str, input_file_name: str | None,
                 print(interactive_prompt + line)
                 await process_request(line)
     else:
-        # Use readline to enable input editing and history
-        import readline  # type: ignore
+        try:
+            # Use readline to enable input editing and history
+            import readline  # type: ignore # noqa: F401
+        except ImportError:
+            pass
         while True:
             try:
                 line = input(interactive_prompt)

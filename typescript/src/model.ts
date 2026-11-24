@@ -1,4 +1,4 @@
-import { Result, success, error } from "./result";
+import { Result, success, error, withResponseMetadata, TypeChatResponseMetadata, TypeChatTokenUsage } from "./result.js";
 
 /**
  * Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for
@@ -13,14 +13,52 @@ export interface PromptSection {
     /**
      * Specifies the content of this section.
      */
-    content: string;
+    content: PromptContent;
 }
+
+export type PromptContent =
+    | string
+    | MultimodalPromptContent[];
+
+/**
+ * GPT-4-vision, GPT-4-omni and GPT-4-turbo allow multi-modal input, where images and text can
+ * be part of the prompt. To support this, the content section of the prompt has an array of objects.
+ */
+export type MultimodalPromptContent =
+    | string
+    | TextPromptContent
+    | ImagePromptContent;
+
+export type TextPromptContent = {
+    type: "text";
+    text: string;
+};
+
+export type ImagePromptContent = {
+    type: "image_url";
+    image_url: ImageUrl;
+};
+
+export type ImageUrl = {
+    /*
+     * This could be a URL to a hosted image, or the base64-encoded image content.
+     */
+    url: string;
+    
+    /*
+     * Controls how the model processes the image and generates its textual understanding.
+     * In "low" mode, the model treats the image as 512x512px, while "high" mode considers
+     * the image at full size.
+     */
+    detail?: "auto" | "low" | "high";
+};
 
 /**
  * Represents a AI language model that can complete prompts. TypeChat uses an implementation of this
  * interface to communicate with an AI service that can translate natural language requests to JSON
  * instances according to a provided schema. The `createLanguageModel`, `createOpenAILanguageModel`,
- * and `createAzureOpenAILanguageModel` functions create instances of this interface.
+ * `createAzureOpenAILanguageModel`, and `createOpenAILanguageModelFromClient` functions create
+ * instances of this interface.
  */
 export interface TypeChatLanguageModel {
     /**
@@ -32,11 +70,123 @@ export interface TypeChatLanguageModel {
      */
     retryPauseMs?: number;
     /**
+     * Optional property that specifies the timeout, in milliseconds, applied to each HTTP request
+     * made to the model endpoint (the default is 600000ms, i.e. 10 minutes). A request - including
+     * reading its response body - is aborted if it does not complete within this time, preventing a
+     * slow or unresponsive endpoint from causing `complete` to hang indefinitely and exhaust
+     * resources. Set to 0 or a negative value to disable the timeout.
+     */
+    timeoutMs?: number;
+    /**
+     * Optional property that specifies the maximum size, in bytes, of a response body accepted from
+     * the model endpoint (the default is 104857600, i.e. 100 MB). A larger response is rejected
+     * without being fully buffered in memory, preventing a malicious or malfunctioning endpoint from
+     * exhausting memory. Set to 0 or a negative value to disable the limit.
+     */
+    maxResponseBytes?: number;
+    /**
      * Obtains a completion from the language model for the given prompt.
      * @param prompt A prompt string or an array of prompt sections. If a string is specified,
      *   it is converted into a single "user" role prompt section.
+     * Optional result metadata contains service-reported usage and filtering information.
      */
     complete(prompt: string | PromptSection[]): Promise<Result<string>>;
+}
+
+/**
+ * Supplies a bearer token; credential acquisition, caching, and renewal remain caller-owned.
+ * Invoked on the caller's event-loop thread. Keep synchronous providers nonblocking; use asynchronous
+ * I/O or application-managed workers for blocking acquisition rather than just wrapping it in a Promise.
+ */
+export type TokenProvider = () => string | Promise<string>;
+
+/**
+ * Optional settings accepted by the language model factory functions.
+ */
+export interface LanguageModelOptions {
+    /**
+     * URL of an HTTP or HTTPS proxy to route model requests through
+     * (for example `"http://127.0.0.1:7890"`). This is useful in environments where the model
+     * endpoint can only be reached via a proxy.
+     *
+     * Requests are dispatched through the proxy using an `undici` `ProxyAgent`. `undici` is an
+     * optional dependency that is imported only when a proxy is configured; install it with
+     * `npm install undici`.
+     *
+     * When you use {@link createLanguageModel}, proxy configuration is read automatically from the
+     * standard `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` environment variables, and `NO_PROXY` is
+     * honored, so setting those (e.g. in a `.env` file) is usually all that is required.
+     */
+    proxyUrl?: string;
+
+    /**
+     * Selects the OpenAI API variant. When `true`, the Responses API (`/v1/responses`) is used
+     * regardless of the endpoint URL; when `false`, the Chat Completions API is used. When omitted
+     * (default), the variant is inferred from the endpoint URL (a path ending in `/responses`
+     * selects the Responses API). Applies to `createOpenAILanguageModel`; configured-client adapters
+     * also accept this option but default to Chat Completions without endpoint inference.
+     */
+    useResponsesApi?: boolean;
+
+    /**
+     * Supplies a bearer token for each HTTP attempt, including retries. Pass `undefined` for the
+     * factory's `apiKey` argument when using this option. API keys and providers are mutually exclusive.
+     */
+    tokenProvider?: TokenProvider;
+}
+
+type ClientMessage =
+    | { role: "user"; content: string | (TextPromptContent | ImagePromptContent)[] }
+    | { role: "system"; content: string | TextPromptContent[] }
+    | { role: "assistant"; content: string | TextPromptContent[] };
+
+type ClientResponseContent =
+    | { type: "input_text"; text: string }
+    | { type: "input_image"; image_url: string; detail: NonNullable<ImageUrl["detail"]> };
+
+/** Structural contract for a caller-owned asynchronous Chat Completions client. */
+export interface ChatCompletionClient {
+    chat: {
+        completions: {
+            create(request: {
+                model: string;
+                messages: ClientMessage[];
+                temperature: number;
+                n: number;
+                stream: false;
+            }): PromiseLike<unknown>;
+        };
+    };
+}
+
+/** Structural contract for a caller-owned asynchronous Responses client. */
+export interface ResponsesClient {
+    responses: {
+        create(request: {
+            model: string;
+            input: string | { role: PromptSection["role"]; content: string | ClientResponseContent[] }[];
+            temperature: number;
+            stream: false;
+        }): PromiseLike<unknown>;
+    };
+}
+
+/**
+ * Internal proxy configuration threaded to the fetch helpers.
+ * - `url`: an explicit proxy URL supplied via {@link LanguageModelOptions.proxyUrl}.
+ * - `env`: values collected from the standard proxy environment variables, applied per request by
+ *   an `undici` `EnvHttpProxyAgent` (which also honors `NO_PROXY` and the http/https split).
+ */
+type ProxySettings =
+    | { kind: "url"; url: string }
+    | { kind: "env"; httpProxy: string | undefined; httpsProxy: string | undefined; noProxy: string | undefined };
+
+/**
+ * {@link LanguageModelOptions} plus internal, pre-resolved proxy settings passed down by
+ * {@link createLanguageModel}. Not part of the public API.
+ */
+interface InternalModelOptions extends LanguageModelOptions {
+    proxy?: ProxySettings;
 }
 
 /**
@@ -46,6 +196,8 @@ export interface TypeChatLanguageModel {
  * If an `OPENAI_API_KEY` environment variable exists, the `createOpenAILanguageModel` function
  * is used to create the instance. The `OPENAI_ENDPOINT` and `OPENAI_MODEL` environment variables
  * must also be defined or an exception will be thrown.
+ * To use the OpenAI Responses API, set `OPENAI_ENDPOINT` to a URL whose path ends with `/responses`
+ * (e.g. `https://api.openai.com/v1/responses`); otherwise the Chat Completions API is used.
  *
  * If an `AZURE_OPENAI_API_KEY` environment variable exists, the `createAzureOpenAILanguageModel` function
  * is used to create the instance. The `AZURE_OPENAI_ENDPOINT` environment variable must also be defined
@@ -55,35 +207,53 @@ export interface TypeChatLanguageModel {
  * @returns An instance of `TypeChatLanguageModel`.
  */
 export function createLanguageModel(env: Record<string, string | undefined>): TypeChatLanguageModel {
+    const proxy = proxySettingsFromEnv(env);
+    const options: InternalModelOptions | undefined = proxy ? { proxy } : undefined;
     if (env.OPENAI_API_KEY) {
         const apiKey = env.OPENAI_API_KEY ?? missingEnvironmentVariable("OPENAI_API_KEY");
         const model = env.OPENAI_MODEL ?? missingEnvironmentVariable("OPENAI_MODEL");
-        const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
         const org = env.OPENAI_ORGANIZATION ?? "";
-        return createOpenAILanguageModel(apiKey, model, endPoint, org);
+        const endPoint = env.OPENAI_ENDPOINT ?? "https://api.openai.com/v1/chat/completions";
+        return createOpenAILanguageModel(apiKey, model, endPoint, org, options);
     }
     if (env.AZURE_OPENAI_API_KEY) {
         const apiKey = env.AZURE_OPENAI_API_KEY ?? missingEnvironmentVariable("AZURE_OPENAI_API_KEY");
         const endPoint = env.AZURE_OPENAI_ENDPOINT ?? missingEnvironmentVariable("AZURE_OPENAI_ENDPOINT");
-        return createAzureOpenAILanguageModel(apiKey, endPoint);
+        return createAzureOpenAILanguageModel(apiKey, endPoint, options);
     }
     missingEnvironmentVariable("OPENAI_API_KEY or AZURE_OPENAI_API_KEY");
 }
 
 /**
  * Creates a language model encapsulation of an OpenAI REST API endpoint.
- * @param apiKey The OpenAI API key.
- * @param model The model name.
- * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to "https://api.openai.com/v1/chat/completions".
+ *
+ * When `endPoint` (or `options.useResponsesApi`) indicates the Responses API the function routes through
+ * the `/v1/responses` request/response format; otherwise the Chat Completions format is used.
+ * The Responses API is auto-detected when the endpoint URL path ends with `/responses`
+ * (e.g. `https://api.openai.com/v1/responses`).
+ * @param apiKey The OpenAI API key, or `undefined` when using `options.tokenProvider`.
+ * @param model The model name (e.g. `"gpt-4o"`).
+ * @param endPoint The URL of the OpenAI REST API endpoint. Defaults to
+ *   `"https://api.openai.com/v1/chat/completions"`. Supply a `/responses` URL to use the
+ *   Responses API instead.
  * @param org The OpenAI organization id.
+ * @param options Optional settings such as a proxy URL or the API variant to use.
+ *   See {@link LanguageModelOptions}.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = ""): TypeChatLanguageModel {
+export function createOpenAILanguageModel(apiKey: string | undefined, model: string, endPoint = "https://api.openai.com/v1/chat/completions", org = "", options?: LanguageModelOptions): TypeChatLanguageModel {
+    const tokenProvider = options?.tokenProvider;
+    validateAuthentication(apiKey, tokenProvider);
+    if (apiKey === undefined) {
+        return createFetchLanguageModel(endPoint, { "OpenAI-Organization": org }, { model },
+            resolveProxySettings(options), options?.useResponsesApi ?? isResponsesApiUrl(endPoint), tokenProvider);
+    }
     const headers = {
         "Authorization": `Bearer ${apiKey}`,
         "OpenAI-Organization": org
     };
-    return createFetchLanguageModel(endPoint, headers, { model });
+    const proxy = resolveProxySettings(options);
+    return createFetchLanguageModel(endPoint, headers, { model }, proxy, options?.useResponsesApi ?? isResponsesApiUrl(endPoint));
 }
 
 /**
@@ -91,37 +261,184 @@ export function createOpenAILanguageModel(apiKey: string, model: string, endPoin
  * @param endPoint The URL of the OpenAI REST API endpoint. The URL must be in the format
  *   "https://{your-resource-name}.openai.azure.com/openai/deployments/{your-deployment-name}/chat/completions?api-version={API-version}".
  *   Example deployment names are "gpt-35-turbo" and "gpt-4". An example API versions is "2023-05-15".
- * @param apiKey The Azure OpenAI API key.
+ * @param apiKey The Azure OpenAI API key, or `undefined` when using `options.tokenProvider`.
+ * @param options Optional settings such as a proxy URL. See {@link LanguageModelOptions}.
  * @returns An instance of `TypeChatLanguageModel`.
  */
-export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string): TypeChatLanguageModel {
+export function createAzureOpenAILanguageModel(apiKey: string | undefined, endPoint: string, options?: LanguageModelOptions): TypeChatLanguageModel {
+    const tokenProvider = options?.tokenProvider;
+    validateAuthentication(apiKey, tokenProvider);
+    if (apiKey === undefined) {
+        return createFetchLanguageModel(endPoint, {}, {}, resolveProxySettings(options), false, tokenProvider);
+    }
     const headers = {
         // Needed when using managed identity
         "Authorization": `Bearer ${apiKey}`,
         // Needed when using regular API key
         "api-key": apiKey
     };
-    return createFetchLanguageModel(endPoint, headers, {});
+    return createFetchLanguageModel(endPoint, headers, {}, resolveProxySettings(options));
 }
+
+/**
+ * Adapts a configured asynchronous client without importing an SDK, changing its settings, closing
+ * it, or adding retries/timeouts. Client exceptions propagate. Only `complete` is exposed; configure
+ * network controls on the supplied client. Responses mode is explicit, not inferred from the client.
+ */
+export function createOpenAILanguageModelFromClient(client: ChatCompletionClient, model: string, options?: { useResponsesApi?: false }): Pick<TypeChatLanguageModel, "complete">;
+export function createOpenAILanguageModelFromClient(client: ResponsesClient, model: string, options: { useResponsesApi: true }): Pick<TypeChatLanguageModel, "complete">;
+export function createOpenAILanguageModelFromClient(client: ChatCompletionClient & ResponsesClient, model: string, options: Pick<LanguageModelOptions, "useResponsesApi">): Pick<TypeChatLanguageModel, "complete">;
+export function createOpenAILanguageModelFromClient(client: ChatCompletionClient | ResponsesClient, model: string, options?: Pick<LanguageModelOptions, "useResponsesApi">): Pick<TypeChatLanguageModel, "complete"> {
+    if (!model.trim()) {
+        throw new Error("The client model or deployment name must not be empty.");
+    }
+    const responsesApi = options?.useResponsesApi ?? false;
+    const finish = (json: unknown) => {
+        const metadata = responseMetadata(json, responsesApi);
+        return withResponseMetadata(completionResult(json, responsesApi, metadata), [metadata]);
+    };
+    if (responsesApi) {
+        if (!("responses" in client)) {
+            throw new Error("Responses mode requires a client with responses.create.");
+        }
+        return {
+            async complete(prompt) {
+                const messages = clientMessages(prompt);
+                if (!messages.success) return messages;
+                const input = typeof prompt === "string" ? prompt : messages.data.map(message => ({
+                    role: message.role,
+                    content: typeof message.content === "string" ? message.content :
+                        message.content.map((part): ClientResponseContent => part.type === "text" ?
+                            { type: "input_text", text: part.text } :
+                            { type: "input_image", image_url: part.image_url.url, detail: part.image_url.detail ?? "auto" })
+                }));
+                return finish(await client.responses.create({ model, input, temperature: 0, stream: false }));
+            }
+        };
+    }
+    if (!("chat" in client)) {
+        throw new Error("Chat Completions mode requires a client with chat.completions.create.");
+    }
+    return {
+        async complete(prompt) {
+            const messages = clientMessages(prompt);
+            if (!messages.success) return messages;
+            return finish(await client.chat.completions.create({
+                model, messages: messages.data, temperature: 0, n: 1, stream: false
+            }));
+        }
+    };
+}
+
+function validateAuthentication(apiKey: string | undefined, provider: TokenProvider | undefined): void {
+    if (provider !== undefined && typeof provider !== "function") {
+        throw new TypeError("Token provider must be a function.");
+    }
+    if (apiKey !== undefined && provider !== undefined) {
+        throw new Error("Specify either an API key or a token provider, not both.");
+    }
+    if (apiKey === undefined && provider === undefined) {
+        throw new Error("Specify an API key or a token provider.");
+    }
+}
+
+function clientMessages(prompt: string | PromptSection[]): Result<ClientMessage[]> {
+    const sections: PromptSection[] = typeof prompt === "string" ? [{ role: "user", content: prompt }] : prompt;
+    const messages: ClientMessage[] = [];
+    for (const { role, content } of sections) {
+        if (role !== "user" && role !== "system" && role !== "assistant") {
+            return error("Unsupported prompt role.");
+        }
+        if (typeof content === "string") {
+            messages.push({ role, content });
+            continue;
+        }
+        if (!Array.isArray(content)) {
+            return error("Prompt content must be a string or an array of text/image parts.");
+        }
+        const parts: (TextPromptContent | ImagePromptContent)[] = [];
+        for (const part of content) {
+            if (typeof part === "string") {
+                parts.push({ type: "text", text: part });
+                continue;
+            }
+            const value = record(part);
+            if (value?.type === "text" && typeof value.text === "string") {
+                parts.push({ type: "text", text: value.text });
+                continue;
+            }
+            const image = record(value?.image_url);
+            const detail = image?.detail;
+            if (value?.type !== "image_url" || typeof image?.url !== "string" ||
+                detail !== undefined && detail !== "auto" && detail !== "low" && detail !== "high") {
+                return error("Unsupported or malformed text/image prompt part.");
+            }
+            parts.push({ type: "image_url", image_url: { url: image.url, ...(detail !== undefined ? { detail } : {}) } });
+        }
+        if (role === "user") {
+            messages.push({ role, content: parts });
+        } else {
+            const textParts: TextPromptContent[] = [];
+            for (const part of parts) {
+                if (part.type !== "text") {
+                    return error("Image prompt parts are supported only in user messages.");
+                }
+                textParts.push(part);
+            }
+            messages.push({ role, content: textParts });
+        }
+    }
+    return success(messages);
+}
+
+/**
+ * Default per-request timeout applied when a model does not set {@link TypeChatLanguageModel.timeoutMs}.
+ * Ten minutes matches common LLM client defaults, allowing slow completions while still preventing a
+ * request from hanging indefinitely.
+ */
+const defaultTimeoutMs = 600000;
+
+/**
+ * Default maximum response body size (100 MB) applied when a model does not set
+ * {@link TypeChatLanguageModel.maxResponseBytes}. Generous enough for any legitimate completion while
+ * still preventing an endpoint from exhausting memory with an unbounded response.
+ */
+const defaultMaxResponseBytes = 100 * 1024 * 1024;
 
 /**
  * Common OpenAI REST API endpoint encapsulation using the fetch API.
  */
-function createFetchLanguageModel(url: string, headers: object, defaultParams: object) {
+function createFetchLanguageModel(url: string, headers: object, defaultParams: object, proxy?: ProxySettings, responsesApi = false, tokenProvider?: TokenProvider) {
+    let dispatcherPromise: Promise<RequestInit["dispatcher"]> | undefined;
     const model: TypeChatLanguageModel = {
         complete
     };
     return model;
 
     async function complete(prompt: string | PromptSection[]) {
+        const responses: TypeChatResponseMetadata[] = [];
+        const finish = (result: Result<string>) => withResponseMetadata(result, responses);
+        dispatcherPromise ??= resolveProxyDispatcher(proxy);
+        let dispatcher: RequestInit["dispatcher"];
+        try {
+            dispatcher = await dispatcherPromise;
+        } catch (e) {
+            return finish(error(`REST API fetch error: ${getErrorMessage(e)}`));
+        }
         let retryCount = 0;
         const retryMaxAttempts = model.retryMaxAttempts ?? 3;
         const retryPauseMs = model.retryPauseMs ?? 1000;
+        const timeoutMs = model.timeoutMs ?? defaultTimeoutMs;
+        const maxResponseBytes = model.maxResponseBytes ?? defaultMaxResponseBytes;
         const messages = typeof prompt === "string" ? [{ role: "user", content: prompt }] : prompt;
         while (true) {
-            const options = {
+            const options: RequestInit = {
                 method: "POST",
-                body: JSON.stringify({
+                body: JSON.stringify(responsesApi ? {
+                    ...defaultParams,
+                    input: prompt,
+                    temperature: 0
+                } : {
                     ...defaultParams,
                     messages,
                     temperature: 0,
@@ -131,19 +448,159 @@ function createFetchLanguageModel(url: string, headers: object, defaultParams: o
                     "content-type": "application/json",
                     ...headers
                 }
+            };
+            if (dispatcher) {
+                options.dispatcher = dispatcher;
             }
-            const response = await fetch(url, options);
+            let response: Response;
+            try {
+                if (tokenProvider) {
+                    const token = await tokenProvider();
+                    if (typeof token !== "string" || !token || /[^\x21-\x7e]/.test(token)) {
+                        return finish(error("Token provider must return a nonempty, header-safe bearer-token string."));
+                    }
+                    options.headers = { ...headers, "content-type": "application/json", "Authorization": `Bearer ${token}` };
+                }
+                response = await fetchWithTimeout(url, options, timeoutMs);
+            } catch (e) {
+                if (retryCount >= retryMaxAttempts) {
+                    return finish(error(`REST API fetch error: ${getErrorMessage(e)}`));
+                }
+                await sleep(retryPauseMs);
+                retryCount++;
+                continue;
+            }
+            const parsed = await readModelResponse(response, maxResponseBytes, responsesApi, responses);
+            if (!parsed.success && response.ok) {
+                return finish(parsed);
+            }
+            const json = parsed.success ? parsed.data : undefined;
             if (response.ok) {
-                const json = await response.json() as { choices: { message: PromptSection }[] };
-                return success(json.choices[0].message.content ?? "");
+                return finish(completionResult(json, responsesApi, responses[responses.length - 1]));
             }
             if (!isTransientHttpError(response.status) || retryCount >= retryMaxAttempts) {
-                return error(`REST API error ${response.status}: ${response.statusText}`);
+                return finish(error(`REST API error ${response.status}: ${response.statusText}`));
             }
-            await sleep(retryPauseMs);
+            await sleep(getRetryDelayMs(response, retryPauseMs, retryPauseMs * retryMaxAttempts));
             retryCount++;
         }
     }
+}
+
+function completionResult(json: unknown, responsesApi: boolean, metadata: TypeChatResponseMetadata): Result<string> {
+    let content: unknown;
+    if (responsesApi) {
+        const output = record(json)?.output;
+        const message = Array.isArray(output) ? record(output.find(o => record(o)?.type === "message")) : undefined;
+        const parts = message?.content;
+        content = Array.isArray(parts) ? record(parts.find(c => record(c)?.type === "output_text"))?.text : undefined;
+    } else {
+        const choices = record(json)?.choices;
+        const choice = record(Array.isArray(choices) ? choices[0] : undefined);
+        content = record(choice?.message)?.content;
+    }
+    if (metadata.filtering?.blocked) {
+        return error("REST API response was filtered or refused.",
+            typeof content === "string" ? { responseText: content } : undefined);
+    }
+    return typeof content === "string" ? success(content) : error(`REST API unexpected response format: ${JSON.stringify(json)}`);
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+    return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function responseMetadata(json: unknown, responsesApi: boolean): TypeChatResponseMetadata {
+    const body = record(json);
+    const metadata: TypeChatResponseMetadata = {};
+    const reported = record(body?.usage);
+    const usage: TypeChatTokenUsage = {};
+    const sourceKeys = responsesApi ? ["input_tokens", "output_tokens", "total_tokens"] : ["prompt_tokens", "completion_tokens", "total_tokens"];
+    for (const [index, key] of (["inputTokens", "outputTokens", "totalTokens"] as const).entries()) {
+        const count = reported?.[sourceKeys[index]];
+        if (typeof count === "number" && Number.isSafeInteger(count) && count >= 0) {
+            usage[key] = count;
+        }
+    }
+    if (Object.keys(usage).length) {
+        metadata.usage = usage;
+    }
+    const choices = body?.choices;
+    const choice = record(Array.isArray(choices) ? choices[0] : undefined);
+    const failure = record(body?.error);
+    const inner = record(failure?.innererror);
+    const input = body?.prompt_filter_results ?? body?.prompt_annotations ?? inner?.content_filter_result;
+    const output = choice?.content_filter_results;
+    const filtering: NonNullable<TypeChatResponseMetadata["filtering"]> = {};
+    if (input !== undefined) filtering.input = input;
+    if (output !== undefined) filtering.output = output;
+    const filtered = (rule: unknown) => record(rule)?.filtered === true;
+    const blocked = (details: unknown) => Object.values(record(details) ?? {}).some(rule =>
+        filtered(rule) || Array.isArray(rule) && rule.some(filtered));
+    if (blocked(output) || (Array.isArray(input) ? input.some(item => blocked(record(item)?.content_filter_results)) : blocked(input))) {
+        filtering.blocked = true;
+    }
+    const reason = responsesApi ? record(body?.incomplete_details)?.reason : choice?.finish_reason;
+    const code = failure?.code;
+    if (reason === "content_filter" || code === "content_filter" || code === "content_policy_violation" || inner?.code === "ResponsibleAIPolicyViolation") {
+        filtering.reason = typeof code === "string" ? code : "content_filter";
+        filtering.blocked = true;
+    }
+    const refusals: string[] = [];
+    const refusal = record(choice?.message)?.refusal;
+    if (typeof refusal === "string" && refusal) refusals.push(refusal);
+    if (responsesApi && Array.isArray(body?.output)) {
+        for (const item of body.output) {
+            const content = record(item)?.content;
+            if (Array.isArray(content)) {
+                for (const part of content) {
+                    const value = record(part);
+                    if (value?.type === "refusal") {
+                        filtering.blocked = true;
+                        if (typeof value.refusal === "string") refusals.push(value.refusal);
+                    }
+                }
+            }
+        }
+    }
+    if (refusals.length) {
+        filtering.refusals = refusals;
+        filtering.blocked = true;
+    }
+    if (Object.keys(filtering).length) metadata.filtering = filtering;
+    return metadata;
+}
+
+async function readModelResponse(response: Response, maxBytes: number, responsesApi: boolean, responses: TypeChatResponseMetadata[]): Promise<Result<unknown>> {
+    let json: unknown;
+    try {
+        if (response.ok || response.headers.get("content-type")?.toLowerCase().includes("json")) {
+            json = await readResponseJson(response, maxBytes);
+        }
+    } catch (e) {
+        responses.push(response.ok ? {} : { error: e instanceof Error ? e.name : "ResponseReadError" });
+        return error(`REST API response error: ${getErrorMessage(e)}`);
+    }
+    responses.push(responseMetadata(json, responsesApi));
+    return success(json);
+}
+
+/**
+ * Returns the number of milliseconds to wait before the next retry attempt.
+ * When the response carries a `Retry-After` header (sent by servers on 429 Too Many Requests
+ * and 503 Service Unavailable), its value (in seconds) is used as the delay, capped at
+ * `maxMs` to avoid waiting longer than the configured total retry budget.
+ * For all other transient errors the default pause is returned.
+ */
+function getRetryDelayMs(response: Response, defaultMs: number, maxMs: number): number {
+    const retryAfter = response.headers.get("retry-after");
+    if (retryAfter) {
+        const seconds = parseInt(retryAfter, 10);
+        if (Number.isFinite(seconds) && seconds >= 0) {
+            return Math.min(seconds * 1000, maxMs);
+        }
+    }
+    return defaultMs;
 }
 
 /**
@@ -162,10 +619,155 @@ function isTransientHttpError(code: number): boolean {
 }
 
 /**
+ * Returns true when the given URL targets the OpenAI Responses API.
+ * Detection is based on whether the URL path ends with `/responses` (before any query string).
+ * This covers both the standard OpenAI endpoint (`https://api.openai.com/v1/responses`) and
+ * Azure OpenAI deployments that end with `/responses?api-version=...`.
+ */
+function isResponsesApiUrl(url: string): boolean {
+    try {
+        return new URL(url).pathname.endsWith("/responses");
+    } catch {
+        // Fallback for relative or non-standard URLs
+        return url.split("?")[0].endsWith("/responses");
+    }
+}
+
+/**
+ * Performs a `fetch` request that is aborted if it does not complete within `timeoutMs`
+ * milliseconds. Because the abort signal stays attached to the returned response, the timeout also
+ * bounds the time spent reading the response body. A non-positive `timeoutMs` disables the timeout.
+ * Enforcing a timeout prevents a slow or unresponsive endpoint from causing the request to hang
+ * indefinitely and exhaust resources.
+ */
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+    if (timeoutMs > 0) {
+        options.signal = AbortSignal.timeout(timeoutMs);
+    }
+    return fetch(url, options);
+}
+
+/**
+ * Reads and JSON-parses a response body while enforcing a maximum size in bytes. When the runtime
+ * exposes a readable stream body (as Node's `fetch` does) and `maxBytes` is positive, the body is
+ * read incrementally and the read is aborted as soon as the accumulated size exceeds `maxBytes`, so
+ * an oversized response is never fully buffered in memory. When no stream body is available or the
+ * limit is disabled, this falls back to `response.json()`.
+ */
+async function readResponseJson(response: Response, maxBytes: number): Promise<unknown> {
+    const body = response.body;
+    if (maxBytes > 0 && body && typeof body.getReader === "function") {
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let received = 0;
+        let text = "";
+        while (true) {
+            const result = await reader.read();
+            if (result.done) {
+                break;
+            }
+            received += result.value.byteLength;
+            if (received > maxBytes) {
+                await reader.cancel().catch(() => { /* ignore cancellation errors */ });
+                throw new Error(`REST API response exceeded the maximum allowed size of ${maxBytes} bytes`);
+            }
+            text += decoder.decode(result.value, { stream: true });
+        }
+        text += decoder.decode();
+        return JSON.parse(text);
+    }
+    return response.json();
+}
+
+/**
+ * Extracts a human-readable message from a value thrown by `fetch` or response processing.
+ */
+function getErrorMessage(e: unknown): string {
+    return e instanceof Error ? e.message : String(e);
+}
+
+/**
  * Sleeps for the given number of milliseconds.
  */
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Collects proxy configuration from the standard proxy environment variables, or returns
+ * `undefined` when none are set. `HTTPS_PROXY`/`HTTP_PROXY` select the proxy per request protocol,
+ * `ALL_PROXY` is the fallback for both, and `NO_PROXY` lists hosts that bypass the proxy. Both
+ * upper- and lower-case names are recognized; matching is applied per request by an
+ * `EnvHttpProxyAgent`.
+ */
+function proxySettingsFromEnv(env: Record<string, string | undefined>): ProxySettings | undefined {
+    const allProxy = env.ALL_PROXY ?? env.all_proxy;
+    const httpsProxy = env.HTTPS_PROXY ?? env.https_proxy ?? allProxy;
+    const httpProxy = env.HTTP_PROXY ?? env.http_proxy ?? allProxy;
+    if (!httpsProxy && !httpProxy) {
+        return undefined;
+    }
+    return { kind: "env", httpProxy, httpsProxy, noProxy: env.NO_PROXY ?? env.no_proxy };
+}
+
+/**
+ * Resolves the {@link ProxySettings} for a set of options: an explicit `proxyUrl` becomes a
+ * single-URL proxy, while {@link createLanguageModel} passes pre-resolved environment settings.
+ */
+function resolveProxySettings(options: LanguageModelOptions | undefined): ProxySettings | undefined {
+    const internal = options as InternalModelOptions | undefined;
+    if (internal?.proxy) {
+        return internal.proxy;
+    }
+    if (options?.proxyUrl) {
+        return { kind: "url", url: options.proxyUrl };
+    }
+    return undefined;
+}
+
+/**
+ * Dynamically imports the optional `undici` package, translating a missing-module error into an
+ * actionable message. `undici` also powers Node's built-in `fetch`, so it is the natural choice for
+ * proxy dispatching and is imported only when a proxy is actually configured.
+ */
+async function importUndici() {
+    try {
+        return await import("undici");
+    } catch (e) {
+        if (e instanceof Error && "code" in e && e.code === "ERR_MODULE_NOT_FOUND" &&
+            /Cannot find (?:module|package) ['"]undici['"]/.test(e.message)) {
+            throw new Error(
+                `A proxy was configured, but the optional "undici" package is not installed. ` +
+                `Run "npm install undici" to enable proxy support.`
+            );
+        }
+        throw e;
+    }
+}
+
+/**
+ * Lazily constructs an `undici` dispatcher for the given proxy settings, or returns `undefined`
+ * when no proxy is configured. Absent settings are a no-op, so an agent is never accidentally
+ * constructed from an empty proxy string. Node's `fetch` honors an undici `dispatcher` per request.
+ */
+async function resolveProxyDispatcher(proxy: ProxySettings | undefined): Promise<RequestInit["dispatcher"]> {
+    if (!proxy) {
+        return undefined;
+    }
+    const { ProxyAgent, EnvHttpProxyAgent } = await importUndici();
+    // `undici` bundles its own dispatcher types, which are structurally identical to the
+    // `undici-types` copy that Node's global `fetch`/`RequestInit` use but nominally distinct;
+    // bridge the two with a cast.
+    if (proxy.kind === "url") {
+        return new ProxyAgent(proxy.url) as unknown as RequestInit["dispatcher"];
+    }
+    // Env-driven: EnvHttpProxyAgent applies NO_PROXY and the http/https split per request.
+    const envOptions = {
+        ...(proxy.httpProxy ? { httpProxy: proxy.httpProxy } : {}),
+        ...(proxy.httpsProxy ? { httpsProxy: proxy.httpsProxy } : {}),
+        ...(proxy.noProxy ? { noProxy: proxy.noProxy } : {})
+    };
+    return new EnvHttpProxyAgent(envOptions) as unknown as RequestInit["dispatcher"];
 }
 
 /**

@@ -200,8 +200,8 @@ You can [see specifics of this change on GitHub](https://github.com/microsoft/Ty
 
 Other changes to be aware of are:
 
-* `TypeChatJsonProgram` and related functions, such as `createModuleTextFromProgram`, `evaluateJsonProgram`, and `createProgramTranslator` all live in `typechat/ts` ([see PR](https://github.com/microsoft/TypeChat/pull/147)).
-* The `processRequests` function for creating a REPL-like prompt now lives in `typechat/interactive` ([see PR](https://github.com/microsoft/TypeChat/pull/221)).
+* `TypeChatJsonProgram` and related functions, such as `createModuleTextFromProgram`, `evaluateJsonProgram`, and `createProgramTranslator` all live in `typechat/ts` ([see the pull request for these `TypeChatJsonProgram` changes](https://github.com/microsoft/TypeChat/pull/147)).
+* The `processRequests` function for creating a REPL-like prompt now lives in `typechat/interactive` ([see the pull request for these `processRequests` changes](https://github.com/microsoft/TypeChat/pull/221)).
 
 ## What's Next?
 

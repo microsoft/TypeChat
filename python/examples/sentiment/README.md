@@ -19,3 +19,21 @@ For example, given the following input statement:
 ```
 The sentiment is positive
 ```
+
+# Non-interactive usage
+
+The self-contained [`non_interactive.py`](./non_interactive.py) example accepts one text argument, prints the validated result as JSON, and exits without prompting for input.
+After configuring the environment as described in the [examples README](../README.md), run it from the `python` directory:
+
+```sh
+python examples/sentiment/non_interactive.py "TypeChat is awesome!"
+```
+
+Example output:
+
+```json
+{"sentiment": "positive"}
+```
+
+The example exposes an async `classify_sentiment` function for use in an existing backend and surfaces translation failures as exceptions.
+See the [Python quickstart](../../../site/src/docs/python/non-interactive.md) for setup, error handling, and application integration.

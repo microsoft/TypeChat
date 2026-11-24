@@ -1,0 +1,113 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "sentiment",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/typescript/examples/sentiment/src/main.ts",
+            "stopOnEntry": false,
+            "args": [],
+            "cwd": "${workspaceFolder}/typescript/examples/sentiment",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "preLaunchTask": "build-sentiment",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/typescript/examples/sentiment/dist/**/*.js"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "calendar",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/typescript/examples/calendar/src/main.ts",
+            "stopOnEntry": false,
+            "args": [],
+            "cwd": "${workspaceFolder}/typescript/examples/calendar",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "preLaunchTask": "build-calendar",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/typescript/examples/calendar/dist/**/*.js"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "math",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/typescript/examples/math/src/main.ts",
+            "stopOnEntry": false,
+            "args": [],
+            "cwd": "${workspaceFolder}/typescript/examples/math",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "preLaunchTask": "build-math",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/typescript/examples/math/dist/**/*.js"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "music",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/typescript/examples/music/src/main.ts",
+            "stopOnEntry": false,
+            "args": [],
+            "cwd": "${workspaceFolder}/typescript/examples/music",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "preLaunchTask": "build-music",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/typescript/examples/music/dist/**/*.js"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "restaurant",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/typescript/examples/restaurant/src/main.ts",
+            "stopOnEntry": false,
+            "args": [],
+            "cwd": "${workspaceFolder}/typescript/examples/restaurant",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "preLaunchTask": "build-restaurant",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/typescript/examples/restaurant/dist/**/*.js"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "coffeeShop",
+            "type": "node",
+            "request": "launch",
+            "program": "${workspaceFolder}/typescript/examples/coffeeShop/src/main.ts",
+            "stopOnEntry": false,
+            "args": [],
+            "cwd": "${workspaceFolder}/typescript/examples/coffeeShop",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "preLaunchTask": "build-coffeeShop",
+            "sourceMaps": true,
+            "outFiles": [
+                "${workspaceFolder}/typescript/examples/coffeeShop/dist/**/*.js"
+            ],
+            "console": "integratedTerminal"
+        }
+    ]
+}

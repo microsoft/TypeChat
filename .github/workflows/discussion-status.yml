@@ -1,0 +1,174 @@
+# Copyright (c) Microsoft Corporation.
+# Licensed under the MIT License.
+
+name: Report TypeChat discussion outcome
+run-name: Report TypeChat discussion outcome
+
+on:
+  workflow_run:
+    workflows: ["TypeChat discussion response"]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: >-
+    ${{ github.repository == 'microsoft/TypeChat' &&
+        github.event.workflow_run.actor.type == 'User' &&
+        github.event.workflow_run.actor.id == 25374553 &&
+        github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+        (github.event.workflow_run.event == 'issue_comment' || github.event.workflow_run.event == 'discussion_comment') &&
+        (github.run_attempt == 1 || github.triggering_actor == 'robgruen') &&
+        startsWith(github.event.workflow_run.display_title, 'TypeChat response: ') &&
+        format('typechat-status-{0}-{1}', github.repository_id, github.event.workflow_run.display_title) ||
+        format('typechat-ignored-status-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  issue_status:
+    name: Report the requested issue outcome
+    if: >-
+      github.repository == 'microsoft/TypeChat' &&
+      github.event.workflow_run.actor.type == 'User' &&
+      github.event.workflow_run.actor.id == 25374553 &&
+      github.event.workflow_run.event == 'issue_comment' &&
+      github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+      (github.run_attempt == 1 || github.triggering_actor == 'robgruen')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      issues: write
+    env:
+      TYPECHAT_STATUS_KIND: issue
+    steps: &status_steps
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Authenticate the completed run and original owner request
+        id: identify
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ github.token }}
+          retries: 0
+          script: |
+            const path = require("node:path");
+            const { pathToFileURL } = require("node:url");
+            const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
+            const status = await helper.identifyStatus(github, context, process.env);
+            core.setOutput("eligible", status.eligible ? "true" : "false");
+            if (!status.eligible) {
+              core.notice(status.reason);
+              await core.summary.addHeading("No completion comment needed").addRaw(status.reason).write();
+              return;
+            }
+            core.setOutput("source_run_id", String(status.run.id));
+            core.setOutput("artifact_id", status.artifact ? String(status.artifact.id) : "");
+      - name: Download the completed draft for outcome verification
+        if: success() && steps.identify.outputs.eligible == 'true' && steps.identify.outputs.artifact_id != ''
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ steps.identify.outputs.artifact_id }}
+          run-id: ${{ steps.identify.outputs.source_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/typechat-status-draft
+      - name: Check the fixed receipt and previous write attempts
+        if: success() && steps.identify.outputs.eligible == 'true'
+        id: check
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TYPECHAT_HAS_STATUS_DRAFT: ${{ steps.identify.outputs.artifact_id != '' }}
+        with:
+          github-token: ${{ github.token }}
+          retries: 0
+          script: |
+            const path = require("node:path");
+            const { pathToFileURL } = require("node:url");
+            const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
+            const bundle = process.env.TYPECHAT_HAS_STATUS_DRAFT === "true" ?
+              helper.readJson(path.join(process.env.RUNNER_TEMP, "typechat-status-draft"), "sealed-draft.json", helper.MAX_BUNDLE_BYTES) : undefined;
+            const result = await helper.checkStatus(github, context, process.env, bundle);
+            core.setOutput("should_write", result.shouldWrite ? "true" : "false");
+            if (!result.shouldWrite) {
+              core.notice(result.reason);
+              core.summary.addHeading("Completion already reported or no longer authorized").addRaw(result.reason);
+              if (result.url) core.summary.addLink("Existing result", result.url);
+              await core.summary.write();
+              return;
+            }
+            const directory = path.join(process.env.RUNNER_TEMP, "typechat-status-intent");
+            helper.writeJson(directory, "intent.json", result.intent);
+            core.setOutput("intent_name", result.intentName);
+            core.setOutput("intent_path", path.join(directory, "intent.json"));
+      - name: Preserve the status-write intent before any comment mutation
+        if: success() && steps.check.outputs.should_write == 'true'
+        id: intent
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.check.outputs.intent_name }}
+          path: ${{ steps.check.outputs.intent_path }}
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30
+      - name: Revalidate and post or update the completion receipt
+        if: success() && steps.check.outputs.should_write == 'true'
+        id: publish
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TYPECHAT_HAS_STATUS_DRAFT: ${{ steps.identify.outputs.artifact_id != '' }}
+          TYPECHAT_STATUS_INTENT_ID: ${{ steps.intent.outputs.artifact-id }}
+        with:
+          github-token: ${{ github.token }}
+          retries: 0
+          script: |
+            const path = require("node:path");
+            const { pathToFileURL } = require("node:url");
+            const helper = await import(pathToFileURL(path.join(process.env.GITHUB_WORKSPACE, "tools", "discussion-draft.mjs")).href);
+            const bundle = process.env.TYPECHAT_HAS_STATUS_DRAFT === "true" ?
+              helper.readJson(path.join(process.env.RUNNER_TEMP, "typechat-status-draft"), "sealed-draft.json", helper.MAX_BUNDLE_BYTES) : undefined;
+            const result = await helper.publishStatus(github, context, process.env, bundle, Number(process.env.TYPECHAT_STATUS_INTENT_ID));
+            const directory = path.join(process.env.RUNNER_TEMP, "typechat-status-result");
+            helper.writeJson(directory, "result.json", {
+              ...result, sourceRunId: context.payload.workflow_run.id, sourceAttempt: context.payload.workflow_run.run_attempt,
+            });
+            core.setOutput("result_path", path.join(directory, "result.json"));
+            core.summary.addHeading(result.posted ? "Completion receipt recorded" : "No new completion comment");
+            if (result.url) core.summary.addLink("Result", result.url);
+            if (result.reason) core.summary.addRaw(result.reason);
+            await core.summary.write();
+            if (result.outcome === "unavailable") {
+              core.setFailed("The source run had no available verified draft; the receipt requests maintainer inspection.");
+            }
+      - name: Preserve the completion result
+        if: always() && steps.publish.outputs.result_path != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: typechat-status-result-${{ github.run_attempt }}
+          path: ${{ steps.publish.outputs.result_path }}
+          if-no-files-found: error
+          overwrite: false
+          retention-days: 30
+  discussion_status:
+    name: Report the requested Discussion outcome
+    if: >-
+      github.repository == 'microsoft/TypeChat' &&
+      github.event.workflow_run.actor.type == 'User' &&
+      github.event.workflow_run.actor.id == 25374553 &&
+      github.event.workflow_run.event == 'discussion_comment' &&
+      github.event.workflow_run.head_branch == github.event.repository.default_branch &&
+      (github.run_attempt == 1 || github.triggering_actor == 'robgruen')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      discussions: write
+    env:
+      TYPECHAT_STATUS_KIND: discussion
+    steps: *status_steps

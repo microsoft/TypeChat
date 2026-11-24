@@ -3,7 +3,7 @@ layout: doc-page
 title: Basic TypeScript Usage
 ---
 
-TypeChat is currently a small library, so let's take a look at some basic usage to understand it.
+TypeChat is currently a small library, so we can get a solid understanding just by understanding the following example:
 
 ```ts
 import fs from "fs";
@@ -34,6 +34,8 @@ processRequests("😀> ", process.argv[2], async (request) => {
 });
 ```
 
+Let's break it down step-by-step.
+
 ## Providing a Model
 
 TypeChat can be used with any language model.
@@ -51,24 +53,30 @@ export interface TypeChatLanguageModel {
     retryPauseMs?: number;
     /**
      * Obtains a completion from the language model for the given prompt.
-     * @param prompt The prompt string.
+     * @param prompt The prompt string or role-tagged prompt sections.
      */
-    complete(prompt: string): Promise<Result<string>>;
+    complete(prompt: string | PromptSection[]): Promise<Result<string>>;
 }
 ```
 
 then you should be able to try TypeChat out with such a model.
 
 The key thing here is that only `complete` is required.
-`complete` is just a function that takes a `string` and eventually returns a `string` if all goes well.
+`complete` takes a string or an array of prompt sections and eventually returns text wrapped in a
+`Result` if all goes well.
 
 For convenience, TypeChat provides two functions out of the box to connect to the OpenAI API and Azure's OpenAI Services.
 You can call these directly.
 
 ```ts
-export function createOpenAILanguageModel(apiKey: string, model: string, endPoint? string): TypeChatLanguageModel;
+export function createOpenAILanguageModel(
+    apiKey: string | undefined, model: string, endPoint?: string,
+    org?: string, options?: LanguageModelOptions
+): TypeChatLanguageModel;
 
-export function createAzureOpenAILanguageModel(apiKey: string, endPoint: string): TypeChatLanguageModel;
+export function createAzureOpenAILanguageModel(
+    apiKey: string | undefined, endPoint: string, options?: LanguageModelOptions
+): TypeChatLanguageModel;
 ```
 
 For even more convenience, TypeChat also provides a function to infer whether you're using OpenAI or Azure OpenAI.
@@ -77,19 +85,121 @@ For even more convenience, TypeChat also provides a function to infer whether yo
 export function createLanguageModel(env: Record<string, string | undefined>): TypeChatLanguageModel
 ```
 
-You can populate your environment variables, and based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get a model of the appropriate type.
+With `createLanguageModel`, you can populate your environment variables and pass them in.
+Based on whether `OPENAI_API_KEY` or `AZURE_OPENAI_API_KEY` is set, you'll get a model of the appropriate type.
+
+#### Using a bearer-token provider
+
+Pass `undefined` for the API key and supply your existing synchronous or asynchronous
+token provider in the options:
+
+```ts
+const model = createAzureOpenAILanguageModel(undefined, endpoint, {
+    tokenProvider
+});
+```
+
+`TokenProvider` is `() => string | Promise<string>`. Return the raw access-token string,
+without a `Bearer ` prefix. The provider owns credential acquisition, caching, renewal,
+and cleanup; TypeChat adds no Azure Identity dependency. It invokes the provider for each
+HTTP attempt, including retries, and sends bearer authorization without an `api-key`
+header. API keys and providers are mutually exclusive. Non-string/empty tokens or tokens
+containing whitespace, control characters, or non-ASCII characters return an error before
+dispatch. Provider exceptions follow the HTTP model's existing
+retry/error policy.
+
+Providers execute on the caller's JavaScript event loop. Synchronous providers should
+return cached tokens quickly; use asynchronous SDK/network APIs for acquisition or renewal.
+Adding `async` or calling `Promise.resolve` around synchronous I/O does not make that work
+nonblocking. If a legacy provider requires blocking I/O, offload it using application-managed
+workers (for example Node.js `worker_threads`) with an appropriate thread-safety and timeout
+strategy. TypeChat invokes providers directly and does not automatically move them to workers.
+
+The same option works with `createOpenAILanguageModel`, including its Responses mode:
+
+```ts
+const model = createOpenAILanguageModel(undefined, deployment, responsesEndpoint, "", {
+    tokenProvider,
+    useResponsesApi: true
+});
+```
+
+The HTTP factories retain their proxy, timeout, response-size, and retry controls.
+The HTTP request timeout does not bound credential acquisition inside your provider.
+Existing string-key calls, environment handling, defaults, and legacy headers are unchanged;
+`AZURE_OPENAI_API_KEY=identity` does not activate a provider.
+
+#### Reusing a configured client
+
+Adapt an existing OpenAI/AzureOpenAI SDK client, or a structurally compatible asynchronous
+client, without importing an SDK into TypeChat:
+
+```ts
+const model = createOpenAILanguageModelFromClient(client, modelOrDeployment);
+const responsesModel = createOpenAILanguageModelFromClient(client, modelOrDeployment, {
+    useResponsesApi: true
+});
+```
+
+Chat Completions is the default and calls `client.chat.completions.create`. Responses mode
+is explicit and calls `client.responses.create`; a Chat-only client does not need a
+`responses` property. TypeChat requests non-streaming output at temperature zero, with
+`n=1` only for Chat Completions.
+
+The adapter exposes only `complete`, retaining the supplied client's endpoint, API version,
+authentication, retry/timeout settings, and ownership. It does not configure or close the
+client or add another network-control layer. Configure proxies, timeouts, retries, and
+response-size safeguards on that client, not on the adapter. Client exceptions and
+cancellation propagate unchanged; missing/malformed output and filtered/refused content
+return TypeChat errors.
+
+String prompts and text/image user messages are supported. Bare strings in content arrays
+become text parts; images retain URLs/data URLs and detail levels. Responses mode maps them
+to `input_text`/`input_image` parts, defaulting omitted image detail to `"auto"`. System and
+assistant messages support text only; unsupported content is reported rather than dropped.
+Neither path fetches image references separately.
+
+Pass either model to `createJsonTranslator` as usual. Schema validation, repair, and
+reported response metadata/filtering behavior are preserved. SDK metadata covers the
+resolved responses visible to TypeChat, not HTTP attempts hidden inside the client's retries.
+
+#### Using OpenAI-compatible gateways
+
+TypeChat works with any service that exposes the OpenAI Chat Completions API.
+To use a gateway such as [OrcaRouter](https://www.orcarouter.ai) or OpenRouter,
+point `createOpenAILanguageModel` at the gateway's endpoint via the `endPoint`
+argument:
+
+```ts
+const model = createOpenAILanguageModel(apiKey, model, "https://api.orcarouter.ai/v1/chat/completions");
+```
+
+With `createLanguageModel`, set the `OPENAI_ENDPOINT` environment variable to
+the gateway's Chat Completions URL alongside `OPENAI_API_KEY` and
+`OPENAI_MODEL`:
+
+```
+OPENAI_API_KEY=<your API key>
+OPENAI_MODEL=<model name>
+OPENAI_ENDPOINT=https://api.orcarouter.ai/v1/chat/completions
+```
+
+Regardless, of how you decide to construct your model, it is important to avoid committing credentials directly in source.
+One way to make this work between production and development environments is to use a `.env` file in development, and specify that `.env` in your `.gitignore`.
+You can use a library like [`dotenv`](https://www.npmjs.com/package/dotenv) to help load these up.
 
 ```ts
 import dotenv from "dotenv";
 dotenv.config(/*...*/);
+
+// ...
+
 import * as typechat from "typechat";
 const model = typechat.createLanguageModel(process.env);
 ```
 
-Regardless, of how you decide to construct your model, we recommend keeping your secret tokens/API keys in a `.env` file, and specifying `.env` in a `.gitignore`.
-You can use a library like [`dotenv`](https://www.npmjs.com/package/dotenv) to help load these up.
 
-## Loading the Schema
+## Defining and Loading the Schema
 
 TypeChat describes types to language models to help guide their responses.
 In this case, we are using a `TypeScriptJsonValidator` which uses the TypeScript compiler to validate data against a set of types.
@@ -103,6 +213,10 @@ export interface SentimentResponse {
     sentiment: "negative" | "neutral" | "positive";  // The sentiment of the text
 }
 ```
+
+The validator type-checks against a minimal library rather than the full TypeScript standard library, since responses are always plain JSON.
+Besides primitives, object types, arrays, and unions, schemas can use `ReadonlyArray`, `Partial`, `Required`, `Readonly`, `Pick`, `Omit`, `Record`, `Exclude`, `Extract`, `NonNullable`, `ReturnType`, `Awaited`, `Uppercase`, `Lowercase`, `Capitalize`, and `Uncapitalize`.
+Runtime types such as `Date`, `Map`, or `Set` aren't JSON values and aren't available; describe their JSON representation instead (for example, an ISO date `string`).
 
 It also means we will need to manually load up an input `.ts` file verbatim.
 
@@ -158,7 +272,7 @@ export interface TypeChatJsonValidator<T extends object> {
     /**
      * Validates the given JSON object according to the associated TypeScript schema. Returns a
      * `Success<T>` object containing the JSON object if validation was successful. Otherwise, returns
-     * an `Error` object with a `message` property describing the error.
+     * an `Error` object with a `message` describing the error and, when available, rejected `data`.
      * @param jsonText The JSON object to validate.
      * @returns The JSON object or an error message.
      */
@@ -193,6 +307,31 @@ const validator = createTypeScriptJsonValidator<SentimentResponse>(schema, "Sent
 
 We provided the text of the schema and the name of the type we want returned data to satisfy.
 We also have to provide the type argument `SentimentResponse` to explain what data shape we expect (though note that this is a bit like a type cast and isn't guaranteed).
+
+#### String enums
+
+JSON represents a TypeScript string enum using the member's value, not its name. The TypeScript validator
+normalizes string-enum types to their literal values before validating, including when they appear in nested
+objects, arrays, unions, and index signatures.
+
+```ts
+export enum Currency {
+    USD = "USD",
+    EUR = "EUR"
+}
+
+export interface Order {
+    currency: Currency;
+}
+```
+
+The JSON `{ "currency": "EUR" }` is valid, while `{ "currency": "GBP" }` is not. If a member's name and value
+differ, such as `Basic = "basic"`, JSON must use `"basic"`; `"Basic"` is rejected. Numeric enums keep their
+existing numeric validation behavior.
+
+Members initialized with compile-time string expressions, such as `Euro = "E" + "UR"`, are supported when
+TypeScript resolves the value to a string literal. Computed members without a compile-time literal type should be
+modeled with a string literal union instead.
 
 ### Zod Validators
 
@@ -243,9 +382,9 @@ A `TypeChatJsonTranslator` brings these together.
 import { createJsonTranslator } from "typechat";
 ```
 
-A translator takes both a model and a validator, and provides a way to translate some user input into objects within our schema.
+A translator takes both a model and a validator, and provides a way to translate some user input into objects following our schema.
 To do so, it crafts a prompt based on the schema, reaches out to the model, parses out JSON data, and attempts validation.
-Optionally, it will craft repair prompts and retry if validation failed..
+Optionally, it will craft repair prompts and retry if validation fails.
 
 ```ts
 const translator = createJsonTranslator(model, validator);
@@ -310,6 +449,33 @@ If something goes wrong, TypeChat will retry requests up to a maximum specified 
 However, if the initial request as well as all retries fail, `response.success` will be `false` and we'll be able to grab a `message` explaining what went wrong.
 
 In the ideal case, `response.success` will be `true` and we'll be able to access our well-typed `data` property!
+
+## Accessing Failed Output
+
+A failed response may also provide `data: unknown` and `responseText: string`.
+The data is the rejected value, not a validated `SentimentResponse`.
+The response text is the original model output, including when it cannot be parsed as JSON.
+
+```ts
+const response = await translator.translate(request);
+if (!response.success) {
+    const originalResponse = response.responseText;
+    if ("data" in response) {
+        const rejected: unknown = response.data;
+        // Validate or repair this value before using it as a SentimentResponse.
+    }
+}
+```
+
+Use `success` to distinguish outcomes, not the presence of `data`.
+TypeScript and Zod validators also retain rejected inputs when used directly.
+Custom validators can return `error(message, { data, responseText })`, and the translator preserves
+their payloads. To manage validation repairs yourself, set `translator.attemptRepair = false`.
+
+If automatic repair fails, TypeChat retains the latest rejected candidate and available model text,
+not a full attempt history. These can refer to different attempts if the repair response could not
+be parsed. A network failure before any output has no candidate data.
+Rejected values and response text may contain sensitive output; do not log them automatically.
 This will correspond to the type that we passed in when we created our translator object (i.e. `SentimentResponse`).
 
 That's it!

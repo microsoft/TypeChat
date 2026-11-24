@@ -6,7 +6,9 @@
             { "title": "Examples", "url": "/docs/examples/"},
             { "title": "Techniques", "url": "/docs/techniques/"},
             { "title": "FAQ", "url": "/docs/faq/"},
-            { "title": "Basic Usage for TypeScript", "url": "/docs/typescript/basic-usage/"}
+            { "title": "Basic Usage for TypeScript", "url": "/docs/typescript/basic-usage/"},
+            { "title": "Basic Usage for Python", "url": "/docs/python/basic-usage/"},
+            { "title": "Non-interactive Python Quickstart", "url": "/docs/python/non-interactive/"}
         ]
     }
 ]
