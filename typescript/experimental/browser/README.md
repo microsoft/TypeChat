@@ -164,8 +164,10 @@ investigation does not introduce a worker pool into TypeChat.
 
 On Windows and Node.js 24.22.1:
 
-- The normal library/examples built, and all **411** normal tests passed,
+- After integrating main's opt-in live-test work, the normal library/examples
+  built and all **424** ordinary tests passed with `TYPECHAT_LIVE_TESTS=0`,
   including CJS/ESM package/declaration tests and the existing enum regressions.
+  The live API suite remained disabled; no hosted model was called.
 - **58** corpus outcomes passed in each real browser and matched the default
   native backend. WASM and the matching development native backend also produced
   identical diagnostics.
@@ -201,8 +203,9 @@ peak process memory, or immediate garbage collection after closing.
 
 The browser test enforces **provisional investigation ceilings**, for review:
 512 KiB minified / 128 KiB gzipped JavaScript; 60 MiB raw / 16 MiB gzipped WASM;
-128 MiB of linear memory for the single 100-property test validator after its
-100 validations. Agree target-device startup and responsiveness budgets before
+128 MiB of linear memory for both the 100-property/100-validation main-thread
+probe and the 500-property/250-validation worker probe. Agree target-device startup
+and responsiveness budgets before
 shipping; wall-clock performance is measured rather than asserted on arbitrary
 CI hardware.
 
