@@ -47,6 +47,7 @@ cd browser
 npm ci --ignore-scripts
 npm test
 npx playwright install chromium --only-shell
+npx playwright install firefox webkit
 npm run test:browser
 ```
 
@@ -56,10 +57,11 @@ tests plus a shared validation corpus against three backends: the default native
 same-version backends must match diagnostics as well as acceptance outcomes.
 
 `npm run test:browser` bundles the actual private-package exports with **no Node
-polyfills or externalized dependencies**, then runs Chromium against a temporary
-loopback server. It verifies validation, repair, schema preflight, stalled-download
-cancellation, and compiler-version rejection before fetching. It closes the
-browser and server, including outstanding connections. No model credentials,
+polyfills or externalized dependencies**, then runs Chromium, Firefox, and WebKit against a temporary loopback server. It
+verifies validation, repair, schema preflight, stalled-download cancellation, and
+compiler-version rejection before fetching. It also exercises the worker example,
+concurrent job isolation, cancellation during synchronous validation, and cleanup.
+It closes every worker, browser, and server, including outstanding connections. No model credentials,
 remote model calls, deployment, or paid inference are needed.
 
 The ordinary TypeChat tests do not install or invoke Playwright. On supported
@@ -120,22 +122,64 @@ TypeChat's `Result` behavior and rejected data. Web Crypto requires HTTPS or a
 secure local context. Browser CSP must allow the application's WASM compilation.
 
 Loading and instance creation are asynchronous, but **validation is synchronous
-on the calling thread**. A worker-based application integration needs separate
-evaluation; this prototype does not hide synchronous work behind an async name.
+on the calling thread**. Use an application-owned worker to keep that work off the
+UI thread. A worker improves responsiveness, not the compiler's execution time.
+
+## Application-owned worker example
+
+From this directory:
+
+```sh
+npm run example:worker
+```
+
+Open the printed loopback URL. The example validates a JSON batch against a schema
+with a string enum, displays valid and invalid results, and keeps a main-thread
+timer running. Cancel interrupts a running job; Ctrl+C stops the local server.
+The development server serves the raw artifact without caching. A production
+application would need deliberate asset compression and cache/version handling.
+
+[`examples/worker/client.ts`](./examples/worker/client.ts) and
+[`examples/worker/validator.worker.ts`](./examples/worker/validator.worker.ts) are
+copyable application code, **not additions to the package's public API**:
+
+- Each call owns one worker, compiler instance, and request batch. Jobs do not
+  share a mutable reactor. Concurrent calls cannot overwrite each other's schema.
+- A caller-supplied `AbortSignal` covers the whole job. Termination rejects its
+  promise and stops even synchronous compiler work; no result is silently retried.
+  The demo combines a cancel button with a 60-second timeout.
+- Success and failure both terminate the worker. Success additionally closes the
+  validator explicitly before sending the report. Termination during cancellation
+  destroys the worker rather than relying on JavaScript `finally` to run there.
+- Schema/load errors, worker startup errors, clone failures, malformed requests,
+  and caller callback errors reject explicitly. Ordinary invalid JSON values
+  retain TypeChat's normal validation `Result`.
+
+The one-shot design deliberately favors simple ownership and cancellation over
+throughput. It reloads/reinitializes a compiler per job. A reusable worker or
+compiled-module cache would need separate lifecycle and cancellation design; this
+investigation does not introduce a worker pool into TypeChat.
 
 ## Recorded verification
 
-On Windows, Node.js 24.22.1 and Chromium 149.0.7827.55:
+On Windows and Node.js 24.22.1:
 
 - The normal library/examples built, and all **411** normal tests passed,
   including CJS/ESM package/declaration tests and the existing enum regressions.
-- **58** corpus outcomes passed in the real browser and matched the default
+- **58** corpus outcomes passed in each real browser and matched the default
   native backend. WASM and the matching development native backend also produced
   identical diagnostics.
 - HTTP/network errors, pre-aborted loads, absent/truncated/oversized/corrupt
   artifacts, concurrent validator isolation, and idempotent disposal passed.
 - Real-browser tests ran with no Node globals, no proxy dependency, no live
   model calls, and `crossOriginIsolated === false`.
+- Chromium 149.0.7827.55, Firefox 151.0, and Playwright WebKit 26.5 each passed the
+  same corpus, the runnable example UI, ten worker lifecycle/error checks,
+  cancellation after a partial network response, and all-worker termination.
+- Review of the shared refactor confirmed that the minimal library, enum wire
+  mapping, diagnostic normalization, and model protocol definitions remain
+  unchanged. Existing custom-module diagnostics, program validation, lifecycle,
+  and CJS/ESM consumer tests were rechecked.
 
 One clean-install development-host run measured:
 
@@ -162,9 +206,46 @@ The browser test enforces **provisional investigation ceilings**, for review:
 shipping; wall-clock performance is measured rather than asserted on arbitrary
 CI hardware.
 
-Only the browser/OS combination above was exercised. This is not a complete
-compatibility certification for every schema, browser, worker, CSP, or edge
-runtime. The full existing native suite is not yet a full browser matrix.
+### Larger worker workload and browser process memory
+
+One run per engine used a **500-property schema with 250 synchronous validations**
+inside a worker. Main-thread timer ticks were counted only during validation:
+
+| Browser engine on Windows | Validation time | Main-thread ticks | Maximum WASM linear memory |
+| --- | ---: | ---: | ---: |
+| Chromium 149.0.7827.55 | 1,920 ms | 191 | 34,603,008 bytes |
+| Firefox 151.0 | 19,389 ms | 1,843 | 34,603,008 bytes |
+| Playwright WebKit 26.5 | 2,895 ms | 184 | 35,127,296 bytes |
+
+Firefox's substantially slower execution is an observed limitation, even though
+the UI remains responsive. The worker's linear-memory report returns zero after
+explicit close; this does not assert immediate OS-memory reclamation.
+
+The test also samples the **entire owned browser process tree** on Windows:
+
+| Engine | Baseline working-set sum | Largest sampled sum during worker workload | After worker jobs |
+| --- | ---: | ---: | ---: |
+| Chromium | 184 MB | 941 MB | 654 MB |
+| Firefox | 481 MB | 1,098 MB | 1,024 MB |
+| WebKit | 179 MB | 858 MB | 436 MB |
+
+These are decimal MB and sums of process working sets, not unique physical memory.
+Shared pages can be counted more than once. Samples include the preceding corpus
+and lifecycle probes in the same browser session; they do not establish the
+incremental memory of a single job, a precise peak, or a leak. Browser/runtime
+overhead and delayed reclamation make the cost materially larger than WASM linear
+memory alone. Other operating systems report this metric as unavailable rather
+than substituting a misleading value.
+
+A gzip-compressed compiler download was also delivered in 256 KiB chunks with
+64 ms delays (nominally 4 MiB/s before backpressure). Loading, verifying, and
+compiling it took roughly 4.0-4.5 seconds in these runs. This is a controlled local
+transfer test, not a complete WAN simulation.
+
+Only the browser-engine/OS combinations above were exercised. Playwright WebKit on
+Windows is **not Safari certification**. macOS, mobile/low-memory devices, production
+CSPs, and real edge runtimes remain unverified. The full existing native suite is
+not yet a full browser matrix.
 
 ## Upgrade, rollback, and recommendation
 
@@ -183,9 +264,10 @@ Rollback is to stop opting into this package and its assets. The ordinary Node
 backend remains available and does not require the experimental dependencies.
 Keep the prototype out of the default workspace/build until reviewed explicitly.
 
-**Recommendation: continue the isolated investigation; do not merge this as
-supported browser functionality yet.** Mainline gates remain an explicit
-upstream-stability/maintenance decision, review of the provisional API and costs,
-broader browser/OS/worker coverage, and a full regression/compatibility assessment.
+**Recommendation: the prototype is ready for draft design review, not for
+supported browser functionality or a mainline merge.** Mainline gates remain an
+explicit upstream-stability/maintenance decision, review of the provisional API
+and substantial browser costs (especially Firefox latency), target-device/CSP
+coverage, and a full regression/compatibility assessment.
 The existing root-package Node-proxy bundling problem remains separate; this
 package does not fix that public entry point or automatically resolve #534.

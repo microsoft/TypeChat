@@ -11,9 +11,10 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p examples/worker/tsconfig.json",
     "test": "npm run build && node --test \"tests/*.test.mjs\"",
-    "test:browser": "npm run build && node --test \"tests/browser/*.test.mjs\""
+    "test:browser": "npm run build && node --test \"tests/browser/*.test.mjs\"",
+    "example:worker": "npm run build && node examples/worker/serve.mjs"
   },
   "engines": {
     "node": ">=24.22.1"
