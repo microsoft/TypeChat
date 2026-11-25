@@ -1,8 +1,8 @@
 // TODO: Revisit these `typescript/unstable/*` imports once a stable API is available.
 import { API, NodeBuilderFlags, SymbolFlags, type Checker, type Diagnostic } from 'typescript/unstable/sync';
 import { createVirtualFileSystem } from 'typescript/unstable/fs';
-import type { Node, SourceFile } from 'typescript/unstable/ast';
-import { isEnumDeclaration, isTypeReferenceNode, isVariableStatement } from 'typescript/unstable/ast/is';
+import type { EnumDeclaration, Node, SourceFile } from 'typescript/unstable/ast';
+import { isEnumDeclaration, isIdentifier, isTypeAliasDeclaration, isTypeReferenceNode, isVariableStatement } from 'typescript/unstable/ast/is';
 import { Result, success, error } from '../result.js';
 import { typeChatSchemaValidation, type TypeChatJsonValidator } from "../typechat.js";
 
@@ -46,7 +46,7 @@ const schemaValidationFileName = "/schema-validation.ts";
 function createUniqueJsonWireTypeName(
     schemaText: string,
     importedTypeName: string,
-    stringEnumValues: readonly string[]
+    stringEnumTypeTexts: readonly string[]
 ): string {
     let name = "__TypeChatJsonWire";
     while (
@@ -58,31 +58,11 @@ function createUniqueJsonWireTypeName(
         schemaText.includes(`${name}Enum`) ||
         schemaText.includes(`${name}Object`) ||
         schemaText.includes(`${name}Shape`) ||
-        stringEnumValues.some(value => value.includes(name))
+        stringEnumTypeTexts.some(typeText => typeText.includes(name))
     ) {
         name += "_";
     }
     return name;
-}
-
-/**
- * Collects the string values declared by enums in the schema. Limiting the JSON wire mapping to
- * these values leaves branded and opaque string types untouched.
- */
-function getStringEnumValues(checker: Checker, sourceFile: SourceFile): string[] {
-    const values = new Set<string>();
-    sourceFile.forEachChild(function visit(node: Node) {
-        if (isEnumDeclaration(node)) {
-            for (const member of node.members) {
-                const value = checker.getConstantValue(member);
-                if (typeof value === "string") {
-                    values.add(value);
-                }
-            }
-        }
-        node.forEachChild(visit);
-    });
-    return [...values];
 }
 
 /**
@@ -91,8 +71,8 @@ function getStringEnumValues(checker: Checker, sourceFile: SourceFile): string[]
  * unchanged because mapping their public keys would drop the nominal constraint that rejects
  * plain JSON objects.
  */
-function createJsonWireTypeDefinition(typeName: string, stringEnumValues: readonly string[]): string {
-    const enumValues = stringEnumValues.map(value => JSON.stringify(value)).join(" | ");
+function createJsonWireTypeDefinition(typeName: string, stringEnumTypeTexts: readonly string[]): string {
+    const enumValues = stringEnumTypeTexts.join(" | ");
     // Intersecting an all-optional mapped shape with `object` disables TypeScript's weak-type
     // check. Keep the constraint when an explicit intersection accepts arrays, or when the mapped
     // shape would newly accept a primitive that the original type rejects. Ordinary weak shapes
@@ -180,14 +160,16 @@ export function createTypeScriptJsonValidator<T extends object = object>(
     const initialSnapshot = api.updateSnapshot({ openProjects: [configFileName] });
     const schemaProject = initialSnapshot.getProject(configFileName);
     const schemaSourceFile = schemaProject?.program.getSourceFile(schemaFileName);
-    const stringEnumValues = schemaProject && schemaSourceFile
-        ? getStringEnumValues(schemaProject.checker, schemaSourceFile)
-        : [];
-    const jsonWireTypeName = createUniqueJsonWireTypeName(schema, typeName, stringEnumValues);
-    const jsonWireTypeDefinition = stringEnumValues.length
-        ? createJsonWireTypeDefinition(jsonWireTypeName, stringEnumValues)
+    const stringEnumTypeTextsResult = schemaProject && schemaSourceFile
+        ? getStringEnumTypeTexts(schemaProject.checker, schemaSourceFile)
+        : error("The TypeScript schema file couldn't be loaded.");
+    const stringEnumTypeTexts = stringEnumTypeTextsResult.success ? stringEnumTypeTextsResult.data : [];
+    const stringEnumTypeError = stringEnumTypeTextsResult.success ? undefined : stringEnumTypeTextsResult.message;
+    const jsonWireTypeName = createUniqueJsonWireTypeName(schema, typeName, stringEnumTypeTexts);
+    const jsonWireTypeDefinition = stringEnumTypeTexts.length
+        ? createJsonWireTypeDefinition(jsonWireTypeName, stringEnumTypeTexts)
         : "";
-    const jsonWireEnumValues = stringEnumValues.map(value => JSON.stringify(value)).join(" | ");
+    const jsonWireEnumValues = stringEnumTypeTexts.join(" | ");
     let schemaValidationResult: Result<void> | undefined;
     const validator: TypeScriptJsonValidatorWithSchemaValidation<T> = {
         getSchemaText: () => schema,
@@ -198,6 +180,94 @@ export function createTypeScriptJsonValidator<T extends object = object>(
         close: () => api.close()
     };
     return validator;
+
+    /**
+     * Formats enum values as literal type text inside the compiler. Reading native API literal
+     * values can corrupt lone surrogates or remove BOMs. Only enum declarations contribute values,
+     * so branded and opaque strings retain their constraints.
+     */
+    function getStringEnumTypeTexts(checker: Checker, sourceFile: SourceFile): Result<string[]> {
+        const declarations: EnumDeclaration[] = [];
+        const identifiers = new Set<string>();
+        sourceFile.forEachChild(function visit(node: Node) {
+            if (isIdentifier(node)) {
+                identifiers.add(node.text);
+            }
+            if (isEnumDeclaration(node) && checker.getTypeAtLocation(node.members)
+                .some(type => type?.isStringLiteralType())) {
+                declarations.push(node);
+            }
+            node.forEachChild(visit);
+        });
+        if (!declarations.length) {
+            return success([]);
+        }
+
+        const aliases = new Set<string>();
+        let querySchema = schema;
+        for (const declaration of declarations.sort((a, b) => b.getEnd() - a.getEnd())) {
+            let name = `__TypeChatEnumValues${aliases.size}`;
+            while (identifiers.has(name)) {
+                name += "_";
+            }
+            identifiers.add(name);
+            aliases.add(name);
+            // Keep each query in the enum's lexical scope, including private namespace enums.
+            const insertion = `\ntype ${name} = \`\${${declaration.name.text} & string}\`;\n`;
+            const end = declaration.getEnd();
+            querySchema = querySchema.slice(0, end) + insertion + querySchema.slice(end);
+        }
+
+        writeFile(schemaFileName, querySchema);
+        try {
+            const snapshot = api.updateSnapshot({ fileChanges: { changed: [schemaFileName] } });
+            const project = snapshot.getProject(configFileName);
+            if (!project) {
+                return error(`The TypeScript string-enum query project '${configFileName}' couldn't be loaded.`);
+            }
+            const queryFile = project.program.getSourceFile(schemaFileName);
+            if (!queryFile) {
+                return error("The TypeScript string-enum query file couldn't be loaded.");
+            }
+            const typeTexts = new Set<string>();
+            const foundAliases = new Set<string>();
+            let queryError: string | undefined;
+            queryFile.forEachChild(function visit(node: Node) {
+                if (queryError !== undefined) {
+                    return;
+                }
+                if (isTypeAliasDeclaration(node) && aliases.has(node.name.text)) {
+                    foundAliases.add(node.name.text);
+                    const type = project.checker.getTypeAtLocation(node);
+                    if (!type) {
+                        queryError = `The TypeScript string-enum query '${node.name.text}' couldn't be resolved.`;
+                        return;
+                    }
+                    const constituents = type.isUnionType() ? type.getTypes() : [type];
+                    for (const constituent of constituents) {
+                        if (!constituent.isStringLiteralType()) {
+                            queryError = `The TypeScript string-enum query '${node.name.text}' didn't resolve to string literal types.`;
+                            return;
+                        }
+                        typeTexts.add(project.checker.typeToString(
+                            constituent, undefined, NodeBuilderFlags.NoTruncation
+                        ));
+                    }
+                }
+                node.forEachChild(visit);
+            });
+            if (queryError !== undefined) {
+                return error(queryError);
+            }
+            if (foundAliases.size !== aliases.size) {
+                return error("The TypeScript string-enum query aliases couldn't be loaded.");
+            }
+            return success([...typeTexts]);
+        } finally {
+            writeFile(schemaFileName, schema);
+            api.updateSnapshot({ fileChanges: { changed: [schemaFileName] } });
+        }
+    }
 
     function validateSchema(): Result<void> {
         if (schemaValidationResult) {
@@ -244,7 +314,9 @@ export function createTypeScriptJsonValidator<T extends object = object>(
                     )
                     .join("\n")
             )
-            : success(undefined);
+            : stringEnumTypeError !== undefined
+                ? error(stringEnumTypeError)
+                : success(undefined);
         return schemaValidationResult;
     }
 
@@ -285,6 +357,9 @@ export function createTypeScriptJsonValidator<T extends object = object>(
                 return normalizeJsonWireTypeNames(flattenDiagnosticMessageText(d, "\n"));
             }).join("\n");
             return error(diagnostics, { data: jsonObject });
+        }
+        if (stringEnumTypeError !== undefined) {
+            return error(stringEnumTypeError, { data: jsonObject });
         }
         return success(jsonObject as T);
     }
