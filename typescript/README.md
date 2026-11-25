@@ -11,7 +11,7 @@ Simply define types that represent the intents supported in your natural languag
 After defining your types, TypeChat takes care of the rest by:
 
 1. Constructing a prompt to the LLM using types.
-2. Validating the LLM response conforms to the schema. If the validation fails, repair the non-conforming output through further language model interaction.
+2. Validating the LLM response conforms to the schema. If the response is not usable JSON or validation fails, repair the output through one further language model interaction.
 3. Summarizing succinctly (without use of a LLM) the instance and confirm that it aligns with user intent.
 
 Types are all you need!

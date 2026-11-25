@@ -22,8 +22,9 @@ export interface TypeChatJsonTranslator<T extends object> {
      */
     validator: TypeChatJsonValidator<T>;
     /**
-     * A boolean indicating whether to attempt repairing JSON objects that fail to validate. The default is `true`,
-     * but an application can set the property to `false` to disable repair attempts.
+     * A boolean indicating whether to attempt one repair when the response has no JSON object, the JSON cannot
+     * be parsed, or the object fails to validate. The default is `true`, but an application can set the property
+     * to `false` to disable repair attempts.
      */
     attemptRepair:  boolean;
     /**
@@ -44,11 +45,10 @@ export interface TypeChatJsonTranslator<T extends object> {
      */
     createRequestPrompt(request: string): PromptContent;
     /**
-     * Creates a repair prompt to append to an original prompt/response in order to repair a JSON object that
-     * failed to validate. This function is called by `completeAndValidate` when `attemptRepair` is true and the
-     * JSON object produced by the original prompt failed to validate. An application can assign a new function
-     * to provide a different repair prompt.
-     * @param validationError The error message returned by the validator.
+     * Creates a repair prompt to append to an original prompt/response. This function is called when
+     * `attemptRepair` is true and the response has no usable JSON object or the object failed to validate.
+     * An application can assign a new function to provide a different repair prompt.
+     * @param validationError The diagnostic for the failed response.
      * @returns A repair prompt constructed from the error message.
      */
     createRepairPrompt(validationError: string): string;
@@ -62,10 +62,10 @@ export interface TypeChatJsonTranslator<T extends object> {
      */
     validateInstance(instance: T): Result<T>;
     /**
-     * Translates a natural language request into an object of type `T`. If the JSON object returned by
-     * the language model fails to validate and the `attemptRepair` property is `true`, a second
-     * attempt to translate the request will be made. The prompt for the second attempt will include the
-     * diagnostics produced for the first attempt. This often helps produce a valid instance.
+     * Translates a natural language request into an object of type `T`. If the response has no JSON object,
+     * the JSON cannot be parsed, or the object fails to validate, and `attemptRepair` is `true`, one further
+     * attempt is made. The repair prompt includes the diagnostic from the first attempt. This often helps
+     * produce a valid instance.
      * A failure retains the latest rejected candidate and available model response text. These may
      * come from different attempts if a repair response couldn't be parsed.
      * Optional result metadata retains response records and reported usage across both attempts.
@@ -184,38 +184,51 @@ export function createJsonTranslator<T extends object>(
             failureContext = { ...failureContext, responseText };
             const startIndex = responseText.indexOf("{");
             const endIndex = responseText.lastIndexOf("}");
-            if (!(startIndex >= 0 && endIndex > startIndex)) {
-                return finish(error(`Response is not JSON:\n${responseText}`, failureContext));
+            const jsonText = startIndex >= 0 && endIndex > startIndex ? responseText.slice(startIndex, endIndex + 1) : undefined;
+            let parsed = false;
+            let jsonObject: object = {};
+            let failure: (TypeChatError & { responseText: string }) | undefined;
+            if (!jsonText) {
+                failure = { ...error(`Response is not JSON:\n${responseText}`, failureContext), responseText };
             }
-            const jsonText = responseText.slice(startIndex, endIndex + 1);
-            let jsonObject;
-            try {
-                jsonObject = JSON.parse(jsonText) as object;
+            else {
+                try {
+                    jsonObject = JSON.parse(jsonText) as object;
+                    parsed = true;
+                }
+                catch (e) {
+                    failure = { ...error(e instanceof SyntaxError ? e.message : "JSON parse error", failureContext), responseText };
+                }
             }
-            catch (e) {
-                return finish(error(e instanceof SyntaxError ? e.message : "JSON parse error", failureContext));
+            if (parsed) {
+                if (typeChat.stripNulls) {
+                    stripNulls(jsonObject);
+                }
+                const schemaValidation = validator.validate(jsonObject);
+                const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
+                if (validation.success) {
+                    return finish(validation);
+                }
+                failure = {
+                    ...validation,
+                    success: false,
+                    message: validation.message,
+                    data: "data" in validation ? validation.data : schemaValidation.success ? schemaValidation.data : jsonObject,
+                    responseText: validation.responseText ?? responseText
+                };
+                if (!attemptRepair) {
+                    return finish({ ...failure, message: `JSON validation failed: ${failure.message}\n${jsonText}` });
+                }
             }
-            if (typeChat.stripNulls) {
-                stripNulls(jsonObject);
+            else if (!attemptRepair) {
+                return finish(failure!);
             }
-            const schemaValidation = validator.validate(jsonObject);
-            const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
-            if (validation.success) {
-                return finish(validation);
-            }
-            const failure: TypeChatError & { responseText: string } = {
-                ...validation,
-                success: false,
-                message: validation.message,
-                data: "data" in validation ? validation.data : schemaValidation.success ? schemaValidation.data : jsonObject,
-                responseText: validation.responseText ?? responseText
+            failureContext = {
+                ...("data" in failure! ? { data: failure!.data } : {}),
+                responseText: failure!.responseText
             };
-            failureContext = { data: failure.data, responseText: failure.responseText };
-            if (!attemptRepair) {
-                return finish({ ...failure, message: `JSON validation failed: ${failure.message}\n${jsonText}` });
-            }
             prompt.push({ role: "assistant", content: responseText });
-            prompt.push({ role: "user", content: typeChat.createRepairPrompt(failure.message) });
+            prompt.push({ role: "user", content: typeChat.createRepairPrompt(failure!.message) });
             attemptRepair = false;
         }
     }

@@ -384,7 +384,7 @@ import { createJsonTranslator } from "typechat";
 
 A translator takes both a model and a validator, and provides a way to translate some user input into objects following our schema.
 To do so, it crafts a prompt based on the schema, reaches out to the model, parses out JSON data, and attempts validation.
-Optionally, it will craft repair prompts and retry if validation fails.
+Optionally, it will craft one repair prompt and retry if the response has no JSON object, the JSON cannot be parsed, or validation fails.
 
 ```ts
 const translator = createJsonTranslator(model, validator);
@@ -447,9 +447,9 @@ TypeChat neither ignores the override nor calls it to build a system message. To
 A custom model must forward the roles and structured content it receives or report that it cannot. Do not concatenate history into a single prompt.
 There is no automatic fallback to legacy. Even in legacy layout a preamble or a repair can require multiple roles.
 
-In either layout a parsed object that fails validation can trigger **one** repair: TypeChat appends the original model text as **assistant**
-and `createRepairPrompt(validationError)` as **user**. Set `attemptRepair = false` to turn that off.
-Missing or malformed JSON still fails without a repair. The model's transport retry settings are separate.
+In either layout, missing JSON, JSON that cannot be parsed, or a parsed object that fails validation can trigger **one** repair: TypeChat appends the original model text as **assistant**
+and `createRepairPrompt(diagnostic)` as **user**. Set `attemptRepair = false` to turn that off.
+The model's transport retry settings are separate.
 
 ## Creating the Prompt
 
