@@ -9,6 +9,32 @@ import { createModuleTextFromProgram, createTypeScriptJsonValidator } from "../d
 import { createZodJsonValidator } from "../dist/zod/index.js";
 
 type Example = { value: number };
+
+describe("stripNulls nested arrays", () => {
+    for (const { groups, expected } of [
+        { groups: [null, [null, 1]], expected: [[1]] },
+        { groups: [[null, 1], null, [null, null]], expected: [[1], []] }
+    ]) {
+        it(`normalizes nested arrays after filtering ${JSON.stringify(groups)}`, async () => {
+            const validator = createTypeScriptJsonValidator<{ groups: number[][] }>(
+                "export interface Data { groups: number[][]; }", "Data");
+            try {
+                const model: TypeChatLanguageModel = {
+                    complete: async () => success(JSON.stringify({ groups }))
+                };
+                const translator = createJsonTranslator(model, validator);
+                translator.stripNulls = true;
+                translator.attemptRepair = false;
+                const result = await translator.translate("Return groups");
+                assert.ok(result.success);
+                assert.deepEqual(result.data.groups, expected);
+            }
+            finally {
+                validator.close();
+            }
+        });
+    }
+});
 type IsUnknown<T> = unknown extends T ? keyof T extends never ? true : false : false;
 
 class GetterFailure {
