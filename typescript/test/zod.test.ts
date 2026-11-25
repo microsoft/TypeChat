@@ -169,6 +169,56 @@ describe("getZodSchemaAsTypeScript", () => {
             assert.match(out, /type Set = globalThis\.Set<string>;/);
         });
 
+        it("escapes non-identifier property names in object element types", () => {
+            const out = schemaOf("T", z.set(z.object({
+                "part-number": z.string(),
+                "is-active": z.boolean().optional(),
+                valid_ident: z.number(),
+            })));
+            assert.match(out, /"part-number": string;/);
+            assert.match(out, /"is-active"\?: boolean;/);
+            assert.match(out, /valid_ident: number;/);
+            assertSchemasCompile([out]);
+        });
+
+        it("throws when generating schema for an unnamed recursive object in a set", () => {
+            interface RecursiveNode {
+                name: string;
+                children?: Set<RecursiveNode>;
+            }
+            const RecursiveNode: z.ZodType<RecursiveNode> = z.object({
+                name: z.string(),
+                get children() {
+                    return z.set(RecursiveNode).optional();
+                },
+            });
+            assert.throws(
+                () => getZodSchemaAsTypeScript({ Nodes: z.set(RecursiveNode) }),
+                /Recursive type reference detected in schema\. Register the recursive type by name in the schema object to allow named type reference emission\./
+            );
+        });
+
+        it("emits named recursive reference when the recursive object is registered by name", () => {
+            interface RecursiveNode {
+                name: string;
+                children?: Set<RecursiveNode>;
+            }
+            const RecursiveNode: z.ZodType<RecursiveNode> = z.object({
+                name: z.string(),
+                get children() {
+                    return z.set(RecursiveNode).optional();
+                },
+            });
+            const out = schemasOf({
+                RecursiveNode,
+                Nodes: z.set(RecursiveNode),
+            });
+            assert.match(out, /interface RecursiveNode \{/);
+            assert.match(out, /children\?: globalThis\.Set<RecursiveNode>;/);
+            assert.match(out, /type Nodes = globalThis\.Set<RecursiveNode>;/);
+            assertSchemasCompile([out]);
+        });
+
     });
 
     describe("z.map()", () => {
@@ -184,6 +234,56 @@ describe("getZodSchemaAsTypeScript", () => {
         it("qualifies Map to avoid collision when the schema itself is named Map", () => {
             const out = schemaOf("Map", z.map(z.string(), z.number()));
             assert.match(out, /type Map = globalThis\.Map<string, number>;/);
+        });
+
+        it("escapes non-identifier property names in map value object types", () => {
+            const out = schemaOf("T", z.map(z.string(), z.object({
+                "part-number": z.string(),
+                "is-active": z.boolean().optional(),
+                valid_ident: z.number(),
+            })));
+            assert.match(out, /"part-number": string;/);
+            assert.match(out, /"is-active"\?: boolean;/);
+            assert.match(out, /valid_ident: number;/);
+            assertSchemasCompile([out]);
+        });
+
+        it("throws when generating schema for an unnamed recursive object in a map", () => {
+            interface RecursiveMapNode {
+                name: string;
+                children?: Map<string, RecursiveMapNode>;
+            }
+            const RecursiveMapNode: z.ZodType<RecursiveMapNode> = z.object({
+                name: z.string(),
+                get children() {
+                    return z.map(z.string(), RecursiveMapNode).optional();
+                },
+            });
+            assert.throws(
+                () => getZodSchemaAsTypeScript({ Nodes: z.map(z.string(), RecursiveMapNode) }),
+                /Recursive type reference detected in schema\. Register the recursive type by name in the schema object to allow named type reference emission\./
+            );
+        });
+
+        it("emits named recursive reference when the recursive object in a map is registered by name", () => {
+            interface RecursiveMapNode {
+                name: string;
+                children?: Map<string, RecursiveMapNode>;
+            }
+            const RecursiveMapNode: z.ZodType<RecursiveMapNode> = z.object({
+                name: z.string(),
+                get children() {
+                    return z.map(z.string(), RecursiveMapNode).optional();
+                },
+            });
+            const out = schemasOf({
+                RecursiveMapNode,
+                Nodes: z.map(z.string(), RecursiveMapNode),
+            });
+            assert.match(out, /interface RecursiveMapNode \{/);
+            assert.match(out, /children\?: globalThis\.Map<string, RecursiveMapNode>;/);
+            assert.match(out, /type Nodes = globalThis\.Map<string, RecursiveMapNode>;/);
+            assertSchemasCompile([out]);
         });
 
     });
@@ -218,6 +318,18 @@ describe("getZodSchemaAsTypeScript", () => {
                 x: z.number().describe("x coordinate"),
             }));
             assert.match(out, /x: number; \/\/ x coordinate/);
+        });
+
+        it("escapes non-identifier property names in interfaces", () => {
+            const out = schemaOf("InventoryItem", z.object({
+                "part-number": z.string(),
+                "special-case?": z.boolean().optional(),
+                validName: z.number(),
+            }));
+            assert.match(out, /"part-number": string;/);
+            assert.match(out, /"special-case\?"\?: boolean;/);
+            assert.match(out, /validName: number;/);
+            assertSchemasCompile([out]);
         });
 
         it("does NOT add comment to field comment if the optional wrapper has a description", () => {
