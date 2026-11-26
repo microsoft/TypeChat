@@ -55,7 +55,14 @@ def _handle_error(validation_error: pydantic.ValidationError, value: object) -> 
         else:
             error_string += "Root validation "
         input = error["input"]
-        error_string += f"failed for value `{json.dumps(input)}` because:\n  {error['msg']}"
+        try:
+            input_text = json.dumps(input)
+        except (TypeError, ValueError):
+            # Pydantic diagnostics can carry intermediate values that are not
+            # JSON-serializable (for example bytes from a BeforeValidator).
+            # Validation must return a Failure, not raise while formatting it.
+            input_text = repr(input)
+        error_string += f"failed for value `{input_text}` because:\n  {error['msg']}"
         error_strings.append(error_string)
 
     if len(error_strings) > 1:
