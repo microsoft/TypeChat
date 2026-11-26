@@ -10,7 +10,7 @@ import sys
 import tokenize
 import typing
 import typing_extensions
-from dataclasses import MISSING, Field, dataclass
+from dataclasses import MISSING, Field, InitVar, dataclass
 from types import NoneType, UnionType
 from typing_extensions import (
     Annotated,
@@ -466,6 +466,12 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                     type_hint = annotated_members[attr_name]
                     if type_hint is ClassVar or get_origin(type_hint) is ClassVar:
                         continue
+                    # An InitVar is not stored on the instance, but it is a constructor
+                    # argument, so the JSON object has to provide it like any other field.
+                    if type_hint is InitVar:
+                        type_hint = cast(Any, Any)
+                    elif isinstance(type_hint, InitVar):
+                        type_hint = cast(Any, type_hint).type
                     optional = not(field.default is MISSING and field.default_factory is MISSING)
                     prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional, fallback_comment=inline_comments.get(attr_name, ""))
                     properties.append(prop)
