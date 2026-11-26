@@ -257,6 +257,9 @@ The demo and its browser tests use the same
   ETags and `Vary: Accept-Encoding` prevent mixing encoded responses, and matching
   conditional requests return an empty `304`. `HEAD`, invalid encoding headers,
   unsupported methods, and missing asset versions have explicit responses.
+  Header fields are tokenized before bounded syntax checks; regression cases
+  cover large whitespace/malformed inputs rather than relying on a backtracking
+  expression for the whole header.
 - The HTML uses external scripts/styles. CSP permits same-origin scripts,
   workers, connections and styles, plus **`'wasm-unsafe-eval'` only** for WASM
   compilation. It does not enable JavaScript `'unsafe-eval'` or `'unsafe-inline'`.

@@ -122,7 +122,12 @@ test("encoding exclusions, preferences, malformed headers, and unsupported metho
         ["gzip;q=0, *;q=1", 200, undefined],
         ["gzip;q=0, identity;q=0", 406, undefined],
         ["*;q=0", 406, undefined],
-        ["gzip;q=2", 400, undefined]
+        ["gzip;q=2", 400, undefined],
+        ["gzip;q=1;q=0", 400, undefined],
+        ["gzip;quality=1", 400, undefined],
+        ["!" + " ".repeat(8000) + "?", 400, undefined],
+        ["gzip" + " ".repeat(8000) + ";q=0", 200, undefined],
+        ["gzip;q=" + "0".repeat(8000), 400, undefined]
     ]) {
         const result = await get(wasmAssetPath, { method: "HEAD", headers: { "accept-encoding": encoding } });
         assert.equal(result.status, status, encoding);

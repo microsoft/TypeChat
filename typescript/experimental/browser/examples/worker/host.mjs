@@ -22,12 +22,24 @@ function chooseEncoding(header) {
     }
     const qualities = new Map();
     for (const entry of header.split(",")) {
-        const match = /^\s*([a-z0-9!#$%&'*+.^_`|~-]+)\s*(?:;\s*q\s*=\s*(0(?:\.\d{0,3})?|1(?:\.0{0,3})?))?\s*$/i.exec(entry);
-        if (!match) {
+        // Separate whitespace from syntax checks to avoid backtracking on untrusted headers.
+        const parts = entry.split(";");
+        const name = parts[0].trim().toLowerCase();
+        if (parts.length > 2 || !/^[a-z0-9!#$%&'*+.^_`|~-]+$/.test(name)) {
             return { status: 400, message: "Invalid Accept-Encoding header." };
         }
-        const name = match[1].toLowerCase();
-        qualities.set(name, Math.max(qualities.get(name) ?? 0, Number(match[2] ?? 1)));
+        let quality = 1;
+        if (parts.length === 2) {
+            const parameter = parts[1];
+            const equals = parameter.indexOf("=");
+            const key = parameter.slice(0, equals).trim().toLowerCase();
+            const value = parameter.slice(equals + 1).trim();
+            if (equals < 0 || key !== "q" || !/^(?:0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/.test(value)) {
+                return { status: 400, message: "Invalid Accept-Encoding header." };
+            }
+            quality = Number(value);
+        }
+        qualities.set(name, Math.max(qualities.get(name) ?? 0, quality));
     }
     const gzip = qualities.get("gzip") ?? qualities.get("*") ?? 0;
     // Identity remains acceptable unless explicitly excluded, including by "*;q=0".
