@@ -40,7 +40,7 @@ const libFileName = "/lib.d.ts";
 function createUniqueJsonWireTypeName(
     schemaText: string,
     importedTypeName: string,
-    stringEnumValues: readonly string[]
+    stringEnumTypeTexts: readonly string[]
 ): string {
     let name = "__TypeChatJsonWire";
     while (
@@ -52,7 +52,7 @@ function createUniqueJsonWireTypeName(
         schemaText.includes(`${name}Enum`) ||
         schemaText.includes(`${name}Object`) ||
         schemaText.includes(`${name}Shape`) ||
-        stringEnumValues.some(value => value.includes(name))
+        stringEnumTypeTexts.some(typeText => typeText.includes(name))
     ) {
         name += "_";
     }
@@ -65,8 +65,8 @@ function createUniqueJsonWireTypeName(
  * unchanged because mapping their public keys would drop the nominal constraint that rejects
  * plain JSON objects.
  */
-function createJsonWireTypeDefinition(typeName: string, stringEnumValues: readonly string[]): string {
-    const enumValues = stringEnumValues.map(value => JSON.stringify(value)).join(" | ");
+function createJsonWireTypeDefinition(typeName: string, stringEnumTypeTexts: readonly string[]): string {
+    const enumValues = stringEnumTypeTexts.join(" | ");
     // Intersecting an all-optional mapped shape with `object` disables TypeScript's weak-type
     // check. Keep the constraint when an explicit intersection accepts arrays, or when the mapped
     // shape would newly accept a primitive that the original type rejects. Ordinary weak shapes
@@ -139,18 +139,20 @@ export function createTypeScriptJsonValidatorWithCompiler<T extends object = obj
         [jsonFileName]: "",
         [schemaValidationFileName]: ""
     });
-    let stringEnumValues: readonly string[];
+    let stringEnumTypeTextsResult: Result<readonly string[]>;
     try {
-        stringEnumValues = compiler.getStringEnumValues();
+        stringEnumTypeTextsResult = compiler.getStringEnumTypeTexts(schema);
     } catch (cause) {
         compiler.close();
         throw cause;
     }
-    const jsonWireTypeName = createUniqueJsonWireTypeName(schema, typeName, stringEnumValues);
-    const jsonWireTypeDefinition = stringEnumValues.length
-        ? createJsonWireTypeDefinition(jsonWireTypeName, stringEnumValues)
+    const stringEnumTypeTexts = stringEnumTypeTextsResult.success ? stringEnumTypeTextsResult.data : [];
+    const stringEnumTypeError = stringEnumTypeTextsResult.success ? undefined : stringEnumTypeTextsResult.message;
+    const jsonWireTypeName = createUniqueJsonWireTypeName(schema, typeName, stringEnumTypeTexts);
+    const jsonWireTypeDefinition = stringEnumTypeTexts.length
+        ? createJsonWireTypeDefinition(jsonWireTypeName, stringEnumTypeTexts)
         : "";
-    const jsonWireEnumValues = stringEnumValues.map(value => JSON.stringify(value)).join(" | ");
+    const jsonWireEnumValues = stringEnumTypeTexts.join(" | ");
     let schemaValidationResult: Result<void> | undefined;
     const validator: TypeScriptJsonValidatorWithSchemaValidation<T> = {
         getSchemaText: () => schema,
@@ -182,6 +184,9 @@ export function createTypeScriptJsonValidatorWithCompiler<T extends object = obj
         schemaValidationResult = instance.validateSchema(
             `export type __TypeChatSchemaTarget = import('./schema').${schemaValidationTypeName};\n`
         );
+        if (schemaValidationResult.success && stringEnumTypeError !== undefined) {
+            schemaValidationResult = error(stringEnumTypeError);
+        }
         return schemaValidationResult;
     }
 
@@ -199,6 +204,9 @@ export function createTypeScriptJsonValidatorWithCompiler<T extends object = obj
         const messages = instance.validateJson(moduleResult.data, jsonWireTypeName);
         if (messages.length) {
             return error(messages.map(normalizeJsonWireTypeNames).join("\n"), { data: jsonObject });
+        }
+        if (stringEnumTypeError !== undefined) {
+            return error(stringEnumTypeError, { data: jsonObject });
         }
         return success(jsonObject as T);
     }

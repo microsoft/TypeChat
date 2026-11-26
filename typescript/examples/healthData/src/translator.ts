@@ -1,13 +1,8 @@
-import {Result, TypeChatLanguageModel, createJsonTranslator, TypeChatJsonTranslator} from "typechat";
+import { PromptSection, Result, TypeChatLanguageModel, createJsonTranslator, TypeChatJsonTranslator } from "typechat";
 import { createTypeScriptJsonValidator } from "typechat/ts";
 
-type ChatMessage = {
-    source: "system" | "user" | "assistant";
-    body: object;
-};
-
 export interface TranslatorWithHistory<T extends object> {
-    _chatHistory: ChatMessage[];
+    _chatHistory: PromptSection[];
     _maxPromptLength: number;
     _additionalAgentInstructions: string;
     _translator: TypeChatJsonTranslator<T>;
@@ -15,13 +10,19 @@ export interface TranslatorWithHistory<T extends object> {
 }
 
 export function createHealthDataTranslator<T extends object>(model: TypeChatLanguageModel, schema: string, typename: string, additionalAgentInstructions: string): TranslatorWithHistory<T> {
-    const _chatHistory: ChatMessage[] = [];
+    const _chatHistory: PromptSection[] = [];
     const _maxPromptLength = 2048;
     const _additionalAgentInstructions = additionalAgentInstructions;
     
     const validator = createTypeScriptJsonValidator<T>(schema, typename);
     const _translator = createJsonTranslator(model, validator);
-    _translator.createRequestPrompt = createRequestPrompt;
+    const schemaPrompt = _translator.createSystemPrompt;
+    _translator.createSystemPrompt = () => {
+        const now = new Date();
+        return `${schemaPrompt()}\n` +
+            `Use precise dates and times relative to the current date: ${now.toLocaleDateString()}, time: ${now.toTimeString().split(" ")[0]}.\n` +
+            `Turn ranges like next week and next month into precise dates.\n${_additionalAgentInstructions}`;
+    };
     
     const customtranslator: TranslatorWithHistory<T> = {
         _chatHistory,
@@ -34,45 +35,10 @@ export function createHealthDataTranslator<T extends object>(model: TypeChatLang
     return customtranslator;
 
     async function translate(request: string): Promise<Result<T>> {
-        const response = await _translator.translate(request);
+        const response = await _translator.translate(request, _chatHistory);
         if (response.success) {
-            _chatHistory.push({ source: "assistant", body: response.data });
+            _chatHistory.push({ role: "assistant", content: JSON.stringify(response.data, undefined, 2) });
         }
         return response;
-
-    }
-
-    function createRequestPrompt(intent: string): string {
-        // TODO: drop history entries if we exceed the max_prompt_length
-        const historyStr = JSON.stringify(_chatHistory, undefined, 2);
-        
-        const now = new Date();
-
-        const prompt = `
-user: You are a service that translates user requests into JSON objects of type "${typename}" according to the following TypeScript definitions:
-'''
-${schema}
-'''
-
-user:
-Use precise date and times RELATIVE TO CURRENT DATE: ${now.toLocaleDateString()} CURRENT TIME: ${now.toTimeString().split(' ')[0]}
-Also turn ranges like next week and next month into precise dates
-
-user:
-${_additionalAgentInstructions}
-
-system:
-IMPORTANT CONTEXT for the user request:
-${historyStr}
-
-user:
-The following is a user request:
-'''
-${intent}
-'''
-The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
-"""
-`;
-        return prompt;
     }
 }

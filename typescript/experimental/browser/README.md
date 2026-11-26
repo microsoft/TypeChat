@@ -4,29 +4,46 @@ Private investigation for [#536](https://github.com/microsoft/TypeChat/issues/53
 under [#534](https://github.com/microsoft/TypeChat/issues/534). This is an isolated
 prototype, **not a published package, supported browser release, or merge approval**.
 
-The normal TypeChat package keeps its existing entry points, dependency manifest,
-and native TypeScript 7.0.2 backend. This package is deliberately outside its npm
+The normal TypeChat package follows main's 0.3 behavior while keeping its native
+TypeScript 7.0.2 backend. The experiment adds no normal-package dependencies or
+entry points. This package is deliberately outside its npm
 workspaces and normal build/test commands. Installing TypeChat does not install
 this experimental compiler or its WASM artifact.
 
-## Current shipping blockers
+## Current integration status
 
-The expanded stability investigation found an upstream Unicode conformance
-failure: both the stable native backend and the pinned WASM backend reject a
-valid string-enum value containing a lone surrogate immediately followed by
-U+FEFF. The altered value without U+FEFF is also rejected. See
-[microsoft/TypeScript#65458](https://github.com/microsoft/TypeScript/issues/65458).
-This is a false rejection, not permission to widen the schema or accept arbitrary
-strings.
+[#545](https://github.com/microsoft/TypeChat/pull/545) fixed
+[#541](https://github.com/microsoft/TypeChat/issues/541) on main. Its
+compiler-rendered literal-type queries are now shared by the normal and browser
+adapters. The formerly failing Unicode assertions are unchanged and **pass in
+both backends**. Queries stay within each enum's lexical scope, include only its
+members rather than merged namespace properties, avoid identifier collisions,
+and restore the original schema before preflight and instance validation.
 
-The same failure was reproduced on an **untouched main snapshot** at
+The branch also includes the approved TypeScript 0.3 schema-first behavior from
+[#540](https://github.com/microsoft/TypeChat/pull/540): application-owned schema
+instructions are system content, the current request appears once as user
+content, and history/repair retain their roles. Explicit
+`{ promptLayout: "legacy" }` remains available. These paths are tested in the
+browser corpus, not merely inferred from the shared implementation.
+
+No compiler dependency upgrade, decoder patch, or relaxed assertion was needed.
+The upstream raw-value issue
+[microsoft/TypeScript#65458](https://github.com/microsoft/TypeScript/issues/65458)
+is not claimed fixed by this adapter; use Unicode escapes for lone surrogates in
+schema source. The WASM API remains experimental, and target-device deployment,
+memory, and maintenance decisions still gate any supported release.
+
+### Historical Unicode reproduction
+
+The original failure was reproduced on an **untouched main snapshot** at
 [`0ef51b0`](https://github.com/microsoft/TypeChat/commit/0ef51b05e6f9c0373870c2754070e7f12b470bf7),
 using Node.js 24.22.1 and the normal TypeScript 7.0.2 backend. All 21 library
 source/runtime-manifest files were checked against that commit, allowing only
 Git's Windows line-ending conversion, then the original package was built.
 The loader/refactor in this branch is therefore not the origin of the failure.
-The leading-U+FEFF control passes; the lone-surrogate-plus-U+FEFF declared value
-fails despite successful schema preflight.
+On that pre-fix commit, the leading-U+FEFF control passes; the
+lone-surrogate-plus-U+FEFF declared value fails despite successful schema preflight.
 
 [`tests/repro-unicode-enum.mjs`](./tests/repro-unicode-enum.mjs) is a standalone
 reproduction for the existing upstream report. Copy it into the `typescript`
@@ -41,15 +58,9 @@ node repro-unicode-enum.mjs
 
 The script resolves TypeChat from the current checkout (not from the prototype),
 prints the compiler versions, code units, preflight and validation results, then
-exits nonzero when the declared value is rejected. It uses no WASM, model, or
-credentials. This reproduction has been prepared; no new upstream comment or
+exits nonzero when the declared value is rejected. On the fixed checkout it
+succeeds. It uses no WASM, model, or credentials. No separate upstream comment or
 pull request has been posted.
-
-The two independent semantic regression checks remain **intentionally failing**
-in `npm test`; native/WASM parity alone cannot catch a shared upstream defect.
-Do not treat the earlier green corpus, or normal repository CI, as resolving
-this blocker. No dependency upgrade, decoder patch, or validation bypass has
-been applied.
 
 The investigation also found and fixed a prototype lifetime bug: retaining a
 closed validator previously retained its compiled module through the loader's
@@ -104,19 +115,21 @@ tests plus a shared validation corpus against three backends: the default native
 7.0.2 compiler, the matching development native compiler, and WASM. The two
 same-version backends must match diagnostics as well as acceptance outcomes.
 The additional stability suite also asserts independently expected semantics;
-it currently reports the two Unicode failures described above.
+the Unicode checks that originally exposed a shared defect are now green.
 
 The latest combined run of the Node checks, hosting contracts, full three-engine
-browser matrix, and opt-in recovery checks reported **34 passed, 2 failed,
-0 skipped**. Only the two independently expected Unicode cases remain red.
+browser matrix, and opt-in recovery checks reported **36 passed, 0 failed,
+0 skipped**. The expanded corpus checks **88 outcomes**, including Unicode,
+scoped/merged enums, exact member constraints, and default/legacy prompt roles.
 The three recovery checks passed in Chromium, Firefox, and WebKit: seven workers
 closed per engine, with no remaining abort listeners, page errors, or fetches for
 the intentionally mismatched compiler. Ordinary `npm test` skips those optional
 browser recovery checks unless explicitly enabled.
 
-The ordinary repository build and 424-test suite were last verified successfully
-with live tests disabled before this hosting-only follow-up; library sources and
-dependency manifests have not changed in the hosting follow-up.
+The ordinary repository and all examples build, and **492 tests pass** with live
+tests disabled after integrating main at
+[`f0e71c0`](https://github.com/microsoft/TypeChat/commit/f0e71c072d3e54a45f333dbcf7fcd3304f8724ba).
+The normal package manifests match main; the private compiler/WASM pins are unchanged.
 To repeat that focused recovery run in PowerShell:
 
 ```powershell
@@ -268,11 +281,11 @@ These observations are not retail-browser cache guarantees.
 
 On Windows and Node.js 24.22.1:
 
-- After integrating main's opt-in live-test work, the normal library/examples
-  built and all **424** ordinary tests passed with `TYPECHAT_LIVE_TESTS=0`,
+- After integrating main's 0.3 behavior and Unicode fix, the normal library/examples
+  built and all **492** ordinary tests passed with `TYPECHAT_LIVE_TESTS=0`,
   including CJS/ESM package/declaration tests and the existing enum regressions.
   The live API suite remained disabled; no hosted model was called.
-- **58** corpus outcomes passed in each real browser and matched the default
+- **88** corpus outcomes passed in each real browser and matched the default
   native backend. WASM and the matching development native backend also produced
   identical diagnostics.
 - HTTP/network errors, pre-aborted loads, absent/truncated/oversized/corrupt
@@ -282,13 +295,16 @@ On Windows and Node.js 24.22.1:
 - Chromium 149.0.7827.55, Firefox 151.0, and Playwright WebKit 26.5 each passed the
   same corpus, the runnable example UI, ten worker lifecycle/error checks,
   cancellation after a partial network response, and all-worker termination.
-- Review of the shared refactor confirmed that the minimal library, enum wire
-  mapping, diagnostic normalization, and model protocol definitions remain
-  unchanged. Existing custom-module diagnostics, program validation, lifecycle,
-  and CJS/ESM consumer tests were rechecked.
+- Main's Unicode query algorithm now runs through the shared compiler boundary.
+  Tests cover restoring the schema on query failure/exception and preserving
+  original diagnostics. Existing custom-module diagnostics, program validation,
+  0.3 prompting, lifecycle, and CJS/ESM consumer tests were rechecked.
 
-The initial clean-install development-host run, before the lifetime follow-up,
-measured:
+The performance tables below record earlier prototype revisions, before the
+0.3/Unicode integration; they are not new retail-performance certifications.
+The latest automated run still enforces the provisional payload/memory ceilings
+(library JavaScript: 444,071 bytes, 94,729 bytes gzipped). The initial clean-install
+development-host run, before the lifetime follow-up, measured:
 
 | Measurement | Observed |
 | --- | ---: |
@@ -439,8 +455,7 @@ Keep the prototype out of the default workspace/build until reviewed explicitly.
 **Recommendation: retain draft-only status, not supported browser functionality
 or a mainline merge.** Mainline gates remain an
 explicit upstream-stability/maintenance decision, review of the provisional API
-and startup/memory costs on target devices,
-resolution of the Unicode conformance failure, target-device/CSP coverage, and a
+and startup/memory costs on target devices, target-device/CSP coverage, and a
 full regression/compatibility assessment.
 The existing root-package Node-proxy bundling problem remains separate; this
 package does not fix that public entry point or automatically resolve #534.

@@ -104,6 +104,69 @@ export interface Probe {
     }
 ];
 
+for (const [name, value] of [
+    ["high surrogate and BOM", "\ud800\uFEFFx"],
+    ["low surrogate and BOM", "\udfff\uFEFFy"],
+    ["high surrogate", "\ud800x"],
+    ["low surrogate", "\udc00x"],
+    ["leading BOM", "\uFEFFx"],
+    ["BOM only", "\uFEFF"],
+    ["middle BOM", "x\uFEFFy"],
+    ["astral Unicode and BOM", "\ud83d\ude00\uFEFFz"],
+    ["repeated BOMs and surrogates", "\ud800\uFEFF\uFEFF\udfff\uFEFFx"],
+    ["BOM between surrogate halves", "\ud83d\uFEFF\ude00"]
+]) {
+    const literal = JSON.stringify(value).replace(/[\u007f-\uffff]/g,
+        character => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
+    corpus.push({
+        name: `exact Unicode: ${name}`,
+        schema: `export enum E { Value = ${literal} } export interface Probe { value: E; }`,
+        accepted: [{ value }],
+        rejected: [{ value: value.includes("\uFEFF") ? value.replaceAll("\uFEFF", "") : value + "!" }]
+    });
+}
+
+corpus.push(
+    {
+        name: "scoped folded Unicode enum members",
+        schema: String.raw`
+type __TypeChatEnumValues0 = "reserved";
+namespace Hidden {
+    export enum E { "quoted-key" = "\ud800" + "\uFEFFx" }
+    export enum E { ["computed"] = "\udfff\uFEFFy" }
+    export namespace E { export const unrelated = { notAnEnumMember: true }; }
+}
+export interface Probe {
+    value: Hidden.E;
+    member: (typeof Hidden.E)["quoted-key"];
+    values: Hidden.E[];
+}`,
+        accepted: [{ value: "\udfff\uFEFFy", member: "\ud800\uFEFFx", values: ["\ud800\uFEFFx", "\udfff\uFEFFy"] }],
+        rejected: [
+            { value: "\udfffy", member: "\ud800\uFEFFx", values: [] },
+            { value: "\udfff\uFEFFy", member: "\ud800x", values: [] },
+            { value: "\udfff\uFEFFy", member: "\ud800\uFEFFx", values: ["\udfffy"] }
+        ]
+    },
+    {
+        name: "contextual enum value name",
+        schema: String.raw`export enum keyof { Value = "\ud800\uFEFFx" }
+export interface Probe { value: (typeof keyof)["Value"]; }`,
+        accepted: [{ value: "\ud800\uFEFFx" }],
+        rejected: [{ value: "\ud800x" }]
+    },
+    {
+        name: "function-scoped Unicode enum",
+        schema: String.raw`function makeProbe() {
+    enum Local { Value = "\ud800\uFEFFx" }
+    return { value: Local.Value };
+}
+export type Probe = ReturnType<typeof makeProbe>;`,
+        accepted: [{ value: "\ud800\uFEFFx" }],
+        rejected: [{ value: "\ud800x" }]
+    }
+);
+
 export const invalidSchemas = [
     { name: "missing target", schema: "export interface Other { value: number; }" },
     { name: "missing export", schema: "interface Probe { value: number; } export {};" },
@@ -193,6 +256,41 @@ export async function runCorpus(createValidator, { createJsonTranslator, success
             observations.push({ name: example.name, success: result.success, message: result.message ?? "" });
         }
         check(validator[typeChatSchemaValidation]().success, "A rejected instance poisoned schema preflight.");
+        for (const layout of [undefined, "legacy"]) {
+            const prompts = [];
+            const history = [
+                { role: "user", content: "earlier question" },
+                { role: "assistant", content: "earlier reply" }
+            ];
+            const request = "CURRENT_REQUEST_541";
+            const translator = createJsonTranslator({
+                async complete(prompt) {
+                    prompts.push(structuredClone(prompt));
+                    return success(prompts.length === 1 ? '{"value":"wrong"}' : '{"value":1}');
+                }
+            }, validator, layout ? { promptLayout: layout } : undefined);
+            const result = await translator.translate(request, history);
+            check(result.success && prompts.length === 2, "Prompt-layout repair did not complete.");
+            const first = prompts[0];
+            const roles = first.map(section => section.role);
+            const expectedRoles = layout ? ["user", "assistant", "user"] : ["system", "user", "assistant", "user"];
+            check(JSON.stringify(roles) === JSON.stringify(expectedRoles), "Prompt roles or history order changed.");
+            check(first.flatMap(section => section.content.split(request)).length - first.length === 1,
+                "The current request must appear exactly once.");
+            if (!layout) {
+                check(first[0].content.includes(corpus[0].schema), "The system message omitted the schema.");
+                check(first.at(-1).content === request, "The schema-first request must be verbatim.");
+                check(prompts[1][0].content === first[0].content, "Repair text changed system instructions.");
+            }
+            check(prompts[1].at(-2).role === "assistant" && prompts[1].at(-2).content === '{"value":"wrong"}',
+                "The rejected response must remain assistant content.");
+            check(prompts[1].at(-1).role === "user", "Repair diagnostics must remain user content.");
+            check(JSON.stringify(history) === JSON.stringify([
+                { role: "user", content: "earlier question" },
+                { role: "assistant", content: "earlier reply" }
+            ]), "Translation mutated caller history.");
+            observations.push({ name: `prompt layout: ${layout ?? "default schema-first"}`, success: true, message: "" });
+        }
     } finally {
         validator.close();
     }

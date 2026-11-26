@@ -27,6 +27,18 @@ export interface CompilerAssignment {
     } | undefined;
 }
 
+export interface CompilerEnumProbe {
+    symbolId: number;
+    end: number;
+    enumName: string;
+    properties: string[];
+}
+
+export interface CompilerEnumInfo {
+    identifiers: Set<string>;
+    probes: CompilerEnumProbe[];
+}
+
 export interface CompilerProject {
     getSyntacticDiagnostics(fileName?: string): readonly CompilerDiagnostic[];
     getSemanticDiagnostics(fileName?: string): readonly CompilerDiagnostic[];
@@ -34,7 +46,8 @@ export interface CompilerProject {
         fileName: string;
         getLineAndCharacterOfPosition(position: number): { line: number; character: number };
     } | undefined;
-    getStringEnumValues(): readonly string[];
+    getEnumInfo(): Result<CompilerEnumInfo>;
+    getEnumTypeTexts(aliases: ReadonlySet<string>): Result<readonly string[]>;
     getAssignments(): readonly CompilerAssignment[];
 }
 
@@ -45,7 +58,7 @@ export interface CompilerHost {
 }
 
 export interface TypeScriptCompiler {
-    getStringEnumValues(): readonly string[];
+    getStringEnumTypeTexts(schema: string): Result<readonly string[]>;
     validateSchema(moduleText: string): Result<void>;
     validateJson(moduleText: string, wireTypeName: string): readonly string[];
     close(): void;
@@ -53,7 +66,44 @@ export interface TypeScriptCompiler {
 
 export function createCompiler(host: CompilerHost): TypeScriptCompiler {
     return {
-        getStringEnumValues: () => host.update([])?.getStringEnumValues() ?? [],
+        getStringEnumTypeTexts(schema) {
+            const project = host.update([]);
+            if (!project) {
+                return error("The TypeScript schema file couldn't be loaded.");
+            }
+            const info = project.getEnumInfo();
+            if (!info.success) {
+                return info;
+            }
+            const { probes, identifiers } = info.data;
+            if (!probes.length) {
+                return success([]);
+            }
+            const aliases = new Set<string>();
+            let querySchema = schema;
+            for (const { end, enumName, properties } of probes.sort((a, b) => b.end - a.end)) {
+                let name = `__TypeChatEnumValues${aliases.size}`;
+                while (identifiers.has(name)) {
+                    name += "_";
+                }
+                identifiers.add(name);
+                aliases.add(name);
+                // Preserve lexical scope and limit merged namespaces to their actual enum members.
+                const keys = `keyof { ${properties.join("; ")} }`;
+                const insertion = `\ntype ${name} = \`\${(typeof ${enumName})[${keys}]}\`;\n`;
+                querySchema = querySchema.slice(0, end) + insertion + querySchema.slice(end);
+            }
+            host.writeFile(schemaFileName, querySchema);
+            try {
+                const queryProject = host.update([schemaFileName]);
+                return queryProject
+                    ? queryProject.getEnumTypeTexts(aliases)
+                    : error(`The TypeScript string-enum query project '${configFileName}' couldn't be loaded.`);
+            } finally {
+                host.writeFile(schemaFileName, schema);
+                host.update([schemaFileName]);
+            }
+        },
         validateSchema(moduleText) {
             host.writeFile(schemaValidationFileName, moduleText);
             const project = host.update([schemaValidationFileName]);
@@ -112,23 +162,73 @@ export function createCompiler(host: CompilerHost): TypeScriptCompiler {
     };
 }
 
-export function collectStringEnumValues<Node, Member>(
+export function collectEnumInfo<Node>(
     source: Node,
     forEachChild: (node: Node, visit: (node: Node) => void) => void,
-    enumMembers: (node: Node) => readonly Member[],
-    getConstantValue: (member: Member) => string | number | undefined
-): string[] {
-    const values = new Set<string>();
+    identifierName: (node: Node) => string | undefined,
+    enumProbe: (node: Node) => Result<CompilerEnumProbe | undefined>
+): Result<CompilerEnumInfo> {
+    const identifiers = new Set<string>();
+    const probes = new Map<number, CompilerEnumProbe>();
+    let failure: string | undefined;
     forEachChild(source, function visit(node) {
-        for (const member of enumMembers(node)) {
-            const value = getConstantValue(member);
-            if (typeof value === "string") {
-                values.add(value);
+        if (failure !== undefined) {
+            return;
+        }
+        const name = identifierName(node);
+        if (name !== undefined) {
+            identifiers.add(name);
+        }
+        const result = enumProbe(node);
+        if (!result.success) {
+            failure = result.message;
+            return;
+        }
+        const probe = result.data;
+        if (probe) {
+            const previous = probes.get(probe.symbolId);
+            if (previous) {
+                previous.properties.push(...probe.properties);
+            } else {
+                probes.set(probe.symbolId, probe);
             }
         }
         forEachChild(node, visit);
     });
-    return [...values];
+    return failure !== undefined ? error(failure) : success({ identifiers, probes: [...probes.values()] });
+}
+
+export function collectEnumTypeTexts<Node>(
+    source: Node,
+    aliases: ReadonlySet<string>,
+    forEachChild: (node: Node, visit: (node: Node) => void) => void,
+    aliasName: (node: Node) => string | undefined,
+    resolve: (node: Node, name: string) => Result<readonly string[]>
+): Result<readonly string[]> {
+    const found = new Set<string>();
+    const texts = new Set<string>();
+    let failure: string | undefined;
+    forEachChild(source, function visit(node) {
+        if (failure !== undefined) {
+            return;
+        }
+        const name = aliasName(node);
+        if (name !== undefined && aliases.has(name)) {
+            found.add(name);
+            const result = resolve(node, name);
+            if (!result.success) {
+                failure = result.message;
+                return;
+            }
+            for (const text of result.data) {
+                texts.add(text);
+            }
+        }
+        forEachChild(node, visit);
+    });
+    return failure !== undefined ? error(failure)
+        : found.size !== aliases.size ? error("The TypeScript string-enum query aliases couldn't be loaded.")
+            : success([...texts]);
 }
 
 export function describeAssignment<Node, Type>(

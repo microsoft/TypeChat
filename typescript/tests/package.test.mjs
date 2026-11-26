@@ -292,6 +292,11 @@ describe("published package", () => {
                     "export interface Value { value: string; }", "Value"
                 );
                 const translator: TypeChatJsonTranslator<Value> = createJsonTranslator(model, validator);
+                const system: string = translator.createSystemPrompt();
+                // @ts-expect-error A system prompt builder never receives the user request.
+                translator.createSystemPrompt = (request: string) => request;
+                const legacy = createJsonTranslator(model, validator, { promptLayout: "legacy" });
+                legacy.createRequestPrompt = request => [{ type: "text", text: request }];
                 const result: Result<Value> = createZodJsonValidator(
                     { Value: z.object({ value: z.string() }) }, "Value"
                 ).validate({ value: "ok" });
@@ -487,6 +492,7 @@ test("published package works for a clean TypeScript 7 consumer", () => {
         writeFileSync(
             verification,
             `import assert from "node:assert/strict";
+import { createJsonTranslator, success } from "typechat";
 import { createTypeScriptJsonValidator } from "typechat/ts";
 
 const validator = createTypeScriptJsonValidator(
@@ -499,6 +505,16 @@ try {
         data: { value: "ok" },
     });
     assert.equal(validator.validate({ value: 42 }).success, false);
+    const translator = createJsonTranslator({
+        async complete(prompt) {
+            assert.deepEqual(prompt.map(section => section.role), ["system", "user"]);
+            assert.ok(prompt[0].content.includes(validator.getSchemaText()));
+            assert.ok(!prompt[0].content.includes("PACKED_REQUEST"));
+            assert.equal(prompt[1].content, "  PACKED_REQUEST  ");
+            return success('{"value":"ok"}');
+        }
+    }, validator);
+    assert.deepEqual(await translator.translate("  PACKED_REQUEST  "), success({ value: "ok" }));
 } finally {
     validator.close?.();
 }

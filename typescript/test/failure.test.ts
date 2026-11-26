@@ -224,13 +224,31 @@ describe("translation failure context", () => {
     });
 
     for (const responseText of ["not JSON", 'before {"value":} after', ""]) {
-        it("retains unparseable output without inventing data or changing repair behavior", async () => {
+        it("retains unparseable output without inventing data when repair is disabled", async () => {
             const { translator, prompts } = translatorFor([success(responseText)]);
+            translator.attemptRepair = false;
             const result = await translator.translate("request");
             assert.ok(!result.success);
             assert.ok(!("data" in result));
             assert.equal(result.responseText, responseText);
             assert.equal(prompts.length, 1);
+        });
+
+        it("repairs unparseable output once without changing the schema-first request", async () => {
+            const { translator, prompts } = translatorFor([success(responseText), success('{"value":7}')]);
+            const result = await translator.translate("request");
+            assert.deepEqual(result, success({ value: 7 }));
+            assert.equal(prompts.length, 2);
+            const [initial, repair] = prompts;
+            assert.ok(Array.isArray(initial));
+            assert.ok(Array.isArray(repair));
+            assert.deepEqual(initial.map(section => section.role), ["system", "user"]);
+            assert.equal(initial[1].content, "request");
+            assert.deepEqual(repair.slice(0, initial.length), initial);
+            assert.equal(repair[repair.length - 2].role, "assistant");
+            assert.equal(repair[repair.length - 2].content, responseText);
+            assert.equal(repair[repair.length - 1].role, "user");
+            assert.match(String(repair[repair.length - 1].content), /Response is not JSON|JSON parse error|Unexpected|Expected/);
         });
     }
 
@@ -251,15 +269,19 @@ describe("translation failure context", () => {
 });
 
 describe("repair failure context", () => {
-    it("preserves a successful repair and the existing repair prompt", async () => {
-        const first = '{"value":"invalid"}';
+    it("repair: raw invalid reply as assistant, validator diagnostic as user", async () => {
+        const first = 'original preface\n{"value":"invalid"}\noriginal suffix';
         const { translator, prompts } = translatorFor([success(first), success('{"value":42}')]);
         assert.deepEqual(await translator.translate("request"), success({ value: 42 }));
         assert.equal(prompts.length, 2);
-        const repairPrompt = prompts[1];
-        assert.ok(Array.isArray(repairPrompt));
-        assert.equal(repairPrompt[1].content, first);
-        assert.match(String(repairPrompt[2].content), /value must be a number/);
+        const [initial, repair] = prompts;
+        assert.ok(Array.isArray(initial));
+        assert.deepEqual(initial.map(section => section.role), ["system", "user"]);
+        assert.equal(initial[1].content, "request");
+        assert.doesNotMatch(String(initial[0].content), /original preface|value must be a number/);
+        assert.deepEqual(repair, [...initial, { role: "assistant", content: first }, { role: "user", content:
+            `The JSON object is invalid for the following reason:\n"""\nvalue must be a number\n"""\nThe following is a revised JSON object:\n`
+        }]);
     });
 
     it("returns the latest rejected candidate after exactly one repair", async () => {

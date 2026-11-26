@@ -4,6 +4,11 @@ import { typeChatSchemaValidation } from "./schemaValidation.js";
 
 export { typeChatSchemaValidation } from "./schemaValidation.js";
 
+export interface TypeChatTranslatorOptions {
+    /** Use separate system and user messages (default), or explicitly select the 0.2 request prompt. */
+    promptLayout?: "schema-first" | "legacy";
+}
+
 /**
  * Represents an object that can translate natural language requests in JSON objects of the given type.
  */
@@ -17,8 +22,9 @@ export interface TypeChatJsonTranslator<T extends object> {
      */
     validator: TypeChatJsonValidator<T>;
     /**
-     * A boolean indicating whether to attempt repairing JSON objects that fail to validate. The default is `true`,
-     * but an application can set the property to `false` to disable repair attempts.
+     * A boolean indicating whether to attempt one repair when the response has no JSON object, the JSON cannot
+     * be parsed, or the object fails to validate. The default is `true`, but an application can set the property
+     * to `false` to disable repair attempts.
      */
     attemptRepair:  boolean;
     /**
@@ -29,18 +35,20 @@ export interface TypeChatJsonTranslator<T extends object> {
      */
     stripNulls:  boolean;
     /**
-     * Creates an AI language model prompt from the given request. This function is called by `completeAndValidate`
-     * to obtain the prompt. An application can assign a new function to provide a different prompt.
-     * @param request The natural language request.
-     * @returns A prompt that combines the request with the schema and type name of the underlying validator.
+     * Creates the schema-first system message. Include only application-owned instructions, schema,
+     * and output rules, not user requests, model output, or history.
+     */
+    createSystemPrompt(): string;
+    /**
+     * Creates the final user message in the legacy layout. To use an existing override, select
+     * `{ promptLayout: "legacy" }` at construction. Its content is never used as a system message.
      */
     createRequestPrompt(request: string): PromptContent;
     /**
-     * Creates a repair prompt to append to an original prompt/response in order to repair a JSON object that
-     * failed to validate. This function is called by `completeAndValidate` when `attemptRepair` is true and the
-     * JSON object produced by the original prompt failed to validate. An application can assign a new function
-     * to provide a different repair prompt.
-     * @param validationError The error message returned by the validator.
+     * Creates a repair prompt to append to an original prompt/response. This function is called when
+     * `attemptRepair` is true and the response has no usable JSON object or the object failed to validate.
+     * An application can assign a new function to provide a different repair prompt.
+     * @param validationError The diagnostic for the failed response.
      * @returns A repair prompt constructed from the error message.
      */
     createRepairPrompt(validationError: string): string;
@@ -54,16 +62,16 @@ export interface TypeChatJsonTranslator<T extends object> {
      */
     validateInstance(instance: T): Result<T>;
     /**
-     * Translates a natural language request into an object of type `T`. If the JSON object returned by
-     * the language model fails to validate and the `attemptRepair` property is `true`, a second
-     * attempt to translate the request will be made. The prompt for the second attempt will include the
-     * diagnostics produced for the first attempt. This often helps produce a valid instance.
+     * Translates a natural language request into an object of type `T`. If the response has no JSON object,
+     * the JSON cannot be parsed, or the object fails to validate, and `attemptRepair` is `true`, one further
+     * attempt is made. The repair prompt includes the diagnostic from the first attempt. This often helps
+     * produce a valid instance.
      * A failure retains the latest rejected candidate and available model response text. These may
      * come from different attempts if a repair response couldn't be parsed.
      * Optional result metadata retains response records and reported usage across both attempts.
      * @param request The natural language request.
-     * @param promptPreamble An optional string or array of prompt sections to prepend to the generated
-     *   prompt. If a string is specified, it is converted into a single "user" role prompt section.
+     * @param promptPreamble Optional context before the current user message (after the system message
+     *   in the default layout). A string becomes one user message; sections retain their roles and order.
      * @returns A promise for the resulting object.
      */
     translate(request: string, promptPreamble?: string | PromptSection[]): Promise<Result<T>>;
@@ -97,25 +105,35 @@ export interface TypeChatJsonValidatorWithSchemaValidation<T extends object> ext
 
 /**
  * Creates an object that can translate natural language requests into JSON objects of the given type.
- * The specified type argument `T` must be the same type as `typeName` in the given `schema`. The function
- * creates a `TypeChatJsonValidator<T>` and stores it in the `validator` property of the returned instance.
  * @param model The language model to use for translating requests into JSON.
- * @param validator A string containing the TypeScript source code for the JSON schema.
- * @param typeName The name of the JSON target type in the schema.
+ * @param validator Supplies the schema and validates the translated object.
+ * @param options Selects the prompt layout.
  * @returns A `TypeChatJsonTranslator<T>` instance.
  */
-export function createJsonTranslator<T extends object>(model: TypeChatLanguageModel, validator: TypeChatJsonValidator<T>): TypeChatJsonTranslator<T> {
+export function createJsonTranslator<T extends object>(
+    model: TypeChatLanguageModel, validator: TypeChatJsonValidator<T>, { promptLayout = "schema-first" }: TypeChatTranslatorOptions = {}
+): TypeChatJsonTranslator<T> {
+    if (promptLayout !== "schema-first" && promptLayout !== "legacy") {
+        throw new Error(`Unknown promptLayout: ${promptLayout}. Expected "schema-first" or "legacy".`);
+    }
     const typeChat: TypeChatJsonTranslator<T> = {
         model,
         validator,
         attemptRepair: true,
         stripNulls: false,
+        createSystemPrompt,
         createRequestPrompt,
         createRepairPrompt,
         validateInstance: success,
         translate
     };
     return typeChat;
+
+    function createSystemPrompt() {
+        return `Translate user requests into JSON objects of type "${validator.getTypeName()}" using the following TypeScript definitions:\n` +
+            `\`\`\`\n${validator.getSchemaText()}\n\`\`\`\n` +
+            `Return only the JSON object with 2 spaces of indentation and no properties with the value undefined.`;
+    }
 
     function createRequestPrompt(request: string) {
         return `You are a service that translates user requests into JSON objects of type "${validator.getTypeName()}" according to the following TypeScript definitions:\n` +
@@ -139,7 +157,12 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             return error(`Schema validation failed before model request: ${preflight.message}`);
         }
         const preamble: PromptSection[] = typeof promptPreamble === "string" ? [{ role: "user", content: promptPreamble }] : promptPreamble ?? [];
-        let prompt: PromptSection[] = [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }];
+        if (promptLayout !== "legacy" && typeChat.createRequestPrompt !== createRequestPrompt) {
+            return error('A custom createRequestPrompt requires { promptLayout: "legacy" }. To migrate, move application instructions to createSystemPrompt() and pass context as promptPreamble.');
+        }
+        const prompt: PromptSection[] = promptLayout === "legacy"
+            ? [...preamble, { role: "user", content: typeChat.createRequestPrompt(request) }]
+            : [{ role: "system", content: typeChat.createSystemPrompt() }, ...preamble, { role: "user", content: request }];
         let attemptRepair = typeChat.attemptRepair;
         let failureContext: (Pick<TypeChatError, "data"> & { responseText: string }) | undefined;
         const responses: TypeChatResponseMetadata[] = [];
@@ -161,38 +184,51 @@ export function createJsonTranslator<T extends object>(model: TypeChatLanguageMo
             failureContext = { ...failureContext, responseText };
             const startIndex = responseText.indexOf("{");
             const endIndex = responseText.lastIndexOf("}");
-            if (!(startIndex >= 0 && endIndex > startIndex)) {
-                return finish(error(`Response is not JSON:\n${responseText}`, failureContext));
+            const jsonText = startIndex >= 0 && endIndex > startIndex ? responseText.slice(startIndex, endIndex + 1) : undefined;
+            let parsed = false;
+            let jsonObject: object = {};
+            let failure: (TypeChatError & { responseText: string }) | undefined;
+            if (!jsonText) {
+                failure = { ...error(`Response is not JSON:\n${responseText}`, failureContext), responseText };
             }
-            const jsonText = responseText.slice(startIndex, endIndex + 1);
-            let jsonObject;
-            try {
-                jsonObject = JSON.parse(jsonText) as object;
+            else {
+                try {
+                    jsonObject = JSON.parse(jsonText) as object;
+                    parsed = true;
+                }
+                catch (e) {
+                    failure = { ...error(e instanceof SyntaxError ? e.message : "JSON parse error", failureContext), responseText };
+                }
             }
-            catch (e) {
-                return finish(error(e instanceof SyntaxError ? e.message : "JSON parse error", failureContext));
+            if (parsed) {
+                if (typeChat.stripNulls) {
+                    stripNulls(jsonObject);
+                }
+                const schemaValidation = validator.validate(jsonObject);
+                const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
+                if (validation.success) {
+                    return finish(validation);
+                }
+                failure = {
+                    ...validation,
+                    success: false,
+                    message: validation.message,
+                    data: "data" in validation ? validation.data : schemaValidation.success ? schemaValidation.data : jsonObject,
+                    responseText: validation.responseText ?? responseText
+                };
+                if (!attemptRepair) {
+                    return finish({ ...failure, message: `JSON validation failed: ${failure.message}\n${jsonText}` });
+                }
             }
-            if (typeChat.stripNulls) {
-                stripNulls(jsonObject);
+            else if (!attemptRepair) {
+                return finish(failure!);
             }
-            const schemaValidation = validator.validate(jsonObject);
-            const validation = schemaValidation.success ? typeChat.validateInstance(schemaValidation.data) : schemaValidation;
-            if (validation.success) {
-                return finish(validation);
-            }
-            const failure: TypeChatError & { responseText: string } = {
-                ...validation,
-                success: false,
-                message: validation.message,
-                data: "data" in validation ? validation.data : schemaValidation.success ? schemaValidation.data : jsonObject,
-                responseText: validation.responseText ?? responseText
+            failureContext = {
+                ...("data" in failure! ? { data: failure!.data } : {}),
+                responseText: failure!.responseText
             };
-            failureContext = { data: failure.data, responseText: failure.responseText };
-            if (!attemptRepair) {
-                return finish({ ...failure, message: `JSON validation failed: ${failure.message}\n${jsonText}` });
-            }
             prompt.push({ role: "assistant", content: responseText });
-            prompt.push({ role: "user", content: typeChat.createRepairPrompt(failure.message) });
+            prompt.push({ role: "user", content: typeChat.createRepairPrompt(failure!.message) });
             attemptRepair = false;
         }
     }

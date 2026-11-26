@@ -299,7 +299,7 @@ console.log(JSON.stringify({ closedMemory: globalThis.retainedClosedValidator.ge
 });
 
 // Independent semantic gates for microsoft/TypeScript#65451 and #65458.
-// The lone-surrogate/BOM cases must stay red until the declared value is preserved.
+// Cross-backend agreement alone is insufficient; declared values must remain exact.
 const upstreamCases = [
     {
         name: "leading-dot numeric literal",

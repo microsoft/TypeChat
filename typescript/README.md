@@ -11,7 +11,7 @@ Simply define types that represent the intents supported in your natural languag
 After defining your types, TypeChat takes care of the rest by:
 
 1. Constructing a prompt to the LLM using types.
-2. Validating the LLM response conforms to the schema. If the validation fails, repair the non-conforming output through further language model interaction.
+2. Validating the LLM response conforms to the schema. If the response is not usable JSON or validation fails, repair the output through one further language model interaction.
 3. Summarizing succinctly (without use of a LLM) the instance and confirm that it aligns with user intent.
 
 Types are all you need!
@@ -62,6 +62,21 @@ npm run build
 
 The build emits CommonJS JavaScript and declarations in `dist`, and native ESM
 JavaScript and declarations in `dist/esm`.
+
+### Translator prompts in 0.3
+
+`createJsonTranslator` sends the schema and JSON output instructions as a system message,
+then caller-supplied context in its original roles and order, then the exact request as a user message.
+Extend `translator.createSystemPrompt()` with application-owned instructions only; pass history or image
+parts as the second argument to `translate`, not as part of the system message. `typechat/ts`'s
+`createProgramTranslator` describes both the JSON Program to return and the API it may call.
+
+To keep the 0.2 layout or an existing `createRequestPrompt(request)` override, explicitly pass
+`{ promptLayout: "legacy" }` as the factory's third argument. Without that option a request-hook
+override produces a migration error before dispatch. Validation, repair, and model retry settings
+are independent of layout. See the [TypeScript usage and migration examples](https://microsoft.github.io/TypeChat/docs/typescript/basic-usage/).
+
+### Running the tests
 
 Run the test suite with `npm test`. Package tests verify named and default imports,
 both module formats, and their declaration resolution using only the files included

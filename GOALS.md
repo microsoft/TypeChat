@@ -48,6 +48,21 @@ If an existing behavior appears to conflict with this policy, ask the owner to
 resolve the difference rather than removing it or closing related issues
 automatically.
 
+## One-time 0.3.x prompt behavior alignment
+
+For 0.3.x, TypeScript and Python may coordinate with the independently maintained
+[TypeChat.NET project](https://github.com/microsoft/TypeChat.net) on one default:
+a fresh translation sends the application's instructions and schema in a system
+message, then the user's request once, as a user message. History retains its
+roles; model replies and repair diagnostics do not become system instructions.
+Each implementation keeps its validation and repair behavior and offers an
+explicit legacy layout for callers that need the previous prompt.
+
+Verify this agreement with deterministic message-level tests, not identical
+APIs or shared implementation code. Each project reviews and releases its own
+packages. Release dates, preview status, patch numbers, and subsequent minor
+versions need not match.
+
 ## Under consideration
 
 Under consideration is not approval to implement, a roadmap commitment, or a
@@ -62,7 +77,7 @@ before they can become accepted implementation work.
   [TypeChat.NET project](https://github.com/microsoft/TypeChat.net) already exists.
   We may consider how additional language support and that work fit together.
   Listing it here does not approve moving it into this repository, changing
-  its ownership, or committing to shared releases.
+  its ownership, or coordinating releases beyond the 0.3.x behavior above.
 
 ## Who decides
 

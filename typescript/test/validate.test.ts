@@ -610,6 +610,341 @@ describe("createTypeScriptJsonValidator", () => {
             assert.ok(result.success, `expected validation to succeed, got: ${result.success ? "" : result.message}`);
         });
 
+        describe("Unicode enum values", () => {
+            const cases = [
+                {
+                    name: "high lone surrogate without BOM",
+                    value: "\ud800x",
+                    invalid: ["x", "\ufffdx", "\ufffd\ufffd\ufffdx"]
+                },
+                {
+                    name: "low lone surrogate without BOM",
+                    value: "\udc00x",
+                    invalid: ["x", "\ufffdx", "\ufffd\ufffd\ufffdx"]
+                },
+                {
+                    name: "high lone surrogate followed by BOM",
+                    value: "\ud800\uFEFFx",
+                    invalid: ["\ud800x", "\ufffd\uFEFFx", "\ufffd\ufffd\ufffd\uFEFFx"]
+                },
+                {
+                    name: "low lone surrogate followed by BOM",
+                    value: "\udc00\uFEFFx",
+                    invalid: ["\udc00x", "\ufffd\uFEFFx", "\ufffd\ufffd\ufffd\uFEFFx"]
+                },
+                {
+                    name: "ordinary prefix before a lone surrogate and BOM",
+                    value: "a\ud800\uFEFFx",
+                    invalid: ["a\ud800x", "a\ufffd\uFEFFx"]
+                },
+                {
+                    name: "BOM before a lone surrogate",
+                    value: "\uFEFF\ud800x",
+                    invalid: ["\ud800x", "\uFEFF\ufffdx"]
+                },
+                {
+                    name: "BOM between surrogate code units",
+                    value: "\ud800\uFEFF\udc00",
+                    invalid: ["\ud800\udc00", "\ufffd\uFEFF\ufffd"]
+                },
+                {
+                    name: "multiple lone-surrogate segments",
+                    value: "\ud800\uFEFFx\udc00\uFEFFy",
+                    invalid: ["\ud800x\udc00y", "\ufffd\uFEFFx\ufffd\uFEFFy"]
+                },
+                {
+                    name: "repeated BOMs after a lone surrogate",
+                    value: "\ud800\uFEFF\uFEFFx",
+                    invalid: ["\ud800\uFEFFx", "\ud800x"]
+                },
+                {
+                    name: "trailing BOM after a lone surrogate",
+                    value: "\ud800\uFEFF",
+                    invalid: ["\ud800", "\ufffd\uFEFF"]
+                },
+                {
+                    name: "leading BOM control",
+                    value: "\uFEFFx",
+                    invalid: ["x", "\uFEFF"]
+                },
+                {
+                    name: "BOM-only control",
+                    value: "\uFEFF",
+                    invalid: ["", "\uFEFF\uFEFF"]
+                },
+                {
+                    name: "ordinary middle BOM control",
+                    value: "a\uFEFFb",
+                    invalid: ["ab", "a\uFEFFc"]
+                },
+                {
+                    name: "astral Unicode control",
+                    value: "\ud83d\ude00\uFEFFx",
+                    invalid: ["\ud83d\ude00x", "\ufffd\ufffd\uFEFFx"]
+                },
+                {
+                    name: "canonical Unicode control",
+                    value: "\u00e9x",
+                    invalid: ["e\u0301x", "ex"]
+                },
+                {
+                    name: "escaped control characters",
+                    value: "\ud800\uFEFF\v\0\"\\\n",
+                    invalid: ["\ud800\v\0\"\\\n", "\ufffd\uFEFF\v\0\"\\\n"]
+                },
+                {
+                    name: "long literal without truncation",
+                    value: "x".repeat(600) + "\ud800\uFEFF",
+                    invalid: ["x".repeat(599) + "\ud800\uFEFF", "x".repeat(600) + "\ud800"]
+                }
+            ];
+
+            for (const { name, value, invalid } of cases) {
+                for (const encoding of ["JSON", "Unicode-escaped"]) {
+                    it(`preserves ${name} in a ${encoding} schema literal`, () => {
+                        const jsonLiteral = JSON.stringify(value);
+                        const literal = encoding === "JSON" ? jsonLiteral : jsonLiteral.replace(
+                            /[\u0080-\uffff]/g,
+                            character => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`
+                        );
+                        const schema = `export enum E { X = ${literal} }\nexport interface Probe { value: E; }`;
+                        const v = validatorFor(schema, "Probe");
+                        const preflight = v[typeChatSchemaValidation]();
+                        assert.ok(preflight.success);
+                        assert.equal(v.getSchemaText(), schema);
+                        const candidate = { value };
+                        const result = v.validate(candidate);
+                        assert.ok(result.success, `expected exact value to pass, got: ${result.success ? "" : result.message}`);
+                        assert.strictEqual(result.data, candidate);
+
+                        for (const altered of invalid) {
+                            assert.notEqual(altered, value);
+                            const rejected = v.validate({ value: altered });
+                            assert.ok(!rejected.success, `expected altered value ${JSON.stringify(altered)} to fail`);
+                            assert.match(rejected.message, /not assignable/);
+                        }
+                        assert.strictEqual(v[typeChatSchemaValidation](), preflight);
+                    });
+                }
+            }
+
+            it("preserves folded members and heterogeneous numeric enum constraints", () => {
+                const v = validatorFor(String.raw`
+export enum E {
+    Prefix = "\ud800",
+    X = Prefix + "\uFEFFx",
+    Small = .1,
+    Large = 1e20
+}
+export interface Probe { value: E.X; small: E.Small; large: E.Large; }`, "Probe");
+                assert.ok(v[typeChatSchemaValidation]().success);
+                const candidate = { value: "\ud800\uFEFFx", small: 0.1, large: 1e20 };
+                const result = v.validate(candidate);
+                assert.ok(result.success, `expected folded value to pass, got: ${result.success ? "" : result.message}`);
+                assert.strictEqual(result.data, candidate);
+                for (const invalid of [
+                    { ...candidate, value: "\ud800" },
+                    { ...candidate, value: "\ud800x" },
+                    { ...candidate, small: 1 },
+                    { ...candidate, small: "0.1" },
+                    { ...candidate, large: 1e19 }
+                ]) {
+                    assert.ok(!v.validate(invalid).success);
+                }
+            });
+
+            for (const declaration of ["enum", "const enum"]) {
+                it(`preserves merged ${declaration} declarations`, () => {
+                    const schema = String.raw`export ${declaration} E { X = "\ud800\uFEFFx" }
+export ${declaration} E { Y = "\udc00\uFEFFy" }
+export interface Probe { value: E; first: E.X; }`;
+                    const v = validatorFor(schema, "Probe");
+                    assert.ok(v[typeChatSchemaValidation]().success);
+                    assert.ok(v.validate({ value: "\udc00\uFEFFy", first: "\ud800\uFEFFx" }).success);
+                    assert.ok(!v.validate({ value: "\udc00y", first: "\ud800\uFEFFx" }).success);
+                    assert.ok(!v.validate({ value: "\udc00\uFEFFy", first: "\udc00\uFEFFy" }).success);
+                });
+            }
+
+            for (const name of ["keyof", "infer", "readonly", "unique"]) {
+                it(`validates a qualified enum named ${name}`, () => {
+                    const v = validatorFor(String.raw`
+namespace N {
+    export enum ${name} { X = "yes", ["\ud800\uFEFF"] = "\ud800\uFEFFx" }
+    export namespace ${name} { export declare const description: string; }
+}
+export interface Probe { value: N.${name}; }`, "Probe");
+                    assert.ok(v[typeChatSchemaValidation]().success);
+                    assert.ok(v.validate({ value: "yes" }).success);
+                    assert.ok(v.validate({ value: "\ud800\uFEFFx" }).success);
+                    assert.ok(!v.validate({ value: "\ud800x" }).success);
+                    assert.ok(!v.validate({ value: "description" }).success);
+                });
+            }
+
+            it("does not reject an unrelated target because of a local enum named infer", () => {
+                const v = validatorFor(`
+function local() { enum infer { X = "yes" } }
+export interface Probe { value: number; }`, "Probe");
+                assert.ok(v[typeChatSchemaValidation]().success);
+                assert.ok(v.validate({ value: 1 }).success);
+                assert.ok(!v.validate({ value: "yes" }).success);
+            });
+
+            it("formats no more literals for a merged enum than for one declaration", async t => {
+                const members = Array.from({ length: 32 }, (_, i) => `V${i} = "value-${i}"`);
+                const makeSchema = (groups: string[]) => groups.map(group =>
+                    `namespace A { export enum E { ${group} } }`
+                ).join("\n") + `
+namespace B { export enum E { V0 = "other" } }
+export interface Probe { a: A.E; b: B.E; }`;
+                const { Checker } = await import("typescript/unstable/sync");
+                const format = t.mock.method(Checker.prototype, "typeToString");
+                validatorFor(makeSchema([members.join(", ")]), "Probe");
+                const singleCount = format.mock.callCount();
+                format.mock.resetCalls();
+
+                const v = validatorFor(makeSchema(members), "Probe");
+                assert.ok(format.mock.callCount() <= singleCount,
+                    `expected at most ${singleCount} formatting calls, got ${format.mock.callCount()}`);
+                assert.ok(v[typeChatSchemaValidation]().success);
+                assert.ok(v.validate({ a: "value-0", b: "other" }).success);
+                assert.ok(v.validate({ a: "value-31", b: "other" }).success);
+                assert.ok(!v.validate({ a: "other", b: "other" }).success);
+                assert.ok(!v.validate({ a: "value-0", b: "value-0" }).success);
+            });
+
+            it("preserves string members alongside computed numeric members", () => {
+                const v = validatorFor(String.raw`
+declare function numericValue(): number;
+export enum E { X = "\ud800\uFEFFx", Numeric = numericValue() }
+export interface Probe { value: E.X; }`, "Probe");
+                assert.ok(v[typeChatSchemaValidation]().success);
+                assert.ok(v.validate({ value: "\ud800\uFEFFx" }).success);
+                assert.ok(!v.validate({ value: "\ud800x" }).success);
+            });
+
+            it("preserves branded literals that match an enum value", () => {
+                const v = validatorFor(String.raw`
+export enum E { X = "\ud800\uFEFFx" }
+type Id = "\ud800\uFEFFx" & { readonly __brand: "Id" };
+export interface Probe { value: E; id: Id; }`, "Probe");
+                assert.ok(v[typeChatSchemaValidation]().success);
+                const result = v.validate({ value: "\ud800\uFEFFx", id: "\ud800\uFEFFx" });
+                assert.ok(!result.success);
+                assert.match(result.message, /not assignable/);
+            });
+
+            it("preserves source positions after a file BOM and astral Unicode", () => {
+                const schema = "\uFEFF// \u00e9 \ud83d\ude00\n" + String.raw`
+export enum \u{10400} { X = "\ud800\uFEFFx" }
+export interface Probe { value: \u{10400}; }`;
+                const v = validatorFor(schema, "Probe");
+                assert.ok(v[typeChatSchemaValidation]().success);
+                assert.ok(v.validate({ value: "\ud800\uFEFFx" }).success);
+                assert.ok(!v.validate({ value: "\ud800x" }).success);
+                assert.equal(v.getSchemaText(), schema);
+            });
+
+            it("preserves private namespace enums in nested containers and member types", () => {
+                const v = validatorFor(String.raw`
+namespace Outer {
+    enum E { X = "\ud800\uFEFFx", Y = "\udc00\uFEFFy" }
+    export interface Shape {
+        primary: { value: E.X };
+        pair: readonly [E.X, E.Y];
+        list: E[];
+        lookup: Record<string, E>;
+        choice: { ok: true; value: E.X } | { ok: false; value: E.Y };
+    }
+}
+export interface Probe { payload: Outer.Shape; }`, "Probe");
+                const x = "\ud800\uFEFFx";
+                const y = "\udc00\uFEFFy";
+                const payload = {
+                    primary: { value: x },
+                    pair: [x, y],
+                    list: [x, y],
+                    lookup: { first: x, second: y },
+                    choice: { ok: true, value: x }
+                };
+                const candidate = { payload };
+                const result = v.validate(candidate);
+                assert.ok(result.success, `expected nested values to pass, got: ${result.success ? "" : result.message}`);
+                assert.strictEqual(result.data, candidate);
+                for (const invalid of [
+                    { ...payload, primary: { value: "\ud800x" } },
+                    { ...payload, pair: [x, "\udc00y"] },
+                    { ...payload, list: [x, "\ufffd\uFEFFy"] },
+                    { ...payload, lookup: { first: "\ud800x" } },
+                    { ...payload, choice: { ok: true, value: y } }
+                ]) {
+                    assert.ok(!v.validate({ payload: invalid }).success);
+                }
+            });
+
+            it("avoids collisions with escaped enum and query identifiers", () => {
+                const schema = String.raw`
+type \u005f_TypeChatEnumValues0 = number;
+export enum \u0045 { X = "\ud800\uFEFFx" }
+export interface Probe { value: E; }`;
+                const v = validatorFor(schema, "Probe");
+                assert.ok(v[typeChatSchemaValidation]().success);
+                assert.ok(v.validate({ value: "\ud800\uFEFFx" }).success);
+                assert.equal(v.getSchemaText(), schema);
+                const module = v.createModuleTextFromJson({ value: "\ud800\uFEFFx" });
+                assert.ok(module.success);
+                assert.ok(!module.data.includes("__TypeChatEnumValues"));
+            });
+
+            it("does not truncate large enum unions", () => {
+                const members = Array.from(
+                    { length: 150 },
+                    (_, index) => `M${index} = ${JSON.stringify(`value-${index}\ud800\uFEFF`)}`
+                ).join(",\n");
+                const v = validatorFor(
+                    `export enum E { ${members} }\nexport interface Probe { value: E; }`,
+                    "Probe"
+                );
+                assert.ok(v.validate({ value: "value-149\ud800\uFEFF" }).success);
+                assert.ok(!v.validate({ value: "value-150\ud800\uFEFF" }).success);
+            });
+
+            it("preserves original schema diagnostics after enum queries", () => {
+                const schema = String.raw`export enum E { X = "\ud800\uFEFFx" }
+export interface Probe { value: E; missing: MissingType; }`;
+                const v = validatorFor(schema, "Probe");
+                const result = v[typeChatSchemaValidation]();
+                assert.ok(!result.success);
+                assert.match(result.message, /schema\.ts\(2,\d+\):.*MissingType/);
+                assert.ok(!result.message.includes("__TypeChatEnumValues"));
+                assert.equal(v.getSchemaText(), schema);
+                const invalid = v.validate({ value: "\ud800\uFEFFx", missing: {} });
+                assert.ok(!invalid.success);
+                assert.match(invalid.message, /MissingType/);
+            });
+
+            it("repairs an altered enum value without changing exact code units", async () => {
+                const v = validatorFor(String.raw`
+export enum E { X = "\ud800\uFEFFx" }
+export interface Probe { value: E; }`, "Probe");
+                let modelCalls = 0;
+                const translator = createJsonTranslator({
+                    async complete() {
+                        modelCalls++;
+                        return {
+                            success: true as const,
+                            data: JSON.stringify({ value: modelCalls === 1 ? "\ud800x" : "\ud800\uFEFFx" })
+                        };
+                    }
+                }, v);
+                const result = await translator.translate("test request");
+                assert.ok(result.success, `expected repair to succeed, got: ${result.success ? "" : result.message}`);
+                assert.deepEqual(result.data, { value: "\ud800\uFEFFx" });
+                assert.equal(modelCalls, 2);
+            });
+        });
+
         it("rejects unknown values and member names that differ from their values", () => {
             const v = validatorFor(differingEnumValueSchema, "Subscription");
             const unknown = v.validate({ plan: "enterprise" });
