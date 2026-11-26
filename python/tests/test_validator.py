@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-from typing import Annotated, TypedDict
+from typing import Annotated
 
 from pydantic import BeforeValidator
+from typing_extensions import TypedDict  # Pydantic rejects typing.TypedDict on Python 3.11
 
 import typechat
 
