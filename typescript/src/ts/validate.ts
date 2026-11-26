@@ -193,28 +193,50 @@ export function createTypeScriptJsonValidator<T extends object = object>(
             if (isIdentifier(node)) {
                 identifiers.add(node.text);
             }
-            if (isEnumDeclaration(node) && checker.getTypeAtLocation(node.members)
-                .some(type => type?.isStringLiteralType())) {
+            if (isEnumDeclaration(node)) {
                 declarations.push(node);
             }
             node.forEachChild(visit);
         });
-        if (!declarations.length) {
+
+        const probes = new Map<number, { end: number; enumName: string; properties: string[] }>();
+        for (const declaration of declarations) {
+            const types = checker.getTypeAtLocation(declaration.members);
+            const members = declaration.members.filter((_, i) => types[i]?.isStringLiteralType());
+            if (!members.length) {
+                continue;
+            }
+            const symbol = checker.getSymbolAtLocation(declaration.name);
+            if (!symbol) {
+                return error(`The TypeScript enum '${declaration.name.text}' couldn't be resolved.`);
+            }
+            let probe = probes.get(symbol.id);
+            if (!probe) {
+                probe = { end: declaration.getEnd(), enumName: declaration.name.text, properties: [] };
+                probes.set(symbol.id, probe);
+            }
+            for (const member of members) {
+                // Preserve the source spelling, including escapes in quoted and computed keys.
+                probe.properties.push(`${member.name.getText(sourceFile)}: unknown`);
+            }
+        }
+        if (!probes.size) {
             return success([]);
         }
 
         const aliases = new Set<string>();
         let querySchema = schema;
-        for (const declaration of declarations.sort((a, b) => b.getEnd() - a.getEnd())) {
+        for (const { end, enumName, properties } of [...probes.values()].sort((a, b) => b.end - a.end)) {
             let name = `__TypeChatEnumValues${aliases.size}`;
             while (identifiers.has(name)) {
                 name += "_";
             }
             identifiers.add(name);
             aliases.add(name);
-            // Keep each query in the enum's lexical scope, including private namespace enums.
-            const insertion = `\ntype ${name} = \`\${${declaration.name.text} & string}\`;\n`;
-            const end = declaration.getEnd();
+            // `typeof` reads even `keyof` as a value name. Index only enum members, not
+            // additional properties from a merged namespace.
+            const keys = `keyof { ${properties.join("; ")} }`;
+            const insertion = `\ntype ${name} = \`\${(typeof ${enumName})[${keys}]}\`;\n`;
             querySchema = querySchema.slice(0, end) + insertion + querySchema.slice(end);
         }
 

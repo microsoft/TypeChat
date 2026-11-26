@@ -766,6 +766,54 @@ export interface Probe { value: E; first: E.X; }`;
                 });
             }
 
+            for (const name of ["keyof", "infer", "readonly", "unique"]) {
+                it(`validates a qualified enum named ${name}`, () => {
+                    const v = validatorFor(String.raw`
+namespace N {
+    export enum ${name} { X = "yes", ["\ud800\uFEFF"] = "\ud800\uFEFFx" }
+    export namespace ${name} { export declare const description: string; }
+}
+export interface Probe { value: N.${name}; }`, "Probe");
+                    assert.ok(v[typeChatSchemaValidation]().success);
+                    assert.ok(v.validate({ value: "yes" }).success);
+                    assert.ok(v.validate({ value: "\ud800\uFEFFx" }).success);
+                    assert.ok(!v.validate({ value: "\ud800x" }).success);
+                    assert.ok(!v.validate({ value: "description" }).success);
+                });
+            }
+
+            it("does not reject an unrelated target because of a local enum named infer", () => {
+                const v = validatorFor(`
+function local() { enum infer { X = "yes" } }
+export interface Probe { value: number; }`, "Probe");
+                assert.ok(v[typeChatSchemaValidation]().success);
+                assert.ok(v.validate({ value: 1 }).success);
+                assert.ok(!v.validate({ value: "yes" }).success);
+            });
+
+            it("formats no more literals for a merged enum than for one declaration", async t => {
+                const members = Array.from({ length: 32 }, (_, i) => `V${i} = "value-${i}"`);
+                const makeSchema = (groups: string[]) => groups.map(group =>
+                    `namespace A { export enum E { ${group} } }`
+                ).join("\n") + `
+namespace B { export enum E { V0 = "other" } }
+export interface Probe { a: A.E; b: B.E; }`;
+                const { Checker } = await import("typescript/unstable/sync");
+                const format = t.mock.method(Checker.prototype, "typeToString");
+                validatorFor(makeSchema([members.join(", ")]), "Probe");
+                const singleCount = format.mock.callCount();
+                format.mock.resetCalls();
+
+                const v = validatorFor(makeSchema(members), "Probe");
+                assert.ok(format.mock.callCount() <= singleCount,
+                    `expected at most ${singleCount} formatting calls, got ${format.mock.callCount()}`);
+                assert.ok(v[typeChatSchemaValidation]().success);
+                assert.ok(v.validate({ a: "value-0", b: "other" }).success);
+                assert.ok(v.validate({ a: "value-31", b: "other" }).success);
+                assert.ok(!v.validate({ a: "other", b: "other" }).success);
+                assert.ok(!v.validate({ a: "value-0", b: "value-0" }).success);
+            });
+
             it("preserves string members alongside computed numeric members", () => {
                 const v = validatorFor(String.raw`
 declare function numericValue(): number;

@@ -329,6 +329,9 @@ The JSON `{ "currency": "EUR" }` is valid, while `{ "currency": "GBP" }` is not.
 differ, such as `Basic = "basic"`, JSON must use `"basic"`; `"Basic"` is rejected. Numeric enums keep their
 existing numeric validation behavior.
 
+Merged declarations contribute all their enum members. Qualified names such as `N.keyof` work
+even when the enum name is also a contextual keyword.
+
 String values are matched exactly by their UTF-16 code units. BOMs are not removed and Unicode
 normalization is not applied. Use Unicode escape sequences for lone surrogates in schema source,
 for example `"\uD800\uFEFFx"`. When constructing schema text in JavaScript, use `String.raw` or escaped
