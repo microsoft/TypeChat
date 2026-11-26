@@ -79,6 +79,10 @@ function getTypePrecedence(type: z.ZodType): TypePrecedence {
     return TypePrecedence.Object;
 }
 
+function isValidPropertyName(name: string): boolean {
+    return /^[a-zA-Z_$][0-9a-zA-Z_$]*$/.test(name);
+}
+
 /**
  * Returns the TypeScript source code corresponding to a Zod schema. The schema is supplied as an object where each
  * property provides a name for an associated Zod type. The return value is a string containing the TypeScript source
@@ -94,6 +98,7 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
     let indent = 0;
     const entries = Array.from(Object.entries(schema));
     let namedTypes = new Map<object, string>(entries.map(([name, type]) => [getTypeIdentity(type), name]));
+    const expandingTypes = new Set<object>();
     for (const [name, type] of entries) {
         if (result) {
             appendNewLine();
@@ -132,15 +137,24 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
     }
 
     function appendType(type: z.ZodType, minPrecedence = 0) {
-        const name = namedTypes.get(getTypeIdentity(type));
+        const identity = getTypeIdentity(type);
+        const name = namedTypes.get(identity);
         if (name) {
             append(name);
+            return;
         }
-        else {
+        if (expandingTypes.has(identity)) {
+            throw new Error("Recursive type reference detected in schema. Register the recursive type by name in the schema object to allow named type reference emission.");
+        }
+        expandingTypes.add(identity);
+        try {
             const parenthesize = getTypePrecedence(type) < minPrecedence;
             if (parenthesize) append("(");
             appendTypeDefinition(type);
             if (parenthesize) append(")");
+        }
+        finally {
+            expandingTypes.delete(identity);
         }
     }
 
@@ -163,6 +177,10 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
                 return append("unknown");
             case "array":
                 return appendArrayType(type);
+            case "set":
+                return appendSetType(type);
+            case "map":
+                return appendMapType(type);
             case "object":
                 return appendObjectType(type);
             case "union": { // covers both z.union() and z.discriminatedUnion() — Zod v4 merged discriminated unions into the regular union type kind ("ZodDiscriminatedUnion" in v3); both have an `options` array
@@ -198,11 +216,27 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
         append("[]");
     }
 
+    function appendSetType(setType: z.ZodType) {
+        append("globalThis.Set<");
+        appendType((setType._zod.def as z.core.$ZodSetDef).valueType as z.ZodType);
+        append(">");
+    }
+
+    function appendMapType(mapType: z.ZodType) {
+        const mapDef = mapType._zod.def as z.core.$ZodMapDef;
+        append("globalThis.Map<");
+        appendType(mapDef.keyType as z.ZodType);
+        append(", ");
+        appendType(mapDef.valueType as z.ZodType);
+        append(">");
+    }
+
     function appendObjectType(objectType: z.ZodType) {
         append("{");
         appendNewLine();
         indent++;
         for (let [name, type] of Object.entries((objectType._zod.def as z.core.$ZodObjectDef).shape) as [string, z.ZodType][]) {
+            const propertyName = isValidPropertyName(name) ? name : JSON.stringify(name);
             let inlineComment: string | undefined;
             if (getTypeKind(type) === "optional") {
                 const wrapperDescription = type.description;
@@ -212,12 +246,12 @@ export function getZodSchemaAsTypeScript(schema: Record<string, z.ZodType>): str
                         appendNewLine();
                     }
                 }
-                append(name);
+                append(propertyName);
                 append("?");
                 type = (type._zod.def as z.core.$ZodOptionalDef).innerType as z.ZodType;
             } else {
                 inlineComment = type.description;
-                append(name);
+                append(propertyName);
             }
             append(": ");
             appendType(type);

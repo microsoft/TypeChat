@@ -151,6 +151,144 @@ describe("getZodSchemaAsTypeScript", () => {
     });
 
     // -----------------------------------------------------------------------
+    // Set & Map
+    // -----------------------------------------------------------------------
+
+    describe("z.set()", () => {
+
+        it("produces globalThis.Set<T> representation for sets", () => {
+            assert.match(schemaOf("T", z.set(z.string())), /type T = globalThis\.Set<string>;/);
+        });
+
+        it("supports union element type in a set", () => {
+            assert.match(schemaOf("T", z.set(z.union([z.string(), z.number()]))), /type T = globalThis\.Set<string \| number>;/);
+        });
+
+        it("qualifies Set to avoid collision when the schema itself is named Set", () => {
+            const out = schemaOf("Set", z.set(z.string()));
+            assert.match(out, /type Set = globalThis\.Set<string>;/);
+        });
+
+        it("escapes non-identifier property names in object element types", () => {
+            const out = schemaOf("T", z.set(z.object({
+                "part-number": z.string(),
+                "is-active": z.boolean().optional(),
+                valid_ident: z.number(),
+            })));
+            assert.match(out, /"part-number": string;/);
+            assert.match(out, /"is-active"\?: boolean;/);
+            assert.match(out, /valid_ident: number;/);
+            assertSchemasCompile([out]);
+        });
+
+        it("throws when generating schema for an unnamed recursive object in a set", () => {
+            interface RecursiveNode {
+                name: string;
+                children?: Set<RecursiveNode>;
+            }
+            const RecursiveNode: z.ZodType<RecursiveNode> = z.object({
+                name: z.string(),
+                get children() {
+                    return z.set(RecursiveNode).optional();
+                },
+            });
+            assert.throws(
+                () => getZodSchemaAsTypeScript({ Nodes: z.set(RecursiveNode) }),
+                /Recursive type reference detected in schema\. Register the recursive type by name in the schema object to allow named type reference emission\./
+            );
+        });
+
+        it("emits named recursive reference when the recursive object is registered by name", () => {
+            interface RecursiveNode {
+                name: string;
+                children?: Set<RecursiveNode>;
+            }
+            const RecursiveNode: z.ZodType<RecursiveNode> = z.object({
+                name: z.string(),
+                get children() {
+                    return z.set(RecursiveNode).optional();
+                },
+            });
+            const out = schemasOf({
+                RecursiveNode,
+                Nodes: z.set(RecursiveNode),
+            });
+            assert.match(out, /interface RecursiveNode \{/);
+            assert.match(out, /children\?: globalThis\.Set<RecursiveNode>;/);
+            assert.match(out, /type Nodes = globalThis\.Set<RecursiveNode>;/);
+            assertSchemasCompile([out]);
+        });
+
+    });
+
+    describe("z.map()", () => {
+
+        it("produces globalThis.Map<K, V> representation for maps", () => {
+            assert.match(schemaOf("T", z.map(z.string(), z.number())), /type T = globalThis\.Map<string, number>;/);
+        });
+
+        it("supports union key and value types in maps", () => {
+            assert.match(schemaOf("T", z.map(z.union([z.string(), z.number()]), z.boolean())), /type T = globalThis\.Map<string \| number, boolean>;/);
+        });
+
+        it("qualifies Map to avoid collision when the schema itself is named Map", () => {
+            const out = schemaOf("Map", z.map(z.string(), z.number()));
+            assert.match(out, /type Map = globalThis\.Map<string, number>;/);
+        });
+
+        it("escapes non-identifier property names in map value object types", () => {
+            const out = schemaOf("T", z.map(z.string(), z.object({
+                "part-number": z.string(),
+                "is-active": z.boolean().optional(),
+                valid_ident: z.number(),
+            })));
+            assert.match(out, /"part-number": string;/);
+            assert.match(out, /"is-active"\?: boolean;/);
+            assert.match(out, /valid_ident: number;/);
+            assertSchemasCompile([out]);
+        });
+
+        it("throws when generating schema for an unnamed recursive object in a map", () => {
+            interface RecursiveMapNode {
+                name: string;
+                children?: Map<string, RecursiveMapNode>;
+            }
+            const RecursiveMapNode: z.ZodType<RecursiveMapNode> = z.object({
+                name: z.string(),
+                get children() {
+                    return z.map(z.string(), RecursiveMapNode).optional();
+                },
+            });
+            assert.throws(
+                () => getZodSchemaAsTypeScript({ Nodes: z.map(z.string(), RecursiveMapNode) }),
+                /Recursive type reference detected in schema\. Register the recursive type by name in the schema object to allow named type reference emission\./
+            );
+        });
+
+        it("emits named recursive reference when the recursive object in a map is registered by name", () => {
+            interface RecursiveMapNode {
+                name: string;
+                children?: Map<string, RecursiveMapNode>;
+            }
+            const RecursiveMapNode: z.ZodType<RecursiveMapNode> = z.object({
+                name: z.string(),
+                get children() {
+                    return z.map(z.string(), RecursiveMapNode).optional();
+                },
+            });
+            const out = schemasOf({
+                RecursiveMapNode,
+                Nodes: z.map(z.string(), RecursiveMapNode),
+            });
+            assert.match(out, /interface RecursiveMapNode \{/);
+            assert.match(out, /children\?: globalThis\.Map<string, RecursiveMapNode>;/);
+            assert.match(out, /type Nodes = globalThis\.Map<string, RecursiveMapNode>;/);
+            assertSchemasCompile([out]);
+        });
+
+    });
+
+    // -----------------------------------------------------------------------
     // Object — emitted as interface
     // -----------------------------------------------------------------------
 
@@ -180,6 +318,18 @@ describe("getZodSchemaAsTypeScript", () => {
                 x: z.number().describe("x coordinate"),
             }));
             assert.match(out, /x: number; \/\/ x coordinate/);
+        });
+
+        it("escapes non-identifier property names in interfaces", () => {
+            const out = schemaOf("InventoryItem", z.object({
+                "part-number": z.string(),
+                "special-case?": z.boolean().optional(),
+                validName: z.number(),
+            }));
+            assert.match(out, /"part-number": string;/);
+            assert.match(out, /"special-case\?"\?: boolean;/);
+            assert.match(out, /validName: number;/);
+            assertSchemasCompile([out]);
         });
 
         it("does NOT add comment to field comment if the optional wrapper has a description", () => {
@@ -505,6 +655,60 @@ describe("getZodSchemaAsTypeScript", () => {
 
             const invalidResult = validator.validate({ dateTime: "not-a-date" });
             assert.ok(!invalidResult.success, "expected invalid date-time validation to fail");
+        });
+
+        it("preserves explicit array-to-Set and tuple-array-to-Map transforms during validation and translation", async () => {
+            const CollectionSchema = {
+                Collections: z.object({
+                    tags: z.array(z.string()).transform(items => new Set(items)),
+                    entries: z.array(z.tuple([z.string(), z.number()])).transform(tuples => new Map(tuples)),
+                }),
+            };
+            const validator = createZodJsonValidator(CollectionSchema, "Collections");
+            const schemaText = validator.getSchemaText();
+            assert.match(schemaText, /tags: string\[\];/);
+            assert.match(schemaText, /entries: \[string, number\]\[\];/);
+
+            // Validation with JSON array inputs produces Set and Map instances
+            const valid = validator.validate({
+                tags: ["apple", "banana", "apple"],
+                entries: [["first", 1], ["second", 2]],
+            });
+            assert.ok(valid.success, "expected validation to succeed");
+            assert.ok(valid.data.tags instanceof Set);
+            assert.equal(valid.data.tags.size, 2);
+            assert.ok(valid.data.tags.has("apple"));
+            assert.ok(valid.data.tags.has("banana"));
+            assert.ok(valid.data.entries instanceof Map);
+            assert.equal(valid.data.entries.get("first"), 1);
+            assert.equal(valid.data.entries.get("second"), 2);
+
+            // Rejects invalid array elements
+            const invalid = validator.validate({
+                tags: [123],
+                entries: [["first", 1]],
+            });
+            assert.ok(!invalid.success, "expected invalid collection element to fail validation");
+
+            // Full translation path with stubbed language model
+            const mockModel = {
+                async complete() {
+                    return {
+                        success: true as const,
+                        data: JSON.stringify({
+                            tags: ["alpha", "beta"],
+                            entries: [["count", 42]],
+                        }),
+                    };
+                },
+            };
+            const translator = createJsonTranslator(mockModel, validator);
+            const translationResult = await translator.translate("Provide sample collections");
+            assert.ok(translationResult.success, "expected translation to succeed");
+            assert.ok(translationResult.data.tags instanceof Set);
+            assert.ok(translationResult.data.tags.has("alpha"));
+            assert.ok(translationResult.data.entries instanceof Map);
+            assert.equal(translationResult.data.entries.get("count"), 42);
         });
 
     });
