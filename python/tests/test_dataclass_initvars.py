@@ -40,6 +40,26 @@ class BareInitVariable:
     anything: InitVar = None  # type: ignore
 
 
+@dataclass
+class QuotedInitVariables:
+    name: str
+    repeat: InitVar["int"]
+    tags: InitVar["list[Tag] | None"] = None
+
+    def __post_init__(self, repeat: int, tags: "list[Tag] | None") -> None:
+        self.name = self.name * repeat
+
+
+@dataclass
+class Tag:
+    label: str
+
+
+@dataclass
+class InheritedQuotedInitVariables(QuotedInitVariables):
+    extra: str = "fake"
+
+
 class CapturingModel(TypeChatLanguageModel):
     def __init__(self) -> None:
         super().__init__()
@@ -68,7 +88,19 @@ def test_init_variables_use_their_wrapped_type() -> None:
     assert "    anything?: any;\n" in bare_schema
 
 
-@pytest.mark.parametrize("target", [InitVariables, InheritedInitVariables])
+@pytest.mark.parametrize("target", [QuotedInitVariables, InheritedQuotedInitVariables])
+def test_quoted_init_variable_types_are_resolved(target: type[Any]) -> None:
+    result = python_type_to_typescript_schema(target)
+    assert not result.errors
+    schema = result.typescript_schema_str
+    assert "    repeat: number;\n" in schema
+    assert "    tags?: Tag[] | null;\n" in schema
+
+
+@pytest.mark.parametrize(
+    "target",
+    [InitVariables, InheritedInitVariables, QuotedInitVariables, InheritedQuotedInitVariables],
+)
 def test_translator_accepts_init_variables(target: type[Any]) -> None:
     validator = TypeChatValidator(target)
     model = CapturingModel()

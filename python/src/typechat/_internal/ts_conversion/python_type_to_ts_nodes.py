@@ -209,6 +209,30 @@ def _extract_inline_field_comments(py_type: type) -> dict[str, str]:
     return comments
 
 
+def _resolve_init_var_type(py_type: type, attr_name: str, init_var_type: object) -> Any:
+    """Resolve quoted types inside `InitVar[...]`, which `get_type_hints` does not look into."""
+    owner = py_type
+    for base in py_type.__mro__:
+        try:
+            own_annotations = inspect.get_annotations(base)
+        except Exception:
+            continue
+        if attr_name in own_annotations:
+            owner = base
+            break
+
+    def holder() -> None: ...
+
+    holder.__annotations__ = {"value": init_var_type}
+    module = sys.modules.get(owner.__module__)
+    return get_type_hints(
+        holder,
+        globalns=dict(vars(module)) if module is not None else {},
+        localns=dict(vars(owner)),
+        include_extras=True,
+    )["value"]
+
+
 def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTranslationResult:
     # TODO: handle conflicting names
 
@@ -471,7 +495,7 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                     if type_hint is InitVar:
                         type_hint = cast(Any, Any)
                     elif isinstance(type_hint, InitVar):
-                        type_hint = cast(Any, type_hint).type
+                        type_hint = _resolve_init_var_type(py_type, attr_name, cast(Any, type_hint).type)
                     optional = not(field.default is MISSING and field.default_factory is MISSING)
                     prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional, fallback_comment=inline_comments.get(attr_name, ""))
                     properties.append(prop)
