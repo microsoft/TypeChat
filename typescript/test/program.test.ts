@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import type { PromptSection } from "../dist/index.js";
 import {
     createModuleTextFromProgram,
     createProgramTranslator,
@@ -115,11 +116,12 @@ describe("createModuleTextFromProgram result references", () => {
 describe("createProgramTranslator", () => {
     const apiSchema = "export interface API { add(a: number, b: number): number; }";
 
-    it("preflights an API-only schema and translates a valid program", async () => {
-        let modelCalls = 0;
+    it("program: describes the JSON Program output and allowed API, then validates a program", async () => {
+        const calls: PromptSection[][] = [];
         const translator = createProgramTranslator({
-            async complete() {
-                modelCalls++;
+            async complete(prompt) {
+                assert.ok(Array.isArray(prompt));
+                calls.push(structuredClone(prompt));
                 return {
                     success: true as const,
                     data: '{"@steps":[{"@func":"add","@args":[1,2]}]}'
@@ -131,7 +133,34 @@ describe("createProgramTranslator", () => {
             const result = await translator.translate("add one and two");
             assert.ok(result.success);
             assert.deepEqual(result.data, { "@steps": [{ "@func": "add", "@args": [1, 2] }] });
-            assert.equal(modelCalls, 1);
+            assert.equal(calls.length, 1);
+            const [system] = calls[0];
+            assert.match(String(system.content), /export type Program =/);
+            assert.match(String(system.content), /"@steps": FunctionCall\[\]/);
+            assert.ok(system.content.includes(apiSchema));
+            assert.match(String(system.content), /Return only a JSON object of type Program/);
+            assert.doesNotMatch(String(system.content), /add one and two/);
+            assert.deepEqual(calls[0], [{ role: "system", content: system.content }, { role: "user", content: "add one and two" }]);
+        } finally {
+            (translator.validator as TypeScriptJsonValidator<Program>).close();
+        }
+    });
+
+    it("legacy program prompt keeps both schemas and the request in the user role", async () => {
+        const translator = createProgramTranslator({
+            async complete(prompt) {
+                assert.ok(Array.isArray(prompt));
+                assert.deepEqual(prompt.map(section => section.role), ["user"]);
+                const content = String(prompt[0].content);
+                assert.match(content, /export type Program =/);
+                assert.ok(content.includes(apiSchema));
+                assert.match(content, /The following is a user request:\n"""\nadd one and two\n"""/);
+                assert.match(content, /translated into a JSON program object/);
+                return { success: true, data: '{"@steps":[]}' };
+            }
+        }, apiSchema, { promptLayout: "legacy" });
+        try {
+            assert.ok((await translator.translate("add one and two")).success);
         } finally {
             (translator.validator as TypeScriptJsonValidator<Program>).close();
         }
@@ -144,7 +173,13 @@ describe("createProgramTranslator", () => {
         ];
         let modelCalls = 0;
         const translator = createProgramTranslator({
-            async complete() {
+            async complete(prompt) {
+                if (modelCalls === 1) {
+                    assert.ok(Array.isArray(prompt));
+                    assert.deepEqual(prompt.map(section => section.role), ["system", "user", "assistant", "user"]);
+                    assert.equal(prompt[2].content, responses[0]);
+                    assert.match(String(prompt[3].content), /JSON program object is invalid[\s\S]+not assignable/);
+                }
                 const data = responses[modelCalls++];
                 return { success: true as const, data };
             }

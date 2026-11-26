@@ -1,7 +1,7 @@
 import { Result, error, success } from "../result.js";
 import { TypeChatLanguageModel } from "../model.js";
 import { createTypeScriptJsonValidator } from "./validate.js";
-import { TypeChatJsonTranslator, createJsonTranslator } from "../typechat.js";
+import { TypeChatJsonTranslator, TypeChatTranslatorOptions, createJsonTranslator } from "../typechat.js";
 
 const programSchemaText = `// A program consists of a sequence of function calls that are evaluated in order.
 export type Program = {
@@ -210,24 +210,34 @@ export async function evaluateJsonProgram(program: Program, onCall: (func: strin
  * function.
  * @param model The language model to use for translating requests into programs.
  * @param schema The TypeScript source code for the target API. The source code must export a type named `API`.
+ * @param options Selects the prompt layout, as for `createJsonTranslator`.
  * @returns A `TypeChatJsonTranslator<Program>` instance.
  */
-export function createProgramTranslator(model: TypeChatLanguageModel, schema: string): TypeChatJsonTranslator<Program> {
+export function createProgramTranslator(model: TypeChatLanguageModel, schema: string, options?: TypeChatTranslatorOptions): TypeChatJsonTranslator<Program> {
     const validator = createTypeScriptJsonValidator<Program>(
         schema,
         "Program",
         "API"
     );
     validator.createModuleTextFromJson = createModuleTextFromProgram;
-    const translator = createJsonTranslator<Program>(model, validator);
-    translator.createRequestPrompt = createRequestPrompt;
+    const translator = createJsonTranslator<Program>(model, validator, options);
+    translator.createSystemPrompt = () => describeProgram() +
+        `\`\`\`\n${validator.getSchemaText()}\n\`\`\`\n` +
+        `Return only a JSON object of type Program with 2 spaces of indentation and no properties with the value undefined.`;
+    if (options?.promptLayout === "legacy") {
+        translator.createRequestPrompt = createRequestPrompt;
+    }
     translator.createRepairPrompt = createRepairPrompt;
     return translator;
 
-    function createRequestPrompt(request: string) {
+    function describeProgram() {
         return `You are a service that translates user requests into programs represented as JSON using the following TypeScript definitions:\n` +
             `\`\`\`\n${programSchemaText}\`\`\`\n` +
-            `The programs can call functions from the API defined in the following TypeScript definitions:\n` +
+            `The programs can call functions from the API defined in the following TypeScript definitions:\n`;
+    }
+
+    function createRequestPrompt(request: string) {
+        return describeProgram() +
             `\`\`\`\n${validator.getSchemaText()}\`\`\`\n` +
             `The following is a user request:\n` +
             `"""\n${request}\n"""\n` +

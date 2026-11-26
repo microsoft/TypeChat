@@ -29,6 +29,10 @@ export function createAgentRouter<T extends object>(model: TypeChatLanguageModel
         description: "Handles all unrecognized requests"
     });
 
+    const schemaPrompt = taskClassifier.createSystemPrompt;
+    taskClassifier.createSystemPrompt = () => `${schemaPrompt()}\n` +
+        `Classify the request using this table of registered agents:\n${JSON.stringify(router._taskTypes, undefined, 2)}`;
+
     return router;
 
     async function handlerUnknownTask(request: string): Promise<Result<T>> {
@@ -47,13 +51,7 @@ export function createAgentRouter<T extends object>(model: TypeChatLanguageModel
     }
 
     async function routeRequest(request:string): Promise<void> {
-        const initClasses = JSON.stringify(router._taskTypes, undefined, 2);
-        const fullRequest = `
-Classify "${request}" using the following classification table:\n
-${initClasses}\n`;
-        const response = await router._taskClassifier.translate(request, [{
-            role: "assistant", content: `${fullRequest}`
-        }]);
+        const response = await router._taskClassifier.translate(request);
 
         if (response.success) {
             if (response.data.taskType != "No Match") {

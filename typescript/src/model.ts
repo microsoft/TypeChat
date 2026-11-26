@@ -1,9 +1,9 @@
 import { Result, success, error, withResponseMetadata, TypeChatResponseMetadata, TypeChatTokenUsage } from "./result.js";
 
 /**
- * Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for
- * prompts it generates and the "assistant" role for previous LLM responses (which will be part of
- * the prompt in repair attempts). TypeChat currently doesn't use the "system" role.
+ * Represents a section of an LLM prompt with an associated role. By default translators send the
+ * schema and output instructions as system, the current request as user, and, when repairing,
+ * the rejected model response as assistant and the diagnostic as user.
  */
 export interface PromptSection {
     /**
@@ -88,6 +88,7 @@ export interface TypeChatLanguageModel {
      * Obtains a completion from the language model for the given prompt.
      * @param prompt A prompt string or an array of prompt sections. If a string is specified,
      *   it is converted into a single "user" role prompt section.
+     *   Preserve the roles and order of sections; report unsupported layouts rather than flattening them.
      * Optional result metadata contains service-reported usage and filtering information.
      */
     complete(prompt: string | PromptSection[]): Promise<Result<string>>;
