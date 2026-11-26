@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2021", "webworker"],
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["client.ts", "validator.worker.ts"]
+}

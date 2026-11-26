@@ -141,6 +141,11 @@ The symbol's runtime value and canonical declaration are shared across the ESM a
 CommonJS builds, so validators remain type-compatible and schema preflight also runs
 when a validator and translator come from different module formats.
 
+An isolated, private [browser/WASM validator prototype](./experimental/browser/README.md)
+tracks [#536](https://github.com/microsoft/TypeChat/issues/536). It requires a separate
+install and explicit opt-in; it is not a published or supported browser release.
+The normal package and `typechat/ts` continue to use the native Node.js backend.
+
 To see TypeChat in action, we recommend exploring the [TypeChat example projects](https://github.com/microsoft/TypeChat/tree/main/typescript/examples). You can try them on your local machine or in a GitHub Codespace.
 
 To learn more about TypeChat, visit the [documentation](https://microsoft.github.io/TypeChat) which includes more information on TypeChat and how to get started.

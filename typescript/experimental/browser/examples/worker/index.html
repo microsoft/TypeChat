@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Experimental TypeChat worker validation</title>
+<link rel="stylesheet" href="/worker.css">
+<script type="module" src="/worker-main.js"></script>
+</head>
+<body data-wasm-url="__TYPECHAT_WASM_ASSET__">
+<h1>Experimental TypeChat worker validation</h1>
+<p>Offline example: no model calls or credentials. Each run owns a worker and a
+compiler. Cancellation terminates that worker. The experimental WASM download is
+about 53 MB before compression.</p>
+<pre>enum Status { Active = "active", Paused = "paused" }
+interface Request { status: Status; value: number; }</pre>
+<label for="values">JSON objects to validate</label>
+<textarea id="values">[{"status":"active","value":1},{"status":"unknown","value":"invalid"}]</textarea>
+<button id="run">Validate in worker</button>
+<button id="cancel" disabled>Cancel</button>
+<p id="status" role="status">Ready</p>
+<p>Main-thread timer ticks: <span id="ticks">0</span></p>
+<pre id="result"></pre>
+</body>
+</html>
