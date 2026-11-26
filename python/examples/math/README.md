@@ -1,6 +1,11 @@
 # Math
 
-The Math example shows how to use TypeChat for program generation based on an API schema with the `evaluateJsonProgram` function. This example translates calculations into simple programs given an [`API`](./schema.py) type that can perform the four basic mathematical operations.
+The Math example translates calculations into JSON programs that call the functions in
+[`MathAPI`](./schema.py). The [program translator](./program.py) puts **both** the
+JSON program schema and the calculator API schema in its system message. The
+calculation request is a separate user message. `use_legacy_prompt=True` keeps the
+previous combined user prompt. In both layouts, `evaluate_json_program` evaluates
+the validated program using the example's operations.
 
 # Try Math
 
@@ -21,15 +26,15 @@ For example, we could use natural language to describe mathematical operations, 
 **Output**:
 
 ```
-import { API } from "./schema";
-function program(api: API) {
-  const step1 = api.mul(2, 3);
-  const step2 = api.mul(4, 5);
-  return api.add(step1, step2);
+{
+  "@steps": [
+    {"@func": "mul", "@args": [2, 3]},
+    {"@func": "mul", "@args": [4, 5]},
+    {"@func": "add", "@args": [{"@ref": 0}, {"@ref": 1}]}
+  ]
 }
-Running program:
-mul(2, 3)
-mul(4, 5)
-add(6, 20)
-Result: 26
+mul([2, 3])
+mul([4, 5])
+add([6, 20])
+Math Result: 26
 ```

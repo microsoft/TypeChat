@@ -402,18 +402,14 @@ def test_translator_retains_image_context_layout_repair_limits_and_failure_paylo
         assert result.response_text == expected.response_text
     assert preamble == original
     assert len(harness.prompts) == len(responses)
-    expected_request: typechat.PromptSection = {"role": "user", "content": f"""
+    expected_system: typechat.PromptSection = {"role": "system", "content": f"""
 You are a service that translates user requests into JSON objects of type "{translator.type_name}" according to the following TypeScript definitions:
 ```
 {translator.schema_str}
 ```
-The following is a user request:
-'''
-Describe the images.
-'''
-The following is the user request translated into a JSON object with 2 spaces of indentation and no properties with the value undefined:
+You translate each user request into a JSON object with 2 spaces of indentation and no properties with the value undefined.
 """}
-    first_prompt = [*original, expected_request]
+    first_prompt: list[typechat.PromptSection] = [expected_system, *original, {"role": "user", "content": "Describe the images."}]
     for attempt, prompt in enumerate(harness.prompts):
         assert prompt[:len(first_prompt)] == first_prompt
         assert len(prompt) == len(first_prompt) + 2 * attempt
@@ -439,7 +435,7 @@ def test_malformed_preamble_does_not_trigger_translator_repair(
     )
     preamble = cast(list[typechat.PromptSection], [{"role": "user", "content": [_PRIVATE_TEXT]}])
     result = asyncio.run(translator.translate("Describe the images.", prompt_preamble=preamble))
-    _assert_invalid_prompt(harness, result, "section 0, part 0")
+    _assert_invalid_prompt(harness, result, "section 1, part 0")
     complete.assert_awaited_once()
 
 
@@ -449,7 +445,9 @@ def test_documented_model_and_translator_examples_work_offline(model_factory: Mo
     assert text == typechat.Success("image description")
     assert data == typechat.Success({"description": "two images"})
     assert len(harness.prompts) == 2
-    assert harness.prompts[1][:-1] == harness.prompts[0]
+    assert harness.prompts[1][0]["role"] == "system"
+    assert harness.prompts[1][1:-1] == harness.prompts[0]
+    assert harness.prompts[1][-1] == {"role": "user", "content": "Describe the images."}
 
 
 @pytest.mark.parametrize("model_factory", ["http-key", "http-token"], indirect=True)

@@ -28,6 +28,7 @@ class TypeChatJsonTranslator(Generic[T]):
         validator: TypeChatValidator[T],
         target_type: type[T],
         *, # keyword-only parameters follow
+        use_legacy_prompt: bool = False,
         _raise_on_schema_errors: bool = True,
     ):
         """
@@ -35,11 +36,13 @@ class TypeChatJsonTranslator(Generic[T]):
             model: The associated `TypeChatLanguageModel`.
             validator: The associated `TypeChatValidator[T]`.
             target_type: A runtime type object describing `T` - the expected shape of JSON data.
+            use_legacy_prompt: Use the pre-0.3 combined user prompt and `_create_request_prompt` hook.
         """
         super().__init__()
         self.model = model
         self.validator = validator
         self.target_type = target_type
+        self._use_legacy_prompt = use_legacy_prompt
 
         conversion_result = python_type_to_typescript_schema(target_type)
 
@@ -61,18 +64,31 @@ class TypeChatJsonTranslator(Generic[T]):
 
         Args:
             input: A natural language request.
-            prompt_preamble: An optional string or list of prompt sections to prepend to the generated prompt.\
-                             If a string is given, it is converted to a single "user" role prompt section.
+            prompt_preamble: Context placed before the current user message, after the default system
+                             instructions. A nonempty string becomes one user message; a list keeps its roles.
         """
 
         messages: list[PromptSection] = []
+
+        if not self._use_legacy_prompt:
+            # Don't silently bypass a more specific legacy hook, including one assigned to this instance.
+            for owner in (self, *type(self).__mro__):
+                if "_create_system_prompt" in vars(owner):
+                    break
+                if "_create_request_prompt" in vars(owner):
+                    raise ValueError(
+                        "_create_request_prompt is a legacy hook. Pass use_legacy_prompt=True, or override "
+                        + "_create_system_prompt(self) with application instructions only (no request or history)."
+                    )
+            messages.append({"role": "system", "content": self._create_system_prompt()})
 
         if prompt_preamble:
             if isinstance(prompt_preamble, str):
                 prompt_preamble = [{"role": "user", "content": prompt_preamble}]
             messages.extend(prompt_preamble)
 
-        messages.append({"role": "user", "content": self._create_request_prompt(input)})
+        user_prompt = self._create_request_prompt(input) if self._use_legacy_prompt else input
+        messages.append({"role": "user", "content": user_prompt})
 
         num_repairs_attempted = 0
         last_failure: Failure | None = None
@@ -124,7 +140,18 @@ class TypeChatJsonTranslator(Generic[T]):
             messages.append({"role": "assistant", "content": text_response})
             messages.append({"role": "user", "content": self._create_repair_prompt(failure.message)})
 
+    def _create_system_prompt(self) -> str:
+        """Build application-owned instructions for this turn, without the request or conversation history."""
+        return f"""
+You are a service that translates user requests into JSON objects of type "{self.type_name}" according to the following TypeScript definitions:
+```
+{self.schema_str}
+```
+You translate each user request into a JSON object with 2 spaces of indentation and no properties with the value undefined.
+"""
+
     def _create_request_prompt(self, intent: str) -> str:
+        """Build the combined user message used only with use_legacy_prompt=True."""
         prompt = f"""
 You are a service that translates user requests into JSON objects of type "{self.type_name}" according to the following TypeScript definitions:
 ```

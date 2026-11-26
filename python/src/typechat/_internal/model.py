@@ -30,9 +30,9 @@ PromptContent: TypeAlias = str | list[TextPromptContent | ImagePromptContent]
 
 class PromptSection(TypedDict):
     """
-    Represents a section of an LLM prompt with an associated role. TypeChat uses the "user" role for
-    prompts it generates and the "assistant" role for previous LLM responses (which will be part of
-    the prompt in repair attempts). TypeChat currently doesn't use the "system" role.
+    Represents a section of an LLM prompt with an associated role. By default the translator sends
+    schema instructions as "system" and the request as "user". Repairs append the rejected response
+    as "assistant" and the diagnostic as "user".
     """
     role: Literal["system", "user", "assistant"]
     content: PromptContent

@@ -171,7 +171,7 @@ def test_client_adapter_preserves_translation_validation_and_repair():
     assert asyncio.run(translator.translate("Get a value")) == typechat.Success(_Response("repaired"))
     requests = client.chat.completions.requests
     assert len(requests) == 2
-    assert [message["role"] for message in requests[1]["messages"]] == ["user", "assistant", "user"]
+    assert [message["role"] for message in requests[1]["messages"]] == ["system", "user", "assistant", "user"]
 
 
 def test_typechat_import_does_not_require_provider_sdks():

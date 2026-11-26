@@ -814,7 +814,9 @@ def test_translator_accepts_valid_responses_without_repair(
 
     assert asyncio.run(run()) == typechat.Success(_Value("validated"))
     assert len(requests) == 1
-    assert requests[0]["input"][:-1] == expected
+    assert requests[0]["input"][0]["role"] == "system"
+    assert requests[0]["input"][1:-1] == expected
+    assert requests[0]["input"][-1] == {"role": "user", "content": "get value"}
     assert preamble == original
 
 
@@ -838,8 +840,9 @@ def test_translator_validates_and_repairs_responses_without_changing_mode(
 
     asyncio.run(run())
     assert len(requests) == 2
-    assert requests[0]["input"][:-1] == expected
-    assert requests[0]["input"][-1]["role"] == "user"
+    assert requests[0]["input"][0]["role"] == "system"
+    assert requests[0]["input"][1:-1] == expected
+    assert requests[0]["input"][-1] == {"role": "user", "content": "get value"}
     assert requests[1]["input"][:-2] == requests[0]["input"]
     assert requests[1]["input"][-2] == {"role": "assistant", "content": initial}
     assert requests[1]["input"][-1]["role"] == "user"
@@ -865,7 +868,7 @@ def test_translator_preserves_final_failure_values_and_one_repair_default(
     assert result.has_value and result.value == {"value": 123}
     assert result.response_text == "not JSON"
     assert len(requests) == 2
-    assert all(request["input"][:len(expected)] == expected for request in requests)
+    assert all(request["input"][1:1 + len(expected)] == expected for request in requests)
     assert preamble == original
 
 
@@ -889,7 +892,7 @@ def test_model_output_failure_stops_translation_without_an_additional_repair(
     result = asyncio.run(run())
     assert isinstance(result, typechat.Failure)
     assert len(requests) == (2 if after_repair else 1)
-    assert all(request["input"][:len(expected)] == expected for request in requests)
+    assert all(request["input"][1:1 + len(expected)] == expected for request in requests)
     assert preamble == original
     if after_repair:
         assert result.has_value and result.value == {"value": 123}
@@ -917,7 +920,7 @@ def test_responses_rejects_malformed_image_preambles_without_repair(
 
     result = asyncio.run(run())
     assert isinstance(result, typechat.Failure)
-    assert "section 0, part 0" in result.message
+    assert "section 1, part 0" in result.message
     assert not result.has_value and result.response_text is None
     assert requests == []
     provider.assert_not_called()

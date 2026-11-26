@@ -33,9 +33,7 @@ def test_classify_returns_validated_sentiment(sentiment: str) -> None:
 
     assert isinstance(result, non_interactive.Sentiment)
     assert result.sentiment == sentiment
-    request = model.conversation[0]["payload"]
-    assert isinstance(request, list)
-    assert "Classify this text." in request[0]["content"]
+    assert model.request()[-1] == {"role": "user", "content": "Classify this text."}
 
 
 def test_classify_reuses_translator_for_independent_requests() -> None:
@@ -50,13 +48,11 @@ def test_classify_reuses_translator_for_independent_requests() -> None:
     first, second = asyncio.run(classify_both())
     assert first.sentiment == "positive"
     assert second.sentiment == "negative"
-    first_request = model.conversation[0]["payload"]
-    second_request = model.conversation[2]["payload"]
-    assert isinstance(first_request, list)
-    assert isinstance(second_request, list)
-    assert len(first_request) == len(second_request) == 1
-    assert "I love this!" in first_request[0]["content"]
-    assert "I hate this!" in second_request[0]["content"]
+    first_system, first_user = model.request()
+    second_system, second_user = model.request(1)
+    assert first_system == second_system and first_system["role"] == "system"
+    assert first_user == {"role": "user", "content": "I love this!"}
+    assert second_user == {"role": "user", "content": "I hate this!"}
 
 
 def test_classify_repairs_invalid_sentiment() -> None:

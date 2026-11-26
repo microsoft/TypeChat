@@ -166,6 +166,18 @@ def test_translator_propagates_initial_model_failures_unchanged():
     assert asyncio.run(translator.translate("request")) is original
 
 
+def test_unsupported_system_role_is_not_retried_with_flattened_history():
+    unsupported = Failure("This provider does not support system messages.")
+    translator, model = translator_for([unsupported])
+    history: list[PromptSection] = [
+        {"role": "user", "content": "earlier request"}, {"role": "assistant", "content": '{"value":1}'},
+    ]
+    assert asyncio.run(translator.translate("next request", prompt_preamble=history)) is unsupported
+    [prompt] = model.prompts
+    assert isinstance(prompt, list) and prompt[0]["role"] == "system"
+    assert prompt[1:] == [*history, {"role": "user", "content": "next request"}]
+
+
 def test_translator_preserves_successful_repair():
     first = '{"value":"invalid"}'
     translator, model = translator_for([Success(first), Success('{"value":42}')])
@@ -173,8 +185,9 @@ def test_translator_preserves_successful_repair():
     assert len(model.prompts) == 2
     repair_prompt = model.prompts[1]
     assert isinstance(repair_prompt, list)
-    assert repair_prompt[1]["content"] == first
-    assert "failed for value" in repair_prompt[2]["content"]
+    assert repair_prompt[-2] == {"role": "assistant", "content": first}
+    assert repair_prompt[-1]["role"] == "user"
+    assert "failed for value" in repair_prompt[-1]["content"]
 
 
 def test_translator_returns_latest_rejected_candidate_after_one_repair():
