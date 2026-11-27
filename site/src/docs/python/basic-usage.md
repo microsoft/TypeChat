@@ -670,6 +670,8 @@ Use `isinstance` with `Success` or `Failure` to distinguish outcomes, not the pr
 Validators also retain rejected inputs when used directly.
 Custom validators can return `Failure(message, value=rejected, response_text=text)`, and the
 translator preserves their payloads.
+A validation message may show a placeholder such as `<non-JSON bytes>` for intermediate values
+that cannot be formatted, while `Failure.value` still holds the original input.
 
 If automatic repair fails, TypeChat retains the latest rejected candidate and available model text,
 not a full attempt history. These can refer to different attempts if the repair response could not
