@@ -8,6 +8,7 @@ from typechat._internal.result import Failure, Result, Success
 
 T = TypeVar("T", covariant=True)
 
+
 class TypeChatValidator(Generic[T]):
     """
     Validates an object against a given Python type.
@@ -55,7 +56,18 @@ def _handle_error(validation_error: pydantic.ValidationError, value: object) -> 
         else:
             error_string += "Root validation "
         input = error["input"]
-        error_string += f"failed for value `{json.dumps(input)}` because:\n  {error['msg']}"
+        try:
+            input_text = json.dumps(input)
+        except (TypeError, ValueError, RecursionError):
+            # Pydantic diagnostics can carry intermediate values that are not
+            # JSON-serializable (for example bytes from a BeforeValidator), and
+            # deeply nested values can exhaust the encoder's recursion limit.
+            # We avoid `repr()` here because user-defined `__repr__` methods can
+            # raise too (for example, a dataclass with an unset `init=False`
+            # field), which would mask the original validation error.
+            # Validation must return a Failure, not raise while formatting it.
+            input_text = f"<non-JSON {type(input).__name__}>"
+        error_string += f"failed for value `{input_text}` because:\n  {error['msg']}"
         error_strings.append(error_string)
 
     if len(error_strings) > 1:
