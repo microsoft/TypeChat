@@ -97,6 +97,17 @@ def test_quoted_init_variable_types_are_resolved(target: type[Any]) -> None:
     assert "    tags?: Tag[] | null;\n" in schema
 
 
+def test_local_init_variable_can_refer_to_its_own_class() -> None:
+    @dataclass
+    class Node:
+        name: str
+        parent: InitVar["Node | None"] = None
+
+    result = python_type_to_typescript_schema(Node)
+    assert not result.errors
+    assert "    parent?: Node | null;\n" in result.typescript_schema_str
+
+
 @pytest.mark.parametrize(
     "target",
     [InitVariables, InheritedInitVariables, QuotedInitVariables, InheritedQuotedInitVariables],

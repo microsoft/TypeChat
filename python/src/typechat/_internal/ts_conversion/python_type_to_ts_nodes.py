@@ -228,7 +228,9 @@ def _resolve_init_var_type(py_type: type, attr_name: str, init_var_type: object)
     return get_type_hints(
         holder,
         globalns=dict(vars(module)) if module is not None else {},
-        localns=dict(vars(owner)),
+        # A class defined inside a function is not in its module's namespace,
+        # so make it visible to annotations that refer to it by name.
+        localns={owner.__name__: owner, **vars(owner)},
         include_extras=True,
     )["value"]
 
