@@ -268,6 +268,53 @@ describe("translation failure context", () => {
     });
 });
 
+describe("stripNulls array normalization", () => {
+    for (const { groups, expected } of [
+        { groups: [null, [null, 1]], expected: [[1]] },
+        { groups: [[null, 1], null, [null, null]], expected: [[1], []] }
+    ]) {
+        it(`strips nulls from nested arrays ${JSON.stringify(groups)}`, async () => {
+            const validator = createTypeScriptJsonValidator<{ groups: number[][] }>(
+                "export interface Groups { groups: number[][]; }", "Groups"
+            );
+            try {
+                const model: TypeChatLanguageModel = {
+                    complete: async () => success(JSON.stringify({ groups }))
+                };
+                const translator = createJsonTranslator(model, validator);
+                translator.stripNulls = true;
+                translator.attemptRepair = false;
+                const result = await translator.translate("request");
+                assert.ok(result.success);
+                assert.deepEqual(result.data, { groups: expected });
+            }
+            finally {
+                validator.close();
+            }
+        });
+    }
+
+    it("strips nulls from flat arrays", async () => {
+        const validator = createTypeScriptJsonValidator<{ items: number[] }>(
+            "export interface Items { items: number[]; }", "Items"
+        );
+        try {
+            const model: TypeChatLanguageModel = {
+                complete: async () => success('{"items":[null,1,null,2]}')
+            };
+            const translator = createJsonTranslator(model, validator);
+            translator.stripNulls = true;
+            translator.attemptRepair = false;
+            const result = await translator.translate("request");
+            assert.ok(result.success);
+            assert.deepEqual(result.data, { items: [1, 2] });
+        }
+        finally {
+            validator.close();
+        }
+    });
+});
+
 describe("repair failure context", () => {
     it("repair: raw invalid reply as assistant, validator diagnostic as user", async () => {
         const first = 'original preface\n{"value":"invalid"}\noriginal suffix';

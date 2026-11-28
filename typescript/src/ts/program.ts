@@ -137,7 +137,7 @@ export function createModuleTextFromProgram(jsonObject: object): Result<string> 
             return `[${arrayToString(obj)}]`;
         }
         else {
-            return `{ ${Object.keys(obj).map(key => `${JSON.stringify(key)}: ${exprToString(obj[key])}`).join(", ")} }`;
+            return `{ ${Object.keys(obj).map(key => `${key === "__proto__" ? '["__proto__"]' : JSON.stringify(key)}: ${exprToString(obj[key])}`).join(", ")} }`;
         }
         hasError = true;
         return "";
