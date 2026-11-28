@@ -225,12 +225,16 @@ def _resolve_init_var_type(py_type: type, attr_name: str, init_var_type: object)
 
     holder.__annotations__ = {"value": init_var_type}
     module = sys.modules.get(owner.__module__)
+    type_params: dict[str, object] = {
+        type_param.__name__: type_param
+        for type_param in getattr(owner, "__type_params__", ()) or getattr(owner, "__parameters__", ())
+    }
     return get_type_hints(
         holder,
         globalns=dict(vars(module)) if module is not None else {},
         # A class defined inside a function is not in its module's namespace,
-        # so make it visible to annotations that refer to it by name.
-        localns={owner.__name__: owner, **vars(owner)},
+        # and neither are its type parameters, so make both visible by name.
+        localns={**type_params, owner.__name__: owner, **vars(owner)},
         include_extras=True,
     )["value"]
 

@@ -1,7 +1,7 @@
 import asyncio
 import re
 from dataclasses import InitVar, dataclass
-from typing import Annotated, Any
+from typing import Annotated, Any, Generic, TypeVar
 
 import pytest
 from pydantic import TypeAdapter
@@ -106,6 +106,22 @@ def test_local_init_variable_can_refer_to_its_own_class() -> None:
     result = python_type_to_typescript_schema(Node)
     assert not result.errors
     assert "    parent?: Node | null;\n" in result.typescript_schema_str
+
+
+def test_local_generic_init_variable_can_refer_to_its_type_parameter() -> None:
+    T = TypeVar("T")
+
+    @dataclass
+    class Box(Generic[T]):
+        name: str
+        value: InitVar["T"]
+        others: InitVar["list[T] | None"] = None
+
+    result = python_type_to_typescript_schema(Box)
+    assert not result.errors
+    assert "interface Box<T> {\n" in result.typescript_schema_str
+    assert "    value: T;\n" in result.typescript_schema_str
+    assert "    others?: T[] | null;\n" in result.typescript_schema_str
 
 
 @pytest.mark.parametrize(
