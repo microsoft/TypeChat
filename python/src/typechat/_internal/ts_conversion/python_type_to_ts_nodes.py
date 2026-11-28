@@ -209,6 +209,48 @@ def _extract_inline_field_comments(py_type: type) -> dict[str, str]:
     return comments
 
 
+def _substitute_type_arguments(type_hint: Any, type_arguments: dict[object, object]) -> Any:
+    """Replace the type parameters in `type_hint` that have an entry in `type_arguments`."""
+    if isinstance(type_hint, TypeVar):
+        return type_arguments.get(type_hint, type_hint)
+    if isinstance(type_hint, type):
+        return type_hint
+    type_params: tuple[object, ...] = getattr(type_hint, "__parameters__", ())
+    if not any(type_param in type_arguments for type_param in type_params):
+        return type_hint
+    return type_hint[tuple(type_arguments.get(type_param, type_param) for type_param in type_params)]
+
+
+def _inherited_type_arguments(py_type: type) -> dict[type, dict[object, object]]:
+    """
+    Map each base class of `py_type` to the type arguments it is inherited with.
+
+    For `class IntBox(Box[int])` where `Box` is generic in `T`, this is `{Box: {T: int}}`.
+    """
+    result: dict[type, dict[object, object]] = {}
+
+    def visit(current: type, current_type_arguments: dict[object, object]) -> None:
+        for base in get_original_bases(current):
+            origin = get_origin(base) or base
+            if not isinstance(origin, type) or origin is Generic or origin in result:
+                continue
+            type_params: tuple[object, ...] = getattr(origin, "__type_params__", ()) or getattr(origin, "__parameters__", ())
+            type_args = [_substitute_type_arguments(type_arg, current_type_arguments) for type_arg in get_args(base)]
+            type_arguments = dict(zip(type_params, type_args)) if len(type_params) == len(type_args) else {}
+            result[origin] = type_arguments
+            visit(origin, type_arguments)
+
+    visit(py_type, {})
+    return result
+
+
+def _declaring_class(py_type: type, attr_name: str) -> type:
+    for base in py_type.__mro__:
+        if attr_name in base.__dict__.get("__annotations__", {}):
+            return base
+    return py_type
+
+
 def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTranslationResult:
     # TODO: handle conflicting names
 
@@ -462,11 +504,18 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                 if comment == dataclass_doc:
                     comment = ""
 
+                inherited_type_arguments = _inherited_type_arguments(py_type)
                 for attr_name, field in cast(Dataclassish, py_type).__dataclass_fields__.items():
                     type_hint = annotated_members[attr_name]
                     if type_hint is ClassVar or get_origin(type_hint) is ClassVar:
                         continue
                     optional = not(field.default is MISSING and field.default_factory is MISSING)
+                    # A field inherited from `Box[int]` is written in terms of `Box`'s own type
+                    # parameter, which is not a type parameter of the class being declared.
+                    type_hint = _substitute_type_arguments(
+                        type_hint,
+                        inherited_type_arguments.get(_declaring_class(py_type, attr_name), {}),
+                    )
                     prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional, fallback_comment=inline_comments.get(attr_name, ""))
                     properties.append(prop)
 
