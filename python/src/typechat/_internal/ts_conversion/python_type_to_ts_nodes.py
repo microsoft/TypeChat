@@ -10,7 +10,7 @@ import sys
 import tokenize
 import typing
 import typing_extensions
-from dataclasses import MISSING, Field, dataclass
+from dataclasses import MISSING, Field, InitVar, dataclass
 from types import NoneType, UnionType
 from typing_extensions import (
     Annotated,
@@ -207,6 +207,36 @@ def _extract_inline_field_comments(py_type: type) -> dict[str, str]:
                 if trailing.lstrip(" \t;").startswith("#"):
                     comments[stmt.target.id] = comment
     return comments
+
+
+def _resolve_init_var_type(py_type: type, attr_name: str, init_var_type: object) -> Any:
+    """Resolve quoted types inside `InitVar[...]`, which `get_type_hints` does not look into."""
+    owner = py_type
+    for base in py_type.__mro__:
+        try:
+            own_annotations = inspect.get_annotations(base)
+        except Exception:
+            continue
+        if attr_name in own_annotations:
+            owner = base
+            break
+
+    def holder() -> None: ...
+
+    holder.__annotations__ = {"value": init_var_type}
+    module = sys.modules.get(owner.__module__)
+    type_params: dict[str, object] = {
+        type_param.__name__: type_param
+        for type_param in getattr(owner, "__type_params__", ()) or getattr(owner, "__parameters__", ())
+    }
+    return get_type_hints(
+        holder,
+        globalns=dict(vars(module)) if module is not None else {},
+        # A class defined inside a function is not in its module's namespace,
+        # and neither are its type parameters, so make both visible by name.
+        localns={**type_params, owner.__name__: owner, **vars(owner)},
+        include_extras=True,
+    )["value"]
 
 
 def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTranslationResult:
@@ -466,6 +496,12 @@ def python_type_to_typescript_nodes(root_py_type: object) -> TypeScriptNodeTrans
                     type_hint = annotated_members[attr_name]
                     if type_hint is ClassVar or get_origin(type_hint) is ClassVar:
                         continue
+                    # An InitVar is not stored on the instance, but it is a constructor
+                    # argument, so the JSON object has to provide it like any other field.
+                    if type_hint is InitVar:
+                        type_hint = cast(Any, Any)
+                    elif isinstance(type_hint, InitVar):
+                        type_hint = _resolve_init_var_type(py_type, attr_name, cast(Any, type_hint).type)
                     optional = not(field.default is MISSING and field.default_factory is MISSING)
                     prop = declare_property(attr_name, type_hint, is_typeddict_attribute=False, optionality_default=optional, fallback_comment=inline_comments.get(attr_name, ""))
                     properties.append(prop)
